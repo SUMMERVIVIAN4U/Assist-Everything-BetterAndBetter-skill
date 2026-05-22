@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memory Skill Eval Case Workbench</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #fff;
+      --text: #172033;
+      --muted: #68758a;
+      --line: #dfe6ef;
+      --blue: #1769e0;
+      --green: #13864e;
+      --purple: #6a47d8;
+      --orange: #d36b18;
+      --red: #c74444;
+      --radius: 8px;
+      --shadow: 0 8px 22px rgba(24, 38, 66, .07);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      letter-spacing: 0;
+    }
+
+    button { font: inherit; }
+
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.2;
+    }
+
+    .sub {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 10px;
+      min-width: 560px;
+    }
+
+    .stat, .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .stat {
+      padding: 12px;
+      min-height: 88px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stat-value {
+      margin-top: 7px;
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .card {
+      padding: 15px;
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+    }
+
+    .case-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .case-btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 12px;
+      text-align: left;
+      cursor: pointer;
+      display: grid;
+      gap: 8px;
+    }
+
+    .case-btn:hover { background: #f8fbff; }
+
+    .case-btn.active {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px #e4efff;
+    }
+
+    .case-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .case-title {
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .score {
+      font-weight: 800;
+      color: var(--blue);
+      white-space: nowrap;
+    }
+
+    .case-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .compact {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .chip.green { background: #eaf8f0; color: var(--green); }
+    .chip.purple { background: #f1edff; color: var(--purple); }
+    .chip.orange { background: #fff2e8; color: var(--orange); }
+    .chip.red { background: #fff0f0; color: var(--red); }
+    .chip.gray { background: #edf1f5; color: #59677c; }
+
+    .detail-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .detail-title {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .detail-goal {
+      margin-top: 6px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .note {
+      background: #fbfcff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: #44536a;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .rounds {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .round {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      padding: 13px;
+      min-height: 330px;
+      position: relative;
+    }
+
+    .round::after {
+      content: "→";
+      position: absolute;
+      top: 142px;
+      right: -15px;
+      color: #9ba9bc;
+      font-weight: 800;
+      font-size: 22px;
+    }
+
+    .round:last-child::after { content: ""; }
+
+    .round-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .round h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .field {
+      margin-top: 10px;
+    }
+
+    .field-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+      font-weight: 700;
+    }
+
+    .field-body {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .gain {
+      margin-top: 10px;
+      border-left: 4px solid var(--green);
+      background: #f3fbf6;
+      padding: 9px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .round details {
+      margin-top: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .round summary,
+    .rules summary {
+      cursor: pointer;
+      color: var(--blue);
+      font-weight: 800;
+      font-size: 13px;
+      list-style: none;
+    }
+
+    .round summary::-webkit-details-marker,
+    .rules summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .round summary::before,
+    .rules summary::before {
+      content: "›";
+      display: inline-block;
+      margin-right: 6px;
+      transform: rotate(0deg);
+    }
+
+    .round details[open] summary::before,
+    .rules[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .sections {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .memory-journey {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .memory-state {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #fff;
+    }
+
+    .memory-state strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .effort {
+      display: grid;
+      gap: 7px;
+      margin-top: 9px;
+    }
+
+    .effort-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .level {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 24px;
+      padding: 0 8px;
+      border: 1px solid #cfd9e7;
+      border-radius: 999px;
+      background: #f8fbff;
+      color: #334158;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .level.high { color: var(--red); background: #fff5f5; border-color: #f0c3c3; }
+    .level.mid { color: var(--orange); background: #fff8ef; border-color: #f1d2b5; }
+    .level.low { color: var(--green); background: #f2fbf6; border-color: #b8dfc8; }
+
+    .bubble {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 30px;
+      width: 260px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      box-shadow: 0 12px 26px rgba(20, 35, 65, .18);
+      color: #39465d;
+      font-weight: 500;
+      line-height: 1.45;
+      z-index: 5;
+    }
+
+    .level:hover .bubble,
+    .level:focus .bubble {
+      display: block;
+    }
+
+    .rules {
+      margin-top: 10px;
+      border: 1px dashed #cfd9e7;
+      border-radius: var(--radius);
+      padding: 9px 10px;
+      background: #fbfcff;
+    }
+
+    .rules-grid {
+      display: grid;
+      gap: 7px;
+      margin-top: 9px;
+      color: #43516a;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .effort-row {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr) 42px;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .bar {
+      height: 9px;
+      border-radius: 99px;
+      background: #e8eef5;
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+
+    .ability-compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .compare-box {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #fff;
+    }
+
+    .compare-box.off {
+      border-color: #f0c3c3;
+      background: #fffafa;
+    }
+
+    .compare-box.on {
+      border-color: #b8dfc8;
+      background: #f7fdf9;
+    }
+
+    .compare-box h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .compare-box ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #43516a;
+      line-height: 1.55;
+      font-size: 13px;
+    }
+
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .dim {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #fff;
+    }
+
+    .dim-name {
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 34px;
+    }
+
+    .dim-score {
+      margin-top: 4px;
+      font-weight: 800;
+      font-size: 20px;
+    }
+
+    .dim .bar {
+      margin-top: 8px;
+    }
+
+    .footer-summary {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      gap: 14px;
+    }
+
+    .big-score {
+      display: grid;
+      place-items: center;
+      text-align: center;
+      min-height: 210px;
+    }
+
+    .big-score .num {
+      font-size: 58px;
+      line-height: 1;
+      font-weight: 900;
+      color: var(--blue);
+    }
+
+    .big-score .label {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .lowlight {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1180px) {
+      header, .layout, .sections, .footer-summary {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+
+      .summary {
+        min-width: 0;
+      }
+
+      .rounds,
+      .memory-journey,
+      .score-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .round::after {
+        content: "↓";
+        top: auto;
+        right: 18px;
+        bottom: -22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>Memory Skill Eval Case Workbench</h1>
+        <div class="sub">按历史 Case 展示三轮执行、记忆状态跃迁、用户费力度下降与模块 ON/OFF 对比。</div>
+      </div>
+      <div class="summary">
+        <div class="stat">
+          <div class="stat-label">评测对象</div>
+          <div class="stat-value">Skill</div>
+          <div class="case-meta">当前模块配置</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">历史 Case</div>
+          <div class="stat-value">10</div>
+          <div class="case-meta">已运行 10 / 10</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">配置平均分</div>
+          <div class="stat-value">78.6</div>
+          <div class="case-meta">三轮 Case 汇总</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">核心增益</div>
+          <div class="stat-value">-62%</div>
+          <div class="case-meta">重复说明成本</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="card">
+        <h2>历史执行 Case</h2>
+        <div class="case-list" id="case-list"></div>
+        <div class="lowlight">
+          说明：Round 不显示综合总分；Case 三轮跑完后才汇总六维总分；模块价值通过 ON/OFF 消融对比体现。
+        </div>
+      </aside>
+
+      <main>
+        <section class="card">
+          <div class="detail-head">
+            <div>
+              <h2 class="detail-title" id="case-title"></h2>
+              <div class="detail-goal" id="case-goal"></div>
+            </div>
+          <div class="note" id="case-note"></div>
+          </div>
+
+          <div class="rounds" id="rounds"></div>
+        </section>
+
+        <section class="sections">
+          <div class="card">
+            <h2>Memory 状态跃迁：用户操作费力度</h2>
+            <div class="memory-journey" id="memory-journey"></div>
+          </div>
+
+          <div class="card">
+            <h2>模块消融对比：OFF vs ON</h2>
+            <div class="ability-compare" id="ability-compare"></div>
+          </div>
+        </section>
+
+        <section class="footer-summary">
+          <div class="card big-score">
+            <div>
+              <div class="num" id="case-score"></div>
+              <div class="label">Case 六维总分 / 100</div>
+              <div class="chips" id="case-actions" style="justify-content:center;margin-top:14px;"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Case 六维评分</h2>
+            <div class="score-grid" id="score-grid"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const dimensions = [
+      ["repro", "可复测性", 10],
+      ["extract", "有效记忆提取", 20],
+      ["apply", "记忆应用效果", 25],
+      ["update", "记忆更新与淘汰", 20],
+      ["control", "用户控制与透明度", 10],
+      ["quality", "结果质量与可用性", 15]
+    ];
+
+    const cases = [
+      {
+        id: "case01",
+        title: "架构方案工作流适应",
+        goal: "验证用户工作方法能否从空白状态被提取，并在后续同类任务中自然应用；当用户允许例外时，旧规则能否被条件化更新。",
+        note: "亮点：M0 → M1 → M2，重复说明成本下降；冲突处理模块 ON 后旧规则不会干扰新例外。",
+        score: 84,
+        actions: ["新增", "应用", "更新", "降权"],
+        tags: ["工作方法", "冲突处理", "费力度下降"],
+        rounds: [
+          {
+            name: "Round 1",
+            title: "记忆形成",
+            input: "先不要写代码，按照评分标准分析架构方案。",
+            skill: "识别长期工作流偏好。",
+            memory: "新增 workflow_rule。",
+            transition: "M0 空白 → M1 偏好已保存",
+            gain: "后续无需重复说明“先分析再实现”。",
+            detail: "提取内容：架构方案先分析评分标准，不直接写代码。证据来自用户显式表达。",
+            contributes: ["有效记忆提取", "用户控制", "可复测性"],
+            action: "新增记忆"
+          },
+          {
+            name: "Round 2",
+            title: "记忆应用",
+            input: "帮我设计另一个参赛 Skill。",
+            skill: "自动先分析评分标准。",
+            memory: "应用 M1，无新增。",
+            transition: "M1 保持不变",
+            gain: "减少重复说明，输出更贴合用户的工作流。",
+            detail: "执行策略由 M1 触发：先评分标准、再架构方案、暂不写代码。",
+            contributes: ["记忆应用效果", "结果质量", "透明度"],
+            action: "应用记忆"
+          },
+          {
+            name: "Round 3",
+            title: "更新淘汰",
+            input: "这次可以直接实现，但 Eval 方案仍要先确认。",
+            skill: "识别旧规则的条件化例外。",
+            memory: "更新 M1，旧规则降权。",
+            transition: "M1 偏好已保存 → M2 规则已更新",
+            gain: "避免旧偏好过度约束后续任务，减少误拦截。",
+            detail: "新规则：允许直接实现，但 Eval 方案仍需先确认。旧规则保留但优先级降低。",
+            contributes: ["记忆更新与淘汰", "用户控制", "可复测性"],
+            action: "更新 / 降权"
+          }
+        ],
+        effort: [
+          ["M0", "空白记忆", "用户必须完整说明流程", 92, "高"],
+          ["M1", "偏好已保存", "用户只需说任务目标", 38, "中"],
+          ["M2", "规则已更新", "用户只说明例外即可", 24, "低"]
+        ],
+        compare: {
+          ability: "冲突处理模块",
+          off: [
+            "新旧规则同时 active。",
+            "系统既想先分析，又收到直接实现要求，输出摇摆。",
+            "后续同类任务需要用户再次纠正。"
+          ],
+          on: [
+            "检测到新反馈与旧规则局部冲突。",
+            "旧规则降权，新规则条件化生效。",
+            "后续只需用户说明例外，系统能稳定执行。"
+          ]
+        },
+        scores: { repro: 9, extract: 18, apply: 23, update: 17, control: 8, quality: 9 }
+      },
+      {
+        id: "case02",
+        title: "临时信息过滤",
+        goal: "验证系统能否区分临时指令与长期偏好，避免把“这次用表格”错误保存为长期记忆。",
+        note: "亮点：正确动作是未保存，避免临时指令污染长期记忆。",
+        score: 80,
+        actions: ["未保存", "避免误用", "解释"],
+        tags: ["临时信息", "误存防护", "透明解释"],
+        rounds: [
+          {
+            name: "Round 1",
+            title: "临时指令识别",
+            input: "这次先用表格列出来。",
+            skill: "识别为会话级指令。",
+            memory: "仅会话内使用。",
+            transition: "M0 空白 → M0 未变化",
+            gain: "避免污染用户长期画像。",
+            detail: "关键词“这次”降低长期保存置信度；不生成 active memory。",
+            contributes: ["有效记忆提取", "用户控制"],
+            action: "未保存"
+          },
+          {
+            name: "Round 2",
+            title: "避免误应用",
+            input: "再帮我写一段说明。",
+            skill: "不强制使用表格。",
+            memory: "未应用临时指令。",
+            transition: "M0 保持不变",
+            gain: "减少错误个性化，避免用户反向纠正。",
+            detail: "因为 Round 1 未写长期记忆，Round 2 不应继承表格偏好。",
+            contributes: ["记忆应用效果", "结果质量"],
+            action: "避免误用"
+          },
+          {
+            name: "Round 3",
+            title: "透明解释",
+            input: "你为什么没有继续用表格？",
+            skill: "解释未保存原因。",
+            memory: "仍不写长期记忆。",
+            transition: "M0 保持不变",
+            gain: "用户能理解并控制记忆边界。",
+            detail: "透明度输出：说明保存边界、当前状态和用户可如何改成长期偏好。",
+            contributes: ["用户控制与透明度", "可复测性"],
+            action: "解释边界"
+          }
+        ],
+        effort: [
+          ["M0", "空白记忆", "会话内遵循临时指令", 66, "中"],
+          ["M0", "未污染", "后续不需纠正误用表格", 30, "低"],
+          ["M0", "边界清楚", "用户理解保存规则", 22, "低"]
+        ],
+        compare: {
+          ability: "临时信息过滤模块",
+          off: [
+            "把“这次用表格”保存为长期偏好。",
+            "后续无关任务继续强制表格化。",
+            "用户需要反复纠正格式。"
+          ],
+          on: [
+            "识别临时词，不写长期记忆。",
+            "后续任务不误用。",
+            "可解释为什么没有保存。"
+          ]
+        },
+        scores: { repro: 8, extract: 17, apply: 20, update: 14, control: 9, quality: 12 }
+      },
+      {
+        id: "case03",
+        title: "偏好冲突更新",
+        goal: "验证用户偏好变化时，系统是否会替换、降权或归档旧记忆，而不是简单累加。",
+        note: "亮点：新旧偏好冲突时，旧偏好降权或归档，而不是简单累加。",
+        score: 86,
+        actions: ["新增", "应用", "降权", "归档"],
+        tags: ["偏好冲突", "状态治理", "防回归"],
+        rounds: [
+          {
+            name: "Round 1",
+            title: "偏好形成",
+            input: "以后技术方案请解释充分，理由写清楚。",
+            skill: "提取沟通偏好。",
+            memory: "新增 communication_preference。",
+            transition: "M0 空白 → M1 详细偏好",
+            gain: "后续技术方案输出更完整。",
+            detail: "保存偏好：技术方案解释充分，理由写清楚。scope 为 technical_explanation。",
+            contributes: ["有效记忆提取", "结果质量"],
+            action: "新增记忆"
+          },
+          {
+            name: "Round 2",
+            title: "偏好应用",
+            input: "分析这个架构选择。",
+            skill: "输出理由、风险和取舍。",
+            memory: "应用 M1。",
+            transition: "M1 保持不变",
+            gain: "输出符合用户当时偏好，减少补问。",
+            detail: "M1 命中当前任务类型，影响输出结构和细节程度。",
+            contributes: ["记忆应用效果", "结果质量"],
+            action: "应用记忆"
+          },
+          {
+            name: "Round 3",
+            title: "偏好变化",
+            input: "以后这类内容先给简版，不要太展开。",
+            skill: "检测新旧偏好冲突。",
+            memory: "旧偏好降权，新偏好 active。",
+            transition: "M1 详细偏好 → M2 简版优先",
+            gain: "避免旧偏好继续干扰，减少用户二次修正。",
+            detail: "旧偏好变为 superseded，新偏好成为同类内容的默认 active 规则。",
+            contributes: ["记忆更新与淘汰", "用户控制"],
+            action: "降权 / 归档"
+          }
+        ],
+        effort: [
+          ["M0", "空白记忆", "用户需说明详细程度", 80, "高"],
+          ["M1", "详细偏好", "用户无需再强调写清理由", 35, "中"],
+          ["M2", "简版优先", "用户无需反复纠正太啰嗦", 18, "低"]
+        ],
+        compare: {
+          ability: "记忆更新与淘汰模块",
+          off: [
+            "详细偏好和简版偏好同时 active。",
+            "输出有时详细、有时简短，不稳定。",
+            "用户需要继续纠正“太啰嗦”。"
+          ],
+          on: [
+            "旧偏好降权或归档。",
+            "新偏好成为当前默认策略。",
+            "后续输出稳定先给简版。"
+          ]
+        },
+        scores: { repro: 9, extract: 18, apply: 22, update: 19, control: 9, quality: 9 }
+      },
+      {
+        id: "case04",
+        title: "删除记忆控制",
+        goal: "验证用户要求删除某条记忆后，系统是否不再检索和应用该记忆。",
+        note: "亮点：删除必须影响真实执行路径，后续不再命中旧记忆。",
+        score: 78,
+        actions: ["应用", "删除", "不再使用"],
+        tags: ["用户控制", "删除验证", "透明度"],
+        rounds: [
+          {
+            name: "Round 1",
+            title: "已有记忆应用",
+            input: "按我之前的偏好整理方案。",
+            skill: "检索已有沟通偏好。",
+            memory: "应用 mem_028。",
+            transition: "M1 已有偏好",
+            gain: "说明记忆确实能被调用。",
+            detail: "先证明该记忆原本会影响输出，后续删除验证才有意义。",
+            contributes: ["记忆应用效果"],
+            action: "应用记忆"
+          },
+          {
+            name: "Round 2",
+            title: "用户删除",
+            input: "忘掉我之前要求固定用表格这件事。",
+            skill: "识别删除请求。",
+            memory: "mem_028 → deleted。",
+            transition: "M1 → M2 删除后",
+            gain: "用户能直接干预记忆。",
+            detail: "删除写入 memory store 状态，检索层必须过滤 deleted 记录。",
+            contributes: ["用户控制与透明度", "更新淘汰"],
+            action: "删除记忆"
+          },
+          {
+            name: "Round 3",
+            title: "删除后验证",
+            input: "再整理一个方案。",
+            skill: "过滤 deleted 记忆。",
+            memory: "不再应用 mem_028。",
+            transition: "M2 保持删除状态",
+            gain: "证明删除动作影响真实执行。",
+            detail: "后续输出不再带旧偏好；trace 中不应出现 mem_028 命中记录。",
+            contributes: ["可复测性", "用户控制"],
+            action: "不再使用"
+          }
+        ],
+        effort: [
+          ["M1", "旧偏好存在", "输出被固定表格影响", 58, "中"],
+          ["M2", "已删除", "用户一次指令完成控制", 28, "低"],
+          ["M2", "删除生效", "后续无需反复纠正", 16, "低"]
+        ],
+        compare: {
+          ability: "用户删除控制模块",
+          off: [
+            "UI 显示删除，但检索层仍能命中。",
+            "后续输出继续带旧偏好。",
+            "用户失去对记忆的信任。"
+          ],
+          on: [
+            "删除状态进入 memory store。",
+            "检索层过滤 deleted 记忆。",
+            "后续执行路径可复测。"
+          ]
+        },
+        scores: { repro: 8, extract: 14, apply: 19, update: 17, control: 10, quality: 10 }
+      }
+    ];
+
+    let selectedId = cases[0].id;
+
+    function pct(value, max) {
+      return Math.max(0, Math.min(100, Math.round(value / max * 100)));
+    }
+
+    function chip(action) {
+      const map = {
+        "新增": "green",
+        "应用": "purple",
+        "更新": "orange",
+        "降权": "orange",
+        "归档": "orange",
+        "删除": "red",
+        "未保存": "gray",
+        "避免误用": "gray",
+        "解释": "blue",
+        "不再使用": "red"
+      };
+      return `<span class="chip ${map[action] || ""}">${action}</span>`;
+    }
+
+    function renderList() {
+      const box = document.getElementById("case-list");
+      box.innerHTML = cases.map(item => `
+        <button class="case-btn ${item.id === selectedId ? "active" : ""}" data-case="${item.id}">
+          <div class="case-row">
+            <div class="case-title">${item.title}</div>
+            <div class="score">${item.score}/100</div>
+          </div>
+          <div class="case-meta">${item.goal}</div>
+          <div class="chips">${item.actions.map(chip).join("")}</div>
+        </button>
+      `).join("");
+
+      box.querySelectorAll("[data-case]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          selectedId = btn.dataset.case;
+          render();
+        });
+      });
+    }
+
+    function renderRounds(item) {
+      document.getElementById("rounds").innerHTML = item.rounds.map(round => `
+        <article class="round">
+          <div class="round-label">
+            <h3>${round.name}：${round.title}</h3>
+            ${chip(round.action)}
+          </div>
+          <div class="field">
+            <div class="field-label">用户输入</div>
+            <div class="field-body compact">“${round.input}”</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Skill 动作</div>
+            <div class="field-body">${round.skill}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">记忆动作</div>
+            <div class="field-body">${round.memory}</div>
+          </div>
+          <div class="field">
+            <div class="field-label">状态变化</div>
+            <div class="field-body">${round.transition}</div>
+          </div>
+          <div class="gain"><strong>本轮增益：</strong>${round.gain}</div>
+          <details>
+            <summary>展开依据</summary>
+            <div class="field">
+              <div class="field-label">贡献维度</div>
+              <div class="chips">${round.contributes.map(x => `<span class="chip">${x}</span>`).join("")}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">判断依据</div>
+              <div class="field-body">${round.detail}</div>
+            </div>
+          </details>
+        </article>
+      `).join("");
+    }
+
+    function renderMemory(item) {
+      const oldRules = document.querySelector(".rules");
+      if (oldRules) oldRules.remove();
+
+      document.getElementById("memory-journey").innerHTML = item.effort.map(([id, title, desc, effort, level]) => `
+        <div class="memory-state">
+          <div class="effort-head">
+            <strong>${id} ${title}</strong>
+            <button class="level ${level === "高" ? "high" : level === "中" ? "mid" : "low"}" type="button">
+              ${level}
+              <span class="bubble">${effortExplain(level, effort)}</span>
+            </button>
+          </div>
+          <div class="case-meta">${desc}</div>
+          <div class="effort">
+            <div class="effort-row">
+              <span>费力度</span>
+              <div class="bar"><span style="width:${effort}%"></span></div>
+              <strong>${effort}%</strong>
+            </div>
+          </div>
+        </div>
+      `).join("");
+
+      document.getElementById("memory-journey").insertAdjacentHTML("afterend", `
+        <details class="rules">
+          <summary>展开费力度评分规则</summary>
+          <div class="rules-grid">
+            <div><strong>高：</strong>用户必须重复说明偏好/流程，或需要多次修正才能达到目标。</div>
+            <div><strong>中：</strong>系统能记住部分偏好，但用户仍需补充条件或纠正边界。</div>
+            <div><strong>低：</strong>用户只需给任务或说明例外，系统能自然应用记忆并减少澄清。</div>
+            <div><strong>计算参考：</strong>重复说明次数、澄清轮数、修正次数、达到目标所需指令长度。</div>
+          </div>
+        </details>
+      `);
+    }
+
+    function effortExplain(level, effort) {
+      if (level === "高") return `高费力度：约 ${effort}% 协作成本。用户需要完整说明流程、偏好或多次修正。`;
+      if (level === "中") return `中费力度：约 ${effort}% 协作成本。系统记住一部分，但边界仍需用户补充。`;
+      return `低费力度：约 ${effort}% 协作成本。用户只需给任务或例外，系统能自然适配。`;
+    }
+
+    function renderCompare(item) {
+      document.getElementById("ability-compare").innerHTML = `
+        <div class="compare-box off">
+          <h3>${item.compare.ability} OFF</h3>
+          <ul>${item.compare.off.map(x => `<li>${x}</li>`).join("")}</ul>
+        </div>
+        <div class="compare-box on">
+          <h3>${item.compare.ability} ON</h3>
+          <ul>${item.compare.on.map(x => `<li>${x}</li>`).join("")}</ul>
+        </div>
+      `;
+    }
+
+    function renderScores(item) {
+      document.getElementById("score-grid").innerHTML = dimensions.map(([key, name, max]) => {
+        const value = item.scores[key];
+        return `
+          <div class="dim">
+            <div class="dim-name">${name}</div>
+            <div class="dim-score">${value}<span class="case-meta"> / ${max}</span></div>
+            <div class="bar"><span style="width:${pct(value, max)}%"></span></div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function render() {
+      const item = cases.find(x => x.id === selectedId) || cases[0];
+      renderList();
+      document.getElementById("case-title").textContent = item.title;
+      document.getElementById("case-goal").textContent = item.goal;
+      document.getElementById("case-note").textContent = item.note;
+      document.getElementById("case-score").textContent = item.score;
+      document.getElementById("case-actions").innerHTML = item.actions.map(chip).join("");
+      renderRounds(item);
+      renderMemory(item);
+      renderCompare(item);
+      renderScores(item);
+    }
+
+    render();
+  </script>
+</body>
+</html>
