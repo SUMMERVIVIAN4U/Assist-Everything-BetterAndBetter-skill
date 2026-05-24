@@ -77,12 +77,29 @@ python3 scripts/verify_eval.py
 Both the workbench Agent Chat and eval judge can use Mimo through an OpenAI-compatible chat endpoint.
 
 ```bash
-export MIMO_API_KEY="..."
-export MIMO_BASE_URL="https://api.mimo.chat/v1"
-export MIMO_MODEL="mimo-v1"
+cp .env.example .env
+```
 
+Then edit `.env`:
+
+```dotenv
+MIMO_API_KEY=...
+MIMO_BASE_URL=https://api.mimo.chat/v1
+MIMO_MODEL=mimo-v1
+MIMO_TIMEOUT=60
+```
+
+Run with the default `.env`:
+
+```bash
 python3 -m evalharness.cli serve --port 8787 --agent mimo
 python3 -m evalharness.cli run --agent mimo --judge mimo
+```
+
+Or pass a custom env file:
+
+```bash
+python3 -m evalharness.cli --env-file .env.local run --agent mimo --judge mimo
 ```
 
 Defaults:

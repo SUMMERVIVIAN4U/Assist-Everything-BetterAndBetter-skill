@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 eval/output/verify_run_*/
+.env
+.env.local

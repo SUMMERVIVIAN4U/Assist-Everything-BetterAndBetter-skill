@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 
+from .env import load_env
 from .runner import run_all
 from .server import serve
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="evalharness")
+    parser.add_argument("--env-file", default=".env", help="Path to env file loaded before running commands.")
     sub = parser.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run")
     run.add_argument("--output", default="eval/output/latest")
@@ -18,6 +20,7 @@ def main() -> None:
     server.add_argument("--port", type=int, default=8787)
     server.add_argument("--agent", default="auto", choices=["auto", "local", "mimo"])
     args = parser.parse_args()
+    load_env(args.env_file)
 
     if args.cmd == "run":
         report = run_all(args.output, judge_mode=args.judge, agent_mode=args.agent)

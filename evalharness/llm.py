@@ -7,6 +7,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+from .env import load_env
+
 
 @dataclass(frozen=True)
 class MimoConfig:
@@ -17,6 +19,7 @@ class MimoConfig:
 
     @classmethod
     def from_env(cls) -> "MimoConfig":
+        load_env()
         api_key = os.getenv("MIMO_API_KEY", "").strip()
         if not api_key:
             raise ValueError("MIMO_API_KEY is not configured")
@@ -78,6 +81,7 @@ class MimoClient:
 
 
 def mimo_configured() -> bool:
+    load_env()
     return bool(os.getenv("MIMO_API_KEY", "").strip())
 
 

@@ -86,16 +86,23 @@ The workbench exposes Dashboard, Cases, Trace, and Agent Chat tabs. Trace is the
 For Mimo LLM agent/judge mode, configure:
 
 ```bash
-export MIMO_API_KEY="..."
-export MIMO_BASE_URL="https://api.mimo.chat/v1"
-export MIMO_MODEL="mimo-v1"
+cp .env.example .env
 ```
 
-Then run:
+Then edit `.env`:
+
+```dotenv
+MIMO_API_KEY=...
+MIMO_BASE_URL=https://api.mimo.chat/v1
+MIMO_MODEL=mimo-v1
+MIMO_TIMEOUT=60
+```
+
+Run:
 
 ```bash
 python3 -m evalharness.cli serve --port 8787 --agent mimo
 python3 -m evalharness.cli run --agent mimo --judge mimo
 ```
 
-Without Mimo env vars, the harness uses the local tool agent and offline trace judge for reproducible local development. `EVALHARNESS_JUDGE_CMD` is still supported for a custom external judge command.
+The CLI also supports `--env-file .env.local`. Without Mimo env vars, the harness uses the local tool agent and offline trace judge for reproducible local development. `EVALHARNESS_JUDGE_CMD` is still supported for a custom external judge command.
