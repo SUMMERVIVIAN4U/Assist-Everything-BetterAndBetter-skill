@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from .memory import ACTIVE, DELETED, SUPERSEDED, MemoryItem, MemoryStore
@@ -30,8 +32,11 @@ class AssistSkill:
     response plus auditable memory actions.
     """
 
-    def __init__(self) -> None:
-        self.memory = MemoryStore()
+    def __init__(self, memory_dir: str | Path | None = None, persist: bool | None = None) -> None:
+        if persist is None:
+            persist = os.getenv("ASSIST_MEMORY_PERSIST", "1") != "0"
+        storage_dir = memory_dir if memory_dir is not None else os.getenv("ASSIST_MEMORY_DIR", "memories/default")
+        self.memory = MemoryStore(storage_dir if persist else None)
         self.pending_proposals: list[MemoryItem] = []
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:

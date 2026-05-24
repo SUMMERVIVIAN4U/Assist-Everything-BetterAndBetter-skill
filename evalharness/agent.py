@@ -19,9 +19,11 @@ class HarnessAgent:
         toolbox: MemoryToolbox | None = None,
         llm_mode: str = "auto",
         llm_client: MimoClient | None = None,
+        memory_dir: str | None = None,
+        persist_memory: bool | None = None,
     ) -> None:
         self.name = name
-        self.toolbox = toolbox or MemoryToolbox()
+        self.toolbox = toolbox or MemoryToolbox(memory_dir=memory_dir, persist=persist_memory)
         self.session = HarnessSession()
         self.llm_mode = llm_mode
         self.llm_client = llm_client

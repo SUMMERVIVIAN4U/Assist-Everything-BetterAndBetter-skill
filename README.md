@@ -41,6 +41,24 @@ Architecture boundary:
 - Skill runtime is generic and processes natural-language messages through `process_message(...)`.
 - Eval cases are only scripted user messages; they do not call case-specific skill methods.
 - Agent Chat and automated eval share the same memory extraction, update, retrieval, deletion, and response path.
+- Workbench memories are persisted as Markdown files under `memories/workbench/`; automated eval uses an isolated in-memory store for reproducibility.
+
+## Memory Storage
+
+Runtime memory can be persisted as Markdown:
+
+- each memory is one `.md` file with JSON-compatible front matter
+- `_events.jsonl` records memory lifecycle events
+- `_state.json` records the current memory version
+
+Config:
+
+```dotenv
+ASSIST_MEMORY_PERSIST=1
+ASSIST_MEMORY_DIR=memories/default
+```
+
+`memories/` is git-ignored so local user memory and secrets do not leak into commits.
 
 ## Run Eval Harness
 

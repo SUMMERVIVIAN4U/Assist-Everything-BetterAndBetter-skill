@@ -10,8 +10,14 @@ from .schemas import ToolCall
 class MemoryToolbox:
     """Thin tool layer exposed to the harness agent."""
 
-    def __init__(self, skill: AssistSkill | None = None) -> None:
-        self.skill = skill or AssistSkill()
+    def __init__(
+        self,
+        skill: AssistSkill | None = None,
+        *,
+        memory_dir: str | None = None,
+        persist: bool | None = None,
+    ) -> None:
+        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist)
 
     def reset_memory(self) -> tuple[SkillResponse, ToolCall]:
         response = self.skill.reset_memory()

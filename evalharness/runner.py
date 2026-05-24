@@ -15,7 +15,7 @@ def _turn(agent: HarnessAgent, text: str, stage: str) -> dict[str, Any]:
 
 
 def run_case(case: EvalCase, *, judge_mode: str = "auto", agent_mode: str = "local") -> dict[str, Any]:
-    agent = HarnessAgent(llm_mode=agent_mode)
+    agent = HarnessAgent(llm_mode=agent_mode, persist_memory=False)
     turns = [
         _turn(agent, "reset memory", "reset"),
         _turn(agent, case.initial_task, "round1_task"),

@@ -33,6 +33,8 @@ Never silently turn every statement into long-term memory. Extract only reusable
 
 Each memory must carry: `id`, `type`, `content`, `scope`, `source`, `confidence`, `status`, `evidence`, `applies_when`, and `user_approved`.
 
+By default, runtime memory is persisted as Markdown files. `ASSIST_MEMORY_DIR` controls the storage directory, and `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs. Workbench uses `memories/workbench/`.
+
 Statuses:
 
 - `active`: can be retrieved and applied

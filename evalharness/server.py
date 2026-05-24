@@ -15,7 +15,7 @@ LATEST = Path("eval/output/latest/eval_report.json")
 class WorkbenchState:
     def __init__(self, agent_mode: str = "auto") -> None:
         self.agent_mode = agent_mode
-        self.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=agent_mode)
+        self.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=agent_mode, memory_dir="memories/workbench")
 
 
 STATE = WorkbenchState()
@@ -51,7 +51,7 @@ class Handler(BaseHTTPRequestHandler):
             mode = str(body.get("agent", STATE.agent_mode))
             if mode != STATE.agent_mode:
                 STATE.agent_mode = mode
-                STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode)
+                STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode, memory_dir="memories/workbench")
             print(f"[workbench] chat agent={STATE.agent_mode} message={message[:80]}")
             stage = str(body.get("stage", "chat"))
             try:
@@ -69,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/reset-chat":
             mode = str(body.get("agent", STATE.agent_mode))
             STATE.agent_mode = mode
-            STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode)
+            STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode, memory_dir="memories/workbench")
             print(f"[workbench] reset chat agent={STATE.agent_mode}")
             self._send_json({"ok": True, "session": STATE.chat_agent.session.to_dict()})
         else:
