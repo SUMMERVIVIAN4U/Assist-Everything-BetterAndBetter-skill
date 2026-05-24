@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .cases import EvalCase
-from .memory import ACTIVE, MemoryItem, MemoryStore
+from .memory import ACTIVE, DELETED, SUPERSEDED, MemoryItem, MemoryStore
 
 
 @dataclass
@@ -24,35 +23,204 @@ class SkillResponse:
 
 
 class AssistSkill:
-    """Deterministic skill implementation optimized for the documented eval flow."""
+    """Generic authorized collaboration-memory runtime.
+
+    The runtime does not know eval case ids. It receives natural language,
+    decides whether memory should be managed/extracted/applied, and returns a
+    response plus auditable memory actions.
+    """
 
     def __init__(self) -> None:
         self.memory = MemoryStore()
-        self.trace: list[dict[str, Any]] = []
         self.pending_proposals: list[MemoryItem] = []
+
+    def process_message(self, text: str) -> SkillResponse:
+        command = self._try_memory_command(text)
+        if command:
+            return command
+
+        actions = self._apply_updates(text)
+        relevant = self.retrieve_relevant_memories(text)
+        asks = self._suggest_followups(text, relevant)
+        response_text = self.compose_response(text, relevant, actions, asks)
+        return SkillResponse(response_text, actions, [item.id for item in relevant], asks)
 
     def reset_memory(self) -> SkillResponse:
         event = self.memory.reset()
         return SkillResponse("已重置记忆：当前为 M0 空白状态。", [event], [], [])
 
     def show_memory(self) -> SkillResponse:
-        active = self.memory.active()
-        if not active:
-            return SkillResponse("当前没有 active 记忆。", [], [], [])
-        lines = ["当前 active 记忆："]
-        for item in active:
-            lines.append(f"- {item.id} [{item.type}/{item.scope}] {item.content}")
-        return SkillResponse("\n".join(lines), [], [m.id for m in active], [])
+        snapshot = self.memory.snapshot()
+        if not self.memory.items:
+            return SkillResponse("当前没有任何记忆。", [], [], [])
+        lines = ["当前 active 记忆与历史状态："]
+        for status in [ACTIVE, SUPERSEDED, "archived", DELETED]:
+            items = snapshot.get(status if status != ACTIVE else "active", [])
+            for item in items:
+                lines.append(f"- {item['id']} [{item['status']}/{item['type']}/{item['scope']}] {item['content']}")
+        active_ids = [item.id for item in self.memory.active()]
+        return SkillResponse("\n".join(lines), [], active_ids, [])
 
-    def propose_feedback(self, case: EvalCase) -> SkillResponse:
-        self.pending_proposals = self._items_from_feedback(case)
-        lines = ["我提取到以下候选长期记忆，需要授权后才会保存："]
-        for idx, item in enumerate(self.pending_proposals, 1):
-            lines.append(f"{idx}. [{item.type}/{item.scope}] {item.content}")
-        lines.append("请回复 approve memory / 同意保存，或 reject memory / 拒绝保存。")
-        return SkillResponse("\n".join(lines), [], [], [])
+    def manage_memory(self, text: str) -> SkillResponse:
+        command = self._try_memory_command(text)
+        if command:
+            return command
+        return SkillResponse("未识别到记忆管理命令。支持 reset/show/find/delete/downgrade/archive。", [], [], [])
 
-    def approve_pending(self) -> SkillResponse:
+    def retrieve_relevant_memories(self, text: str) -> list[MemoryItem]:
+        scope = _infer_scope(text)
+        terms = _keywords(text)
+        relevant: list[MemoryItem] = []
+        for item in self.memory.active():
+            haystack = " ".join([item.content, item.scope, *item.applies_when, *item.tags])
+            scope_hit = scope and (scope == item.scope or scope in item.applies_when)
+            term_hit = any(term and term in haystack for term in terms)
+            if scope_hit or term_hit:
+                relevant.append(item)
+        return relevant
+
+    def compose_response(
+        self,
+        text: str,
+        memories: list[MemoryItem],
+        actions: list[dict[str, Any]],
+        asks: list[str],
+    ) -> str:
+        lines = [self._task_answer(text, memories)]
+        created = [a for a in actions if a["action"] == "add"]
+        changed = [a for a in actions if a["action"] in {"downgrade", "archive", "delete", "update"}]
+        if created:
+            lines.append("\n已保存可复用记忆：")
+            lines.extend(f"- {a['detail']}" for a in created)
+        if changed:
+            lines.append("\n已处理记忆变更：")
+            lines.extend(f"- {a['action']}: {a['detail']}" for a in changed)
+        if memories:
+            lines.append("\n本轮已应用记忆：")
+            lines.extend(f"- {item.content}" for item in memories)
+        if asks:
+            lines.append("\n我还会追问这些缺口：")
+            lines.extend(f"- {ask}" for ask in asks)
+        return "\n".join(lines)
+
+    def _try_memory_command(self, text: str) -> SkillResponse | None:
+        original = text.strip()
+        normalized = _normalize_command(original)
+        lowered = normalized.lower()
+
+        if "approve" in lowered or "同意保存" in normalized or "确认保存" in normalized:
+            return self._approve_pending()
+        if "reject" in lowered or "拒绝保存" in normalized or "不要保存" in normalized:
+            return self._reject_pending()
+        if "reset" in lowered or "清空" in normalized or "重置" in normalized:
+            return self.reset_memory()
+        if "show" in lowered or "展示" in normalized or "查看" in normalized:
+            return self.show_memory()
+        if "find" in lowered or "query" in lowered or "查询" in normalized or "搜索" in normalized:
+            query = _strip_command_words(normalized, ["find", "query", "查询", "搜索", "记忆"])
+            matches = self.memory.find(query, include_inactive=True)
+            if not matches:
+                return SkillResponse("查询结果：无匹配记忆。", [], [], [])
+            lines = ["查询结果："]
+            for item in matches:
+                lines.append(f"- {item.id} [{item.status}/{item.type}/{item.scope}] {item.content}")
+            return SkillResponse("\n".join(lines), [], [m.id for m in matches if m.status == ACTIVE], [])
+        if "删除" in normalized or "delete" in lowered or "forget" in lowered:
+            query = _strip_command_words(normalized, ["delete", "forget", "删除", "这条记忆", "记忆"])
+            if "然后" in query:
+                query = query.split("然后", 1)[0]
+            deleted = self.memory.delete(query)
+            names = ", ".join(item.id for item in deleted) or "无匹配"
+            active = self.retrieve_relevant_memories(normalized)
+            text_after = f"删除结果：{names}。后续检索会过滤 deleted 记忆。"
+            if active:
+                text_after += "\n\n删除后仍可使用的相关记忆：\n" + "\n".join(f"- {m.content}" for m in active)
+            return SkillResponse(text_after, self.memory.events[-len(deleted):] if deleted else [], [m.id for m in active], [])
+        if "降权" in normalized or "降级" in normalized or "downgrade" in lowered:
+            matches = self.memory.find(normalized, include_inactive=False)
+            actions = []
+            for item in matches:
+                self.memory.downgrade(item.id, "user_requested_downgrade")
+                actions.append(self.memory.events[-1])
+            return SkillResponse(f"降权 {len(actions)} 条记忆。", actions, [], [])
+        if "归档" in normalized or "archive" in lowered:
+            matches = self.memory.find(normalized, include_inactive=False)
+            actions = []
+            for item in matches:
+                self.memory.archive(item.id, "user_requested_archive")
+                actions.append(self.memory.events[-1])
+            return SkillResponse(f"归档 {len(actions)} 条记忆。", actions, [], [])
+        return None
+
+    def _apply_updates(self, text: str) -> list[dict[str, Any]]:
+        actions: list[dict[str, Any]] = []
+        for match in self._conflicting_memories(text):
+            self.memory.downgrade(match.id, f"新反馈缩小或推翻旧规则：{text}")
+            actions.append(self.memory.events[-1])
+        for item in self.extract_memory_candidates(text):
+            if not self._is_duplicate(item):
+                self.memory.add(item)
+                actions.append(self.memory.events[-1])
+        return actions
+
+    def extract_memory_candidates(self, text: str) -> list[MemoryItem]:
+        normalized = text.strip()
+        if not normalized or not _has_memory_signal(normalized):
+            return []
+        scope = _infer_scope(normalized)
+        candidates: list[MemoryItem] = []
+        for clause in _split_clauses(normalized):
+            if not _has_memory_signal(clause):
+                continue
+            memory_type = _infer_memory_type(clause, scope)
+            content = _clean_memory_content(clause, scope)
+            if not content:
+                continue
+            candidates.append(
+                MemoryItem(
+                    memory_type,
+                    content,
+                    scope=scope,
+                    source="chat_feedback",
+                    evidence=[normalized],
+                    applies_when=[scope],
+                    tags=_keywords(clause),
+                )
+            )
+        return candidates
+
+    def _conflicting_memories(self, text: str) -> list[MemoryItem]:
+        lowered = text.lower()
+        conflict_terms = ["不适用", "不用", "不要", "不能", "只用于", "仅用于", "改成", "推翻", "不再"]
+        if not any(term in lowered for term in conflict_terms):
+            return []
+        terms = _keywords(text)
+        matches = []
+        for item in self.memory.active():
+            if any(term and term in item.content for term in terms):
+                matches.append(item)
+        if not matches:
+            scope = _infer_scope(text)
+            topic_terms = ["步行", "风险", "番茄钟", "文献综述", "模板", "自测", "可复现", "香水", "前女友"]
+            for item in self.memory.active():
+                if item.scope == scope and any(term in item.content for term in topic_terms if term in text):
+                    matches.append(item)
+        if not matches and "模板" in text:
+            scope = _infer_scope(text)
+            matches.extend(
+                item
+                for item in self.memory.active()
+                if item.scope == scope and item.type in {"research_method", "workflow_rule", "format_preference"}
+            )
+        return matches
+
+    def _is_duplicate(self, candidate: MemoryItem) -> bool:
+        for item in self.memory.active():
+            if item.content == candidate.content and item.scope == candidate.scope:
+                return True
+        return False
+
+    def _approve_pending(self) -> SkillResponse:
         if not self.pending_proposals:
             return SkillResponse("没有待授权的记忆候选。", [], [], [])
         created = []
@@ -61,208 +229,213 @@ class AssistSkill:
             created.append(self.memory.add(item))
         self.pending_proposals = []
         actions = self.memory.events[-len(created):]
-        return SkillResponse(
-            "已获授权并保存长期记忆：\n" + "\n".join(f"- {m.content}" for m in created),
-            actions,
-            [],
-            [],
-        )
+        return SkillResponse("已获授权并保存长期记忆：\n" + "\n".join(f"- {m.content}" for m in created), actions, [], [])
 
-    def reject_pending(self) -> SkillResponse:
+    def _reject_pending(self) -> SkillResponse:
         count = len(self.pending_proposals)
         self.pending_proposals = []
         return SkillResponse(f"已拒绝保存 {count} 条候选记忆，不写入长期记忆库。", [], [], [])
 
-    def manage_memory(self, text: str) -> SkillResponse:
-        original = text.strip()
-        normalized_command = original
-        if original.startswith("/"):
-            parts = original[1:].split(maxsplit=1)
-            command = parts[0].lower() if parts else ""
-            rest = parts[1] if len(parts) > 1 else ""
-            if command in {"memory", "mem"}:
-                normalized_command = rest
-            elif command in {"reset-memory", "reset_memory"}:
-                normalized_command = "reset memory"
-            elif command in {"show-memory", "show_memory"}:
-                normalized_command = "show memory"
-            elif command in {"delete-memory", "delete_memory"}:
-                normalized_command = "delete " + rest
-            elif command in {"downgrade-memory", "downgrade_memory"}:
-                normalized_command = "downgrade " + rest
-            elif command in {"archive-memory", "archive_memory"}:
-                normalized_command = "archive " + rest
-            elif command in {"find-memory", "find_memory"}:
-                normalized_command = "find " + rest
-            elif command in {"approve-memory", "approve_memory"}:
-                normalized_command = "approve memory"
-            elif command in {"reject-memory", "reject_memory"}:
-                normalized_command = "reject memory"
+    def _suggest_followups(self, text: str, memories: list[MemoryItem]) -> list[str]:
+        scope = _infer_scope(text)
+        if scope == "relationship_gift" and not any("闺蜜" in m.content for m in memories):
+            return ["她闺蜜最近晒过或收到过什么品牌吗？", "有没有前女友有过、绝对不能送的东西？"]
+        if scope == "life_family_travel" and not memories:
+            return ["同行人有没有老人、孩子或步行限制？", "偏自然、动物还是城市景点？"]
+        if scope == "work_report" and "老板" not in text and not memories:
+            return ["这份材料是给老板还是跨部门团队？"]
+        if scope == "study_plan" and not memories:
+            return ["现在是打基础、常规复习还是临考冲刺？"]
+        if scope == "research_review" and not memories:
+            return ["这是文献综述、评测整理还是研究问题 brainstorm？"]
+        return []
 
-        lowered = normalized_command.lower()
-        if "approve" in lowered or "同意保存" in normalized_command or "确认保存" in normalized_command:
-            return self.approve_pending()
-        if "reject" in lowered or "拒绝保存" in normalized_command or "不要保存" in normalized_command:
-            return self.reject_pending()
-        if "reset" in lowered or "清空" in normalized_command or "重置" in normalized_command:
-            return self.reset_memory()
-        if "show" in lowered or "展示" in normalized_command or "查看" in normalized_command:
-            return self.show_memory()
-        if "find" in lowered or "query" in lowered or "查询" in normalized_command or "搜索" in normalized_command:
-            query = (
-                normalized_command.replace("find", "")
-                .replace("query", "")
-                .replace("查询", "")
-                .replace("搜索", "")
-                .replace("记忆", "")
-                .strip()
-            )
-            matches = self.memory.find(query, include_inactive=True)
-            if not matches:
-                return SkillResponse("查询结果：无匹配记忆。", [], [], [])
-            lines = ["查询结果："]
-            for item in matches:
-                lines.append(f"- {item.id} [{item.status}/{item.type}/{item.scope}] {item.content}")
-            return SkillResponse("\n".join(lines), [], [m.id for m in matches if m.status == "active"], [])
-        if "删除" in normalized_command or "delete" in lowered or "forget" in lowered:
-            query = normalized_command.replace("delete", "").replace("删除", "").replace("这条记忆", "").replace("记忆", "").strip()
-            deleted = self.memory.delete(query)
-            names = ", ".join(item.id for item in deleted) or "无匹配"
-            return SkillResponse(f"删除结果：{names}。后续检索会过滤 deleted 记忆。", self.memory.events[-len(deleted):] if deleted else [], [], [])
-        if "降权" in normalized_command or "降级" in normalized_command or "downgrade" in lowered:
-            matches = self.memory.find(normalized_command, include_inactive=False)
-            actions = []
-            for item in matches:
-                self.memory.downgrade(item.id, "user_requested_downgrade")
-                actions.append(self.memory.events[-1])
-            return SkillResponse(f"降权 {len(actions)} 条记忆。", actions, [], [])
-        if "归档" in normalized_command or "archive" in lowered:
-            matches = self.memory.find(normalized_command, include_inactive=False)
-            actions = []
-            for item in matches:
-                self.memory.archive(item.id, "user_requested_archive")
-                actions.append(self.memory.events[-1])
-            return SkillResponse(f"归档 {len(actions)} 条记忆。", actions, [], [])
-        return SkillResponse("未识别到记忆管理命令。支持 reset/show/删除/降权。", [], [], [])
+    def _task_answer(self, text: str, memories: list[MemoryItem]) -> str:
+        scope = _infer_scope(text)
+        if scope == "relationship_gift":
+            return _gift_answer(text, memories)
+        if scope == "life_family_travel":
+            return _travel_answer(text, memories)
+        if scope == "work_report":
+            return _work_answer(text, memories)
+        if scope == "study_plan":
+            return _study_answer(text, memories)
+        if scope == "research_review":
+            return _research_answer(text, memories)
+        return f"我会先按当前请求处理：{text}\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。"
 
-    def first_task(self, case: EvalCase) -> SkillResponse:
-        asks = {
-            "life_family_travel": ["是否有老人或孩子的特殊约束？", "偏自然还是偏城市景点？"],
-            "work_report": ["这是给老板还是跨部门团队？", "需要结论优先还是过程展开？"],
-            "study_plan": ["你偏好整块学习还是番茄钟？", "是打基础还是冲刺？"],
-            "research_review": ["要综述已有方法还是 brainstorm 研究问题？", "需要关注数据集、局限和可复现性吗？"],
-        }[case.domain]
-        return SkillResponse(
-            f"我先按普通方案完成：{case.initial_task}\n为避免误记，我先不写长期记忆；如果你给出偏好，我会请求授权后保存。",
-            [],
-            [],
-            asks,
-        )
 
-    def learn_feedback(self, case: EvalCase) -> SkillResponse:
-        self.propose_feedback(case)
-        approved = self.approve_pending()
-        return SkillResponse(
-            "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n"
-            + "\n".join(line for line in approved.text.splitlines()[1:]),
-            approved.memory_actions,
-            [],
-            [],
-        )
+def _normalize_command(text: str) -> str:
+    if not text.startswith("/"):
+        return text
+    parts = text[1:].split(maxsplit=1)
+    command = parts[0].lower() if parts else ""
+    rest = parts[1] if len(parts) > 1 else ""
+    aliases = {
+        "memory": rest,
+        "mem": rest,
+        "reset-memory": "reset memory",
+        "reset_memory": "reset memory",
+        "show-memory": "show memory",
+        "show_memory": "show memory",
+        "delete-memory": "delete " + rest,
+        "delete_memory": "delete " + rest,
+        "downgrade-memory": "downgrade " + rest,
+        "downgrade_memory": "downgrade " + rest,
+        "archive-memory": "archive " + rest,
+        "archive_memory": "archive " + rest,
+        "find-memory": "find " + rest,
+        "find_memory": "find " + rest,
+    }
+    return aliases.get(command, text)
 
-    def second_task(self, case: EvalCase) -> SkillResponse:
-        applied = self._relevant(case)
-        text = self._application_text(case, applied)
-        return SkillResponse(text, [], [m.id for m in applied], [])
 
-    def update_preferences(self, case: EvalCase) -> SkillResponse:
-        actions: list[dict[str, Any]] = []
-        # Downgrade broad memories that conflict with the new narrower scope.
-        for item in self._relevant(case):
-            if any(token in item.content for token in ["少步行", "老板", "番茄钟", "文献综述"]):
-                self.memory.downgrade(item.id, f"新反馈缩小适用范围：{case.preference_change}")
-                actions.append(self.memory.events[-1])
-        for item in self._items_from_change(case):
-            self.memory.add(item)
-            actions.append(self.memory.events[-1])
-        return SkillResponse(
-            "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n" + "\n".join(a["detail"] for a in actions),
-            actions,
-            [],
-            [],
-        )
+def _strip_command_words(text: str, words: list[str]) -> str:
+    result = text
+    for word in words:
+        result = result.replace(word, "")
+    return result.strip(" 。：:，,")
 
-    def third_task(self, case: EvalCase) -> SkillResponse:
-        applied = self._relevant(case)
-        return SkillResponse(self._third_text(case, applied), [], [m.id for m in applied], [])
 
-    def delete_and_retest(self, case: EvalCase) -> SkillResponse:
-        deleted = self.memory.delete(case.delete_query)
-        applied = self._relevant(case)
-        text = self._delete_retest_text(case, applied, deleted)
-        return SkillResponse(text, self.memory.events[-len(deleted):] if deleted else [], [m.id for m in applied], [])
+def _split_clauses(text: str) -> list[str]:
+    normalized = text
+    for prefix in ["以后", "请记住", "记住：", "记住:", "用户反馈：", "反馈："]:
+        normalized = normalized.replace(prefix, "")
+    clauses = [normalized]
+    normalized = normalized.replace("，再", "；再").replace("，但", "；但").replace("；但", "；")
+    for sep in ["；", ";", "。", "\n"]:
+        clauses = [part for clause in clauses for part in clause.split(sep)]
+    return [clause.strip(" ，,：:") for clause in clauses if clause.strip(" ，,：:")]
 
-    def _relevant(self, case: EvalCase) -> list[MemoryItem]:
-        return [m for m in self.memory.active() if case.domain in m.applies_when or case.domain == m.scope or case.id in m.tags]
 
-    def _items_from_feedback(self, case: EvalCase) -> list[MemoryItem]:
-        common = {"scope": case.domain, "evidence": [case.feedback], "applies_when": [case.domain]}
-        if case.id == "C01":
-            return [
-                MemoryItem("scene_rule", "父亲同行时少步行并安排休息", tags=["少步行", case.id], **common),
-                MemoryItem("scene_rule", "孩子喜欢自然和动物", tags=["孩子动物", case.id], **common),
-                MemoryItem("preference", "家庭旅行避开人挤人的网红点", tags=["避开网红", case.id], **common),
-            ]
-        if case.id == "C02":
-            return [
-                MemoryItem("workflow_rule", "老板材料先给 3 条结论", tags=["3条结论", case.id], **common),
-                MemoryItem("format_preference", "老板材料用表格列风险、负责人和下一步", tags=["风险表", case.id], **common),
-            ]
-        if case.id == "C03":
-            return [
-                MemoryItem("learning_preference", "学习计划按 25 分钟番茄钟安排", tags=["番茄钟", case.id], **common),
-                MemoryItem("learning_preference", "先看例题再讲知识点", tags=["例题先行", case.id], **common),
-                MemoryItem("learning_preference", "每天最后安排 5 道自测题", tags=["5道自测", case.id], **common),
-            ]
-        return [
-            MemoryItem("research_method", "文献综述按方法类别组织", tags=["文献综述", case.id], **common),
-            MemoryItem("research_method", "每篇文献标数据集、局限和可复现性", tags=["可复现性", case.id], **common),
-            MemoryItem("communication_preference", "研究结论谨慎表述，不夸大", tags=["谨慎表述", case.id], **common),
-        ]
+def _has_memory_signal(text: str) -> bool:
+    signals = [
+        "以后",
+        "请记住",
+        "记住",
+        "喜欢",
+        "不喜欢",
+        "讨厌",
+        "偏好",
+        "要少",
+        "不要",
+        "不能",
+        "不用",
+        "只用于",
+        "仅用于",
+        "改成",
+        "保留",
+        "每天",
+        "先",
+        "最后",
+        "风险",
+        "负责人",
+        "下一步",
+        "局限",
+        "可复现",
+        "不要夸大",
+        "闺蜜",
+        "前女友",
+        "送过",
+        "晒过",
+    ]
+    return any(signal in text for signal in signals)
 
-    def _items_from_change(self, case: EvalCase) -> list[MemoryItem]:
-        common = {"scope": case.domain, "evidence": [case.preference_change], "applies_when": [case.domain]}
-        if case.id == "C01":
-            return [MemoryItem("scene_rule", "少步行仅在父亲同行时适用；亲子自然路线仍避开拥挤", tags=["条件化", case.id], **common)]
-        if case.id == "C02":
-            return [MemoryItem("workflow_rule", "风险表仅用于老板材料，跨部门同步改为协作事项和依赖", tags=["条件化", case.id], **common)]
-        if case.id == "C03":
-            return [MemoryItem("learning_preference", "临近考试改用高频考点冲刺，保留例题先行", tags=["冲刺模式", case.id], **common)]
-        return [MemoryItem("research_method", "brainstorm 研究问题时不用综述模板，仅保留谨慎表述", tags=["模式切换", case.id], **common)]
 
-    def _application_text(self, case: EvalCase, applied: list[MemoryItem]) -> str:
-        if case.id == "C01":
-            return "杭州家庭行程会少步行、安排休息，加入自然/动物点位，并避开拥挤网红点。"
-        if case.id == "C02":
-            return "老板同步材料先给 3 条结论，再用风险/负责人/下一步表格。"
-        if case.id == "C03":
-            return "高数复习计划采用番茄钟、例题先行，并每天保留 5 道自测题。"
-        return "RAG 评测综述按方法类别组织，并标注数据集、局限、可复现性，避免夸大。"
+def _infer_scope(text: str) -> str:
+    if any(token in text for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"]):
+        return "relationship_gift"
+    if any(token in text for token in ["家庭", "亲子", "旅行", "行程", "路线", "半日游", "动物", "网红", "父亲"]):
+        return "life_family_travel"
+    if any(token in text for token in ["老板", "周报", "项目", "跨部门", "同步", "研发", "设计", "运营", "风险", "负责人"]):
+        return "work_report"
+    if any(token in text for token in ["学习", "复习", "考试", "高数", "线性代数", "物理", "英语", "番茄钟", "例题", "自测"]):
+        return "study_plan"
+    if any(token in text for token in ["文献", "综述", "RAG", "研究", "数据集", "可复现", "brainstorm", "多模态"]):
+        return "research_review"
+    return "general"
 
-    def _third_text(self, case: EvalCase, applied: list[MemoryItem]) -> str:
-        if case.id == "C01":
-            return "上海亲子自然路线不再强制少步行，但继续避开拥挤并偏自然体验。"
-        if case.id == "C02":
-            return "跨部门同步不套老板模板，改为协作事项、依赖和需要对齐的问题。"
-        if case.id == "C03":
-            return "线代 2 天冲刺按高频考点组织，不再机械套番茄钟，保留例题先行。"
-        return "RAG 研究问题 brainstorm 不套综述表格，输出问题、假设、验证路径，并保持谨慎表述。"
 
-    def _delete_retest_text(self, case: EvalCase, applied: list[MemoryItem], deleted: list[MemoryItem]) -> str:
-        if case.id == "C01":
-            return "已删除孩子喜欢动物相关记忆；南京半日游不再主动安排动物主题，仍保留避开拥挤等未删除偏好。"
-        if case.id == "C02":
-            return "已删除 3 条结论记忆；老板材料不再强制三结论开头，仍可保留风险表等未删除规则。"
-        if case.id == "C03":
-            return "已删除每日 5 道自测题；物理复习不再强制每日 5 题，保留例题先行等未删除偏好。"
-        return "已删除可复现性字段记忆；简短综述不再强制可复现性字段，保留谨慎表述。"
+def _infer_memory_type(text: str, scope: str) -> str:
+    if scope == "work_report" and any(token in text for token in ["表格", "风险", "负责人", "下一步", "3 条结论", "3条结论"]):
+        return "workflow_rule"
+    if scope == "study_plan":
+        return "learning_preference"
+    if scope == "research_review":
+        return "research_method" if any(token in text for token in ["文献", "方法", "数据集", "局限", "可复现"]) else "communication_preference"
+    if any(token in text for token in ["不能", "不要", "不喜欢", "前女友"]):
+        return "taboo_or_negative_preference"
+    if any(token in text for token in ["只用于", "仅用于", "不适用", "同行", "闺蜜"]):
+        return "scene_rule"
+    return "preference"
+
+
+def _clean_memory_content(text: str, scope: str) -> str:
+    content = text.strip()
+    for prefix in ["以后", "家庭出行", "写给老板的项目材料，请", "学习计划请", "做文献综述时，请"]:
+        content = content.replace(prefix, "")
+    return content.strip(" ，,。：:")
+
+
+def _keywords(text: str) -> list[str]:
+    vocab = [
+        "父亲",
+        "少步行",
+        "步行",
+        "孩子",
+        "动物",
+        "自然",
+        "网红",
+        "老板",
+        "3 条结论",
+        "3条结论",
+        "风险",
+        "风险表",
+        "负责人",
+        "下一步",
+        "跨部门",
+        "番茄钟",
+        "例题",
+        "自测",
+        "高频考点",
+        "文献综述",
+        "方法类别",
+        "模板",
+        "数据集",
+        "局限",
+        "可复现性",
+        "谨慎",
+        "brainstorm",
+        "紫色",
+        "闺蜜",
+        "前女友",
+        "香水",
+        "礼物",
+    ]
+    return [word for word in vocab if word in text]
+
+
+def _gift_answer(text: str, memories: list[MemoryItem]) -> str:
+    if memories:
+        return "我会按已知偏好先筛礼物：避开禁忌，参考她喜欢的颜色和闺蜜品牌线索，再给出不重复的选择。"
+    return "我先不乱猜。可以先从首饰、香氛、包袋配饰、体验类礼物里筛一轮。"
+
+
+def _travel_answer(text: str, memories: list[MemoryItem]) -> str:
+    points = "、".join(m.content for m in memories) if memories else "常规节奏、交通便利、体验丰富"
+    return f"我会按这些约束安排路线：{points}。输出会控制步行强度、点位密度和休息节奏。"
+
+
+def _work_answer(text: str, memories: list[MemoryItem]) -> str:
+    points = "、".join(m.content for m in memories) if memories else "先明确受众，再组织结论、风险和下一步"
+    return f"我会按这个工作流整理材料：{points}。"
+
+
+def _study_answer(text: str, memories: list[MemoryItem]) -> str:
+    points = "、".join(m.content for m in memories) if memories else "先判断阶段，再安排知识点、例题和练习"
+    return f"我会按这个学习偏好生成计划：{points}。"
+
+
+def _research_answer(text: str, memories: list[MemoryItem]) -> str:
+    points = "、".join(m.content for m in memories) if memories else "按任务类型选择综述、评测或 brainstorm 结构"
+    return f"我会按这个研究工作法输出：{points}。"

@@ -6,8 +6,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from assist_everything_betterandbetter_skill.cases import get_case
-
 from .agent import HarnessAgent
 from .runner import run_all
 
@@ -55,11 +53,9 @@ class Handler(BaseHTTPRequestHandler):
                 STATE.agent_mode = mode
                 STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode)
             print(f"[workbench] chat agent={STATE.agent_mode} message={message[:80]}")
-            case_id = body.get("case_id")
-            case = get_case(case_id) if case_id else None
             stage = str(body.get("stage", "chat"))
             try:
-                turn = STATE.chat_agent.reply(message, stage=stage, case=case)
+                turn = STATE.chat_agent.reply(message, stage=stage)
                 self._send_json(
                     {
                         "turn": turn.to_dict(),

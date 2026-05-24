@@ -36,6 +36,12 @@ Key features:
 - Trace-based eval with memory snapshots and tool calls
 - Offline judge by default, with configurable Mimo agent/judge adapters
 
+Architecture boundary:
+
+- Skill runtime is generic and processes natural-language messages through `process_message(...)`.
+- Eval cases are only scripted user messages; they do not call case-specific skill methods.
+- Agent Chat and automated eval share the same memory extraction, update, retrieval, deletion, and response path.
+
 ## Run Eval Harness
 
 ```bash

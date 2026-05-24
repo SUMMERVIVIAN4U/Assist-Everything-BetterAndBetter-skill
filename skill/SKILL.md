@@ -54,6 +54,8 @@ Support either slash-like commands or natural language:
 
 Each eval case starts from `reset memory`.
 
+Eval cases are test scripts only. Do not put case-specific extraction, update, or response logic inside the skill. The agent must send each case step as ordinary user text through the same `process_message(...)` path used by normal chat.
+
 1. Round 1: perform an initial no-preference task, receive explicit feedback, extract authorized memory.
 2. Show memory: prove memory is inspectable and explainable.
 3. Round 2: run a similar but different task; apply relevant active memory without asking the user to repeat it.
