@@ -30,6 +30,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/":
             self._send_html(APP_HTML)
+        elif path == "/api/config":
+            self._send_json({"agent_mode": STATE.agent_mode})
         elif path == "/api/report":
             if not LATEST.exists():
                 run_all()
@@ -43,6 +45,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         body = self._read_json()
         if path == "/api/run":
+            print(f"[workbench] run eval agent={body.get('agent', 'local')} judge={body.get('judge', 'auto')}")
             report = run_all(judge_mode=body.get("judge", "auto"), agent_mode=body.get("agent", "local"))
             self._send_json(report)
         elif path == "/api/chat":
@@ -51,21 +54,27 @@ class Handler(BaseHTTPRequestHandler):
             if mode != STATE.agent_mode:
                 STATE.agent_mode = mode
                 STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode)
+            print(f"[workbench] chat agent={STATE.agent_mode} message={message[:80]}")
             case_id = body.get("case_id")
             case = get_case(case_id) if case_id else None
             stage = str(body.get("stage", "chat"))
-            turn = STATE.chat_agent.reply(message, stage=stage, case=case)
-            self._send_json(
-                {
-                    "turn": turn.to_dict(),
-                    "memory": STATE.chat_agent.toolbox.snapshot(),
-                    "session": STATE.chat_agent.session.to_dict(),
-                }
-            )
+            try:
+                turn = STATE.chat_agent.reply(message, stage=stage, case=case)
+                self._send_json(
+                    {
+                        "turn": turn.to_dict(),
+                        "memory": STATE.chat_agent.toolbox.snapshot(),
+                        "session": STATE.chat_agent.session.to_dict(),
+                    }
+                )
+            except Exception as exc:
+                print(f"[workbench] chat error: {exc}")
+                self._send_json({"error": str(exc), "memory": STATE.chat_agent.toolbox.snapshot()})
         elif path == "/api/reset-chat":
             mode = str(body.get("agent", STATE.agent_mode))
             STATE.agent_mode = mode
             STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode)
+            print(f"[workbench] reset chat agent={STATE.agent_mode}")
             self._send_json({"ok": True, "session": STATE.chat_agent.session.to_dict()})
         else:
             self.send_error(404)
@@ -161,7 +170,7 @@ APP_HTML = r"""<!doctype html>
     </div>
     <div>
       <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option></select>
-      <select id="judge"><option value="auto">auto judge</option><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option></select>
+    <select id="judge"><option value="auto">auto judge</option><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option></select>
       <button class="primary" onclick="runEval()">Run Eval</button>
     </div>
   </header>
@@ -198,6 +207,10 @@ APP_HTML = r"""<!doctype html>
       reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用',
       update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'
     };
+    async function fetchConfig() {
+      const cfg = await (await fetch('/api/config')).json();
+      document.getElementById('agentMode').value = cfg.agent_mode || 'local';
+    }
     async function fetchReport() {
       report = await (await fetch('/api/report')).json();
       renderAll();
@@ -243,7 +256,8 @@ APP_HTML = r"""<!doctype html>
       const text = input.value.trim(); if (!text) return;
       input.value = '';
       const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, agent:document.getElementById('agentMode').value})})).json();
-      appendMsg('user', text); appendMsg('assistant', data.turn.assistant.content);
+      appendMsg('user', text);
+      appendMsg('assistant', data.error ? ('ERROR: ' + data.error) : data.turn.assistant.content);
       document.getElementById('chatMemory').textContent = JSON.stringify(data.memory, null, 2);
     }
     async function resetChat() {
@@ -259,7 +273,7 @@ APP_HTML = r"""<!doctype html>
       div.scrollIntoView({block:'end'});
     }
     function escapeHtml(str) { return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-    fetchReport();
+    fetchConfig().then(fetchReport);
   </script>
 </body>
 </html>"""
