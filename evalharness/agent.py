@@ -27,8 +27,9 @@ class HarnessAgent:
         self.llm_client = llm_client
 
     def reply(self, user_text: str, *, stage: str = "chat") -> TurnTrace:
-        response, call = self.toolbox.process_message(user_text)
-        response.text = self._maybe_llm_rewrite(user_text, stage, response.text, response.applied_memories)
+        context = self._recent_context()
+        response, call = self.toolbox.process_message(user_text, context=context)
+        response.text = self._maybe_llm_rewrite(user_text, stage, response.text, response.applied_memories, context)
 
         user = Message(role="user", content=user_text)
         assistant = Message(role="assistant", content=response.text)
@@ -46,7 +47,14 @@ class HarnessAgent:
         self.session.turns.append(turn)
         return turn
 
-    def _maybe_llm_rewrite(self, user_text: str, stage: str, draft: str, applied_memories: list[str]) -> str:
+    def _maybe_llm_rewrite(
+        self,
+        user_text: str,
+        stage: str,
+        draft: str,
+        applied_memories: list[str],
+        context: str,
+    ) -> str:
         if not self._use_mimo():
             return draft
         client = self.llm_client or MimoClient()
@@ -58,6 +66,8 @@ class HarnessAgent:
                     "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
                     "记忆工具已经完成提取、更新、删除和检索。"
                     "必须尊重 tool_draft 和 memory_snapshot，不要虚构或使用 deleted/superseded 记忆。"
+                    "注意主体归属：如果上下文是在给女朋友选礼物，预算通常是用户的送礼预算，"
+                    "颜色/喜好通常归属女朋友，不要误写成用户本人喜欢。"
                     "用中文回复，段落清楚，必要时说明已应用/更新的记忆。"
                 ),
             },
@@ -67,6 +77,7 @@ class HarnessAgent:
                     {
                         "stage": stage,
                         "user_message": user_text,
+                        "conversation_context": context,
                         "tool_draft": draft,
                         "applied_memory_ids": applied_memories,
                         "memory_snapshot": snapshot,
@@ -76,6 +87,9 @@ class HarnessAgent:
             },
         ]
         return client.chat(messages, temperature=0.3).strip()
+
+    def _recent_context(self) -> str:
+        return "\n".join(f"{message.role}: {message.content}" for message in self.session.messages[-8:])
 
     def _use_mimo(self) -> bool:
         if self.llm_mode == "mimo":

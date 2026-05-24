@@ -25,9 +25,9 @@ class MemoryToolbox:
         response = self.skill.manage_memory(command)
         return response, self._call("manage_memory", {"command": command}, response.to_dict())
 
-    def process_message(self, message: str) -> tuple[SkillResponse, ToolCall]:
-        response = self.skill.process_message(message)
-        return response, self._call("process_message", {"message": message}, response.to_dict())
+    def process_message(self, message: str, context: str = "") -> tuple[SkillResponse, ToolCall]:
+        response = self.skill.process_message(message, context=context)
+        return response, self._call("process_message", {"message": message, "context": context}, response.to_dict())
 
     def snapshot(self) -> dict[str, Any]:
         return self.skill.memory.snapshot()

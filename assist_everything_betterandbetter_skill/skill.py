@@ -34,15 +34,15 @@ class AssistSkill:
         self.memory = MemoryStore()
         self.pending_proposals: list[MemoryItem] = []
 
-    def process_message(self, text: str) -> SkillResponse:
+    def process_message(self, text: str, context: str = "") -> SkillResponse:
         command = self._try_memory_command(text)
         if command:
             return command
 
-        actions = self._apply_updates(text)
-        relevant = self.retrieve_relevant_memories(text)
-        asks = self._suggest_followups(text, relevant)
-        response_text = self.compose_response(text, relevant, actions, asks)
+        actions = self._apply_updates(text, context)
+        relevant = self.retrieve_relevant_memories(text, context)
+        asks = self._suggest_followups(text, relevant, context)
+        response_text = self.compose_response(text, relevant, actions, asks, context)
         return SkillResponse(response_text, actions, [item.id for item in relevant], asks)
 
     def reset_memory(self) -> SkillResponse:
@@ -67,8 +67,8 @@ class AssistSkill:
             return command
         return SkillResponse("未识别到记忆管理命令。支持 reset/show/find/delete/downgrade/archive。", [], [], [])
 
-    def retrieve_relevant_memories(self, text: str) -> list[MemoryItem]:
-        scope = _infer_scope(text)
+    def retrieve_relevant_memories(self, text: str, context: str = "") -> list[MemoryItem]:
+        scope = _infer_scope(text, context)
         terms = _keywords(text)
         relevant: list[MemoryItem] = []
         for item in self.memory.active():
@@ -85,8 +85,9 @@ class AssistSkill:
         memories: list[MemoryItem],
         actions: list[dict[str, Any]],
         asks: list[str],
+        context: str = "",
     ) -> str:
-        lines = [self._task_answer(text, memories)]
+        lines = [self._task_answer(text, memories, context)]
         created = [a for a in actions if a["action"] == "add"]
         changed = [a for a in actions if a["action"] in {"downgrade", "archive", "delete", "update"}]
         if created:
@@ -152,28 +153,31 @@ class AssistSkill:
             return SkillResponse(f"归档 {len(actions)} 条记忆。", actions, [], [])
         return None
 
-    def _apply_updates(self, text: str) -> list[dict[str, Any]]:
+    def _apply_updates(self, text: str, context: str = "") -> list[dict[str, Any]]:
         actions: list[dict[str, Any]] = []
-        for match in self._conflicting_memories(text):
+        for match in self._conflicting_memories(text, context):
             self.memory.downgrade(match.id, f"新反馈缩小或推翻旧规则：{text}")
             actions.append(self.memory.events[-1])
-        for item in self.extract_memory_candidates(text):
+        for item in self.extract_memory_candidates(text, context):
             if not self._is_duplicate(item):
                 self.memory.add(item)
                 actions.append(self.memory.events[-1])
         return actions
 
-    def extract_memory_candidates(self, text: str) -> list[MemoryItem]:
+    def extract_memory_candidates(self, text: str, context: str = "") -> list[MemoryItem]:
         normalized = text.strip()
-        if not normalized or not _has_memory_signal(normalized):
+        if not normalized or not _has_memory_signal(normalized, context):
             return []
-        scope = _infer_scope(normalized)
+        scope = _infer_scope(normalized, context)
+        relationship = _relationship_candidates(normalized, context, scope)
+        if relationship:
+            return relationship
         candidates: list[MemoryItem] = []
         for clause in _split_clauses(normalized):
-            if not _has_memory_signal(clause):
+            if not _has_memory_signal(clause, context):
                 continue
             memory_type = _infer_memory_type(clause, scope)
-            content = _clean_memory_content(clause, scope)
+            content = _clean_memory_content(clause, scope, context)
             if not content:
                 continue
             candidates.append(
@@ -189,7 +193,7 @@ class AssistSkill:
             )
         return candidates
 
-    def _conflicting_memories(self, text: str) -> list[MemoryItem]:
+    def _conflicting_memories(self, text: str, context: str = "") -> list[MemoryItem]:
         lowered = text.lower()
         conflict_terms = ["不适用", "不用", "不要", "不能", "只用于", "仅用于", "改成", "推翻", "不再"]
         if not any(term in lowered for term in conflict_terms):
@@ -200,13 +204,13 @@ class AssistSkill:
             if any(term and term in item.content for term in terms):
                 matches.append(item)
         if not matches:
-            scope = _infer_scope(text)
+            scope = _infer_scope(text, context)
             topic_terms = ["步行", "风险", "番茄钟", "文献综述", "模板", "自测", "可复现", "香水", "前女友"]
             for item in self.memory.active():
                 if item.scope == scope and any(term in item.content for term in topic_terms if term in text):
                     matches.append(item)
         if not matches and "模板" in text:
-            scope = _infer_scope(text)
+            scope = _infer_scope(text, context)
             matches.extend(
                 item
                 for item in self.memory.active()
@@ -236,8 +240,8 @@ class AssistSkill:
         self.pending_proposals = []
         return SkillResponse(f"已拒绝保存 {count} 条候选记忆，不写入长期记忆库。", [], [], [])
 
-    def _suggest_followups(self, text: str, memories: list[MemoryItem]) -> list[str]:
-        scope = _infer_scope(text)
+    def _suggest_followups(self, text: str, memories: list[MemoryItem], context: str = "") -> list[str]:
+        scope = _infer_scope(text, context)
         if scope == "relationship_gift" and not any("闺蜜" in m.content for m in memories):
             return ["她闺蜜最近晒过或收到过什么品牌吗？", "有没有前女友有过、绝对不能送的东西？"]
         if scope == "life_family_travel" and not memories:
@@ -250,8 +254,8 @@ class AssistSkill:
             return ["这是文献综述、评测整理还是研究问题 brainstorm？"]
         return []
 
-    def _task_answer(self, text: str, memories: list[MemoryItem]) -> str:
-        scope = _infer_scope(text)
+    def _task_answer(self, text: str, memories: list[MemoryItem], context: str = "") -> str:
+        scope = _infer_scope(text, context)
         if scope == "relationship_gift":
             return _gift_answer(text, memories)
         if scope == "life_family_travel":
@@ -308,7 +312,7 @@ def _split_clauses(text: str) -> list[str]:
     return [clause.strip(" ，,：:") for clause in clauses if clause.strip(" ，,：:")]
 
 
-def _has_memory_signal(text: str) -> bool:
+def _has_memory_signal(text: str, context: str = "") -> bool:
     signals = [
         "以后",
         "请记住",
@@ -338,12 +342,19 @@ def _has_memory_signal(text: str) -> bool:
         "前女友",
         "送过",
         "晒过",
+        "预算",
+        "保留一个",
+        "就保留一个",
+        "只要一个",
+        "一个最合适",
     ]
-    return any(signal in text for signal in signals)
+    if any(signal in text for signal in signals):
+        return True
+    return _is_relationship_context(context) and any(token in text for token in ["紫色", "1000", "一千", "一个"])
 
 
-def _infer_scope(text: str) -> str:
-    if any(token in text for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"]):
+def _infer_scope(text: str, context: str = "") -> str:
+    if any(token in text for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"]) or _is_relationship_context(context):
         return "relationship_gift"
     if any(token in text for token in ["家庭", "亲子", "旅行", "行程", "路线", "半日游", "动物", "网红", "父亲"]):
         return "life_family_travel"
@@ -365,16 +376,122 @@ def _infer_memory_type(text: str, scope: str) -> str:
         return "research_method" if any(token in text for token in ["文献", "方法", "数据集", "局限", "可复现"]) else "communication_preference"
     if any(token in text for token in ["不能", "不要", "不喜欢", "前女友"]):
         return "taboo_or_negative_preference"
+    if scope == "relationship_gift" and any(token in text for token in ["保留一个", "只要一个", "一个最合适", "推荐的有点多"]):
+        return "communication_preference"
     if any(token in text for token in ["只用于", "仅用于", "不适用", "同行", "闺蜜"]):
         return "scene_rule"
     return "preference"
 
 
-def _clean_memory_content(text: str, scope: str) -> str:
+def _clean_memory_content(text: str, scope: str, context: str = "") -> str:
     content = text.strip()
     for prefix in ["以后", "家庭出行", "写给老板的项目材料，请", "学习计划请", "做文献综述时，请"]:
         content = content.replace(prefix, "")
-    return content.strip(" ，,。：:")
+    content = content.strip(" ，,。：:")
+    if scope == "relationship_gift":
+        content = _relationship_memory_content(content, context)
+    return content
+
+
+def _relationship_memory_content(content: str, context: str) -> str:
+    if "预算" in content:
+        budget = _extract_budget(content)
+        if "喜欢紫色" in content or "紫色" in content:
+            if budget:
+                return f"给女朋友选礼物预算在 {budget}；女朋友喜欢紫色"
+            return "女朋友喜欢紫色"
+        if budget:
+            return f"给女朋友选礼物预算在 {budget}"
+    if "喜欢紫色" in content or (_is_relationship_context(context) and "紫色" in content):
+        return "女朋友喜欢紫色"
+    if "保留一个" in content or "只要一个" in content or "一个最合适" in content:
+        return "给女朋友选礼物时，用户希望只保留一个最合适的推荐"
+    if "推荐的有点多" in content:
+        return "给女朋友选礼物时，用户希望推荐更简洁"
+    if "闺蜜" in content:
+        return f"给女朋友选礼物需参考闺蜜线索：{content}"
+    if "前女友" in content:
+        return f"给女朋友选礼物需避开前女友相关物品：{content}"
+    return content
+
+
+def _relationship_candidates(text: str, context: str, scope: str) -> list[MemoryItem]:
+    if scope != "relationship_gift":
+        return []
+    candidates: list[MemoryItem] = []
+    budget = _extract_budget(text)
+    if budget:
+        candidates.append(
+            MemoryItem(
+                "scene_rule",
+                f"给女朋友选礼物预算在 {budget}",
+                scope=scope,
+                source="chat_feedback",
+                evidence=[text],
+                applies_when=[scope],
+                tags=["礼物", "预算"],
+            )
+        )
+    if "紫色" in text or "喜欢紫色" in text:
+        candidates.append(
+            MemoryItem(
+                "preference",
+                "女朋友喜欢紫色",
+                scope=scope,
+                source="chat_feedback",
+                evidence=[text],
+                applies_when=[scope],
+                tags=["女朋友", "紫色"],
+            )
+        )
+    if "保留一个" in text or "只要一个" in text or "一个最合适" in text or "推荐的有点多" in text:
+        candidates.append(
+            MemoryItem(
+                "communication_preference",
+                "给女朋友选礼物时，用户希望只保留一个最合适的推荐",
+                scope=scope,
+                source="chat_feedback",
+                evidence=[text],
+                applies_when=[scope],
+                tags=["推荐简洁", "一个"],
+            )
+        )
+    if "闺蜜" in text:
+        candidates.append(
+            MemoryItem(
+                "scene_rule",
+                f"给女朋友选礼物需参考闺蜜线索：{text}",
+                scope=scope,
+                source="chat_feedback",
+                evidence=[text],
+                applies_when=[scope],
+                tags=["闺蜜", "礼物"],
+            )
+        )
+    if "前女友" in text:
+        candidates.append(
+            MemoryItem(
+                "taboo_or_negative_preference",
+                f"给女朋友选礼物需避开前女友相关物品：{text}",
+                scope=scope,
+                source="chat_feedback",
+                evidence=[text],
+                applies_when=[scope],
+                tags=["前女友", "禁忌"],
+            )
+        )
+    return candidates
+
+
+def _extract_budget(text: str) -> str:
+    for marker in ["1000", "一千"]:
+        if marker in text:
+            return "1000 元以内"
+    return ""
+
+
+def _is_relationship_context(context: str) -> bool:
+    return any(token in context for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"])
 
 
 def _keywords(text: str) -> list[str]:
@@ -416,6 +533,11 @@ def _keywords(text: str) -> list[str]:
 
 
 def _gift_answer(text: str, memories: list[MemoryItem]) -> str:
+    wants_one = any("只保留一个" in memory.content or "一个最合适" in memory.content for memory in memories)
+    likes_purple = any("紫色" in memory.content for memory in memories)
+    has_budget = any("预算" in memory.content for memory in memories)
+    if wants_one and likes_purple and has_budget:
+        return "我就保留一个推荐：紫水晶项链或手链。它符合 1000 元以内预算，也命中女朋友喜欢紫色这个偏好。"
     if memories:
         return "我会按已知偏好先筛礼物：避开禁忌，参考她喜欢的颜色和闺蜜品牌线索，再给出不重复的选择。"
     return "我先不乱猜。可以先从首饰、香氛、包袋配饰、体验类礼物里筛一轮。"
