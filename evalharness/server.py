@@ -154,9 +154,11 @@ APP_HTML = r"""<!doctype html>
     .trace h3 { margin:0 0 6px; font-size:15px; }
     .chat-layout { display:grid; grid-template-columns: 1fr 320px; gap:14px; }
     .chatlog { height:430px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--panel); }
-    .msg { margin:0 0 10px; padding:9px; border-radius:7px; background:#fff; border:1px solid var(--line); }
+    .msg { margin:0 0 10px; padding:10px 11px; border-radius:7px; background:#fff; border:1px solid var(--line); }
     .msg.user { border-left:4px solid var(--warn); }
     .msg.assistant { border-left:4px solid var(--accent); }
+    .msg.thinking { color:var(--muted); font-style:italic; }
+    .msg .content { white-space:pre-wrap; line-height:1.55; margin-top:4px; }
     .composer { display:flex; gap:8px; margin-top:10px; }
     .composer input { flex:1; border:1px solid var(--line); border-radius:6px; padding:9px; }
     @media (max-width: 900px) { .grid, .rounds, .dims, .chat-layout { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
@@ -255,10 +257,15 @@ APP_HTML = r"""<!doctype html>
       const input = document.getElementById('chatInput');
       const text = input.value.trim(); if (!text) return;
       input.value = '';
-      const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, agent:document.getElementById('agentMode').value})})).json();
       appendMsg('user', text);
-      appendMsg('assistant', data.error ? ('ERROR: ' + data.error) : data.turn.assistant.content);
-      document.getElementById('chatMemory').textContent = JSON.stringify(data.memory, null, 2);
+      const thinking = appendMsg('assistant thinking', '正在思考...');
+      try {
+        const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, agent:document.getElementById('agentMode').value})})).json();
+        updateMsg(thinking, data.error ? ('ERROR: ' + data.error) : data.turn.assistant.content, 'assistant');
+        document.getElementById('chatMemory').textContent = JSON.stringify(data.memory, null, 2);
+      } catch (err) {
+        updateMsg(thinking, 'ERROR: ' + err.message, 'assistant');
+      }
     }
     async function resetChat() {
       await fetch('/api/reset-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({agent:document.getElementById('agentMode').value})});
@@ -268,8 +275,16 @@ APP_HTML = r"""<!doctype html>
     function appendMsg(role, content) {
       const div = document.createElement('div');
       div.className = 'msg ' + role;
-      div.innerHTML = `<b>${role}</b><br>${escapeHtml(content)}`;
+      const label = role.includes('user') ? 'user' : 'assistant';
+      div.innerHTML = `<b>${label}</b><div class="content">${escapeHtml(content)}</div>`;
       document.getElementById('chatlog').appendChild(div);
+      div.scrollIntoView({block:'end'});
+      return div;
+    }
+    function updateMsg(div, content, role) {
+      div.className = 'msg ' + role;
+      const label = role.includes('user') ? 'user' : 'assistant';
+      div.innerHTML = `<b>${label}</b><div class="content">${escapeHtml(content)}</div>`;
       div.scrollIntoView({block:'end'});
     }
     function escapeHtml(str) { return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }

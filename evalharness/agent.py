@@ -6,6 +6,7 @@ import subprocess
 from typing import Any
 
 from assist_everything_betterandbetter_skill.cases import EvalCase
+from assist_everything_betterandbetter_skill.memory import MemoryItem
 
 from .llm import MimoClient, mimo_configured
 from .schemas import HarnessSession, Message, ToolCall, TurnTrace
@@ -65,10 +66,24 @@ class HarnessAgent:
             response, call = self.toolbox.manage_memory(user_text)
             tool_calls.append(call)
             if "未识别到记忆管理命令" in response.text:
+                learned_items = self._learn_from_chat(user_text)
+                if learned_items:
+                    tool_calls.append(
+                        ToolCall(
+                            name="extract_chat_memory",
+                            input={"message": user_text},
+                            output={"created": [item.to_dict() for item in learned_items]},
+                        )
+                    )
                 active = self.toolbox.skill.memory.active()
                 applied = [item.id for item in active]
                 memory_hint = "；".join(item.content for item in active[:3]) or "暂无可用长期记忆"
-                response.text = f"我按普通任务处理：{user_text}\n当前可参考记忆：{memory_hint}。"
+                saved_hint = ""
+                if learned_items:
+                    saved_hint = "\n\n我已提取并保存这些可复用记忆：\n" + "\n".join(
+                        f"- {item.content}" for item in learned_items
+                    )
+                response.text = f"我按普通任务处理：{user_text}\n\n当前可参考记忆：{memory_hint}。{saved_hint}"
                 response.applied_memories = applied
         response.text = self._maybe_llm_rewrite(user_text, stage, response.text, response.applied_memories)
 
@@ -100,6 +115,7 @@ class HarnessAgent:
                     "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
                     "必须尊重已执行的 memory tool 结果，不要虚构记忆。"
                     "用中文简洁回答，必要时说明已应用/未应用哪些记忆。"
+                    "输出要有清晰段落和换行，避免把所有内容挤成一整段。"
                 ),
             },
             {
@@ -117,6 +133,46 @@ class HarnessAgent:
             },
         ]
         return client.chat(messages, temperature=0.3).strip()
+
+    def _learn_from_chat(self, user_text: str) -> list[MemoryItem]:
+        memories: list[MemoryItem] = []
+        normalized = user_text.strip()
+        if not normalized:
+            return memories
+        gift_context = any(token in normalized for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"]) or self._chat_context_is_gift()
+        preference_signal = any(token in normalized for token in ["喜欢", "偏好", "讨厌", "不要", "不能", "一定要", "必须"])
+        social_signal = any(token in normalized for token in ["闺蜜", "前女友", "送过", "晒过", "有过"])
+        if gift_context and preference_signal:
+            memories.append(
+                MemoryItem(
+                    "preference",
+                    f"恋爱送礼偏好/约束：{normalized}",
+                    scope="relationship_gift",
+                    source="chat_feedback",
+                    evidence=[normalized],
+                    applies_when=["relationship_gift", "gift_recommendation"],
+                    tags=["恋爱送礼", "偏好"],
+                )
+            )
+        elif gift_context and social_signal:
+            memories.append(
+                MemoryItem(
+                    "scene_rule",
+                    f"恋爱送礼社交参照：{normalized}",
+                    scope="relationship_gift",
+                    source="chat_feedback",
+                    evidence=[normalized],
+                    applies_when=["relationship_gift", "gift_recommendation"],
+                    tags=["恋爱送礼", "闺蜜参照"],
+                )
+            )
+        for item in memories:
+            self.toolbox.skill.memory.add(item)
+        return memories
+
+    def _chat_context_is_gift(self) -> bool:
+        recent = " ".join(message.content for message in self.session.messages[-6:])
+        return any(token in recent for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"])
 
     def _use_mimo(self) -> bool:
         if self.llm_mode == "mimo":
