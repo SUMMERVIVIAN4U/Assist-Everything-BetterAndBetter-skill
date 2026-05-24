@@ -1,0 +1,2227 @@
+{
+  "config": {
+    "name": "current_module_config",
+    "enabled_modules": [
+      "consent_gate",
+      "memory_extraction",
+      "memory_application",
+      "conflict_resolution",
+      "delete_control"
+    ]
+  },
+  "summary": {
+    "case_count": 4,
+    "config_average": 100.0,
+    "effort_reduction": "-54%",
+    "all_cases_above_90": true
+  },
+  "dimensions": {
+    "reproducibility": 10,
+    "memory_extraction": 20,
+    "memory_application": 25,
+    "update_and_decay": 20,
+    "transparency": 10,
+    "result_quality": 15
+  },
+  "cases": [
+    {
+      "id": "C01",
+      "title": "家庭旅行规划",
+      "domain": "life_family_travel",
+      "goal": "验证 场景规则与条件化更新模块 在三轮流程和删除复测中的稳定表现。",
+      "module": "场景规则与条件化更新模块",
+      "score": 100,
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 20,
+        "memory_application": 25,
+        "update_and_decay": 20,
+        "transparency": 10,
+        "result_quality": 15,
+        "total": 100
+      },
+      "rounds": [
+        {
+          "name": "Round 1",
+          "title": "记忆形成",
+          "input": "帮我安排北京周末 2 天亲子旅行。",
+          "skill": "我先按普通方案完成：帮我安排北京周末 2 天亲子旅行。",
+          "memory": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 父亲同行时少步行并安排休息\n- 孩子喜欢自然和动物\n- 家庭旅行避开人挤人的网红点",
+          "transition": "M0 -> M1",
+          "gain": "从无偏好 baseline 进入可复用记忆状态。",
+          "action": "新增记忆",
+          "details": [
+            {
+              "text": "我先按普通方案完成：帮我安排北京周末 2 天亲子旅行。\n为避免误记，我先不写长期记忆；如果你给出偏好，我会请求授权后保存。",
+              "memory_actions": [],
+              "applied_memories": [],
+              "asks": [
+                "是否有老人或孩子的特殊约束？",
+                "偏自然还是偏城市景点？"
+              ]
+            },
+            {
+              "text": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 父亲同行时少步行并安排休息\n- 孩子喜欢自然和动物\n- 家庭旅行避开人挤人的网红点",
+              "memory_actions": [
+                {
+                  "action": "add",
+                  "memory_id": "mem_18bdbd8a",
+                  "detail": "父亲同行时少步行并安排休息",
+                  "version": "M1",
+                  "timestamp": "2026-05-24T03:44:55.392049+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_42c57c10",
+                  "detail": "孩子喜欢自然和动物",
+                  "version": "M2",
+                  "timestamp": "2026-05-24T03:44:55.392055+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_92ffe33e",
+                  "detail": "家庭旅行避开人挤人的网红点",
+                  "version": "M3",
+                  "timestamp": "2026-05-24T03:44:55.392060+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 2",
+          "title": "记忆应用",
+          "input": "帮我安排杭州 3 天家庭行程。",
+          "skill": "杭州家庭行程会少步行、安排休息，加入自然/动物点位，并避开拥挤网红点。",
+          "memory": "应用 3 条 active 记忆",
+          "transition": "M1 保持",
+          "gain": "相似但不同任务中减少重复说明。",
+          "action": "应用记忆",
+          "details": [
+            {
+              "text": "当前 active 记忆：\n- mem_18bdbd8a [scene_rule/life_family_travel] 父亲同行时少步行并安排休息\n- mem_42c57c10 [scene_rule/life_family_travel] 孩子喜欢自然和动物\n- mem_92ffe33e [preference/life_family_travel] 家庭旅行避开人挤人的网红点",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_18bdbd8a",
+                "mem_42c57c10",
+                "mem_92ffe33e"
+              ],
+              "asks": []
+            },
+            {
+              "text": "杭州家庭行程会少步行、安排休息，加入自然/动物点位，并避开拥挤网红点。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_18bdbd8a",
+                "mem_42c57c10",
+                "mem_92ffe33e"
+              ],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 3",
+          "title": "更新淘汰",
+          "input": "帮我安排上海 1 天亲子自然路线。",
+          "skill": "上海亲子自然路线不再强制少步行，但继续避开拥挤并偏自然体验。",
+          "memory": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：这次父亲不去，只有我和孩子；避开网红点这条保留，但少步行不适用。\n少步行仅在父亲同行时适用；亲子自然路线仍避开拥挤",
+          "transition": "M1 -> M2",
+          "gain": "新规则生效，旧规则降权或条件化。",
+          "action": "更新 / 降权",
+          "details": [
+            {
+              "text": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：这次父亲不去，只有我和孩子；避开网红点这条保留，但少步行不适用。\n少步行仅在父亲同行时适用；亲子自然路线仍避开拥挤",
+              "memory_actions": [
+                {
+                  "action": "downgrade",
+                  "memory_id": "mem_18bdbd8a",
+                  "detail": "新反馈缩小适用范围：这次父亲不去，只有我和孩子；避开网红点这条保留，但少步行不适用。",
+                  "version": "M4",
+                  "timestamp": "2026-05-24T03:44:55.392492+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_140e1da7",
+                  "detail": "少步行仅在父亲同行时适用；亲子自然路线仍避开拥挤",
+                  "version": "M5",
+                  "timestamp": "2026-05-24T03:44:55.392535+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            },
+            {
+              "text": "上海亲子自然路线不再强制少步行，但继续避开拥挤并偏自然体验。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_42c57c10",
+                "mem_92ffe33e",
+                "mem_140e1da7"
+              ],
+              "asks": []
+            }
+          ]
+        }
+      ],
+      "memory_journey": [
+        {
+          "state": "M0",
+          "title": "空白记忆",
+          "effort_level": "高",
+          "effort_score": 72,
+          "reason": "用户需要完整说明偏好与约束。"
+        },
+        {
+          "state": "M1",
+          "title": "偏好已保存",
+          "effort_level": "中",
+          "effort_score": 38,
+          "reason": "用户只需给相似任务，系统能主动应用。"
+        },
+        {
+          "state": "M2",
+          "title": "规则已更新",
+          "effort_level": "低",
+          "effort_score": 18,
+          "reason": "用户只需说明例外或新场景，系统能处理边界。"
+        }
+      ],
+      "ablation": {
+        "module": "场景规则与条件化更新模块",
+        "off": [
+          "重复询问基础偏好",
+          "旧规则继续干扰",
+          "删除后仍可能命中旧记忆"
+        ],
+        "on": [
+          "只追问缺口",
+          "旧规则降权/条件化",
+          "deleted 记忆被过滤"
+        ]
+      },
+      "delete_retest": {
+        "text": "已删除孩子喜欢动物相关记忆；南京半日游不再主动安排动物主题，仍保留避开拥挤等未删除偏好。",
+        "memory_actions": [
+          {
+            "action": "delete",
+            "memory_id": "mem_42c57c10",
+            "detail": "user_requested_delete",
+            "version": "M5",
+            "timestamp": "2026-05-24T03:44:55.392875+00:00"
+          }
+        ],
+        "applied_memories": [
+          "mem_92ffe33e",
+          "mem_140e1da7"
+        ],
+        "asks": []
+      },
+      "snapshots": [
+        {
+          "version": "M0",
+          "active": [],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M3",
+          "active": [
+            {
+              "type": "scene_rule",
+              "content": "父亲同行时少步行并安排休息",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "少步行",
+                "C01"
+              ],
+              "id": "mem_18bdbd8a",
+              "created_at": "2026-05-24T03:44:55.391973+00:00",
+              "updated_at": "2026-05-24T03:44:55.391981+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "scene_rule",
+              "content": "孩子喜欢自然和动物",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "孩子动物",
+                "C01"
+              ],
+              "id": "mem_42c57c10",
+              "created_at": "2026-05-24T03:44:55.392006+00:00",
+              "updated_at": "2026-05-24T03:44:55.392011+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "家庭旅行避开人挤人的网红点",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "避开网红",
+                "C01"
+              ],
+              "id": "mem_92ffe33e",
+              "created_at": "2026-05-24T03:44:55.392029+00:00",
+              "updated_at": "2026-05-24T03:44:55.392033+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M3",
+          "active": [
+            {
+              "type": "scene_rule",
+              "content": "父亲同行时少步行并安排休息",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "少步行",
+                "C01"
+              ],
+              "id": "mem_18bdbd8a",
+              "created_at": "2026-05-24T03:44:55.391973+00:00",
+              "updated_at": "2026-05-24T03:44:55.391981+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "scene_rule",
+              "content": "孩子喜欢自然和动物",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "孩子动物",
+                "C01"
+              ],
+              "id": "mem_42c57c10",
+              "created_at": "2026-05-24T03:44:55.392006+00:00",
+              "updated_at": "2026-05-24T03:44:55.392011+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "家庭旅行避开人挤人的网红点",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "避开网红",
+                "C01"
+              ],
+              "id": "mem_92ffe33e",
+              "created_at": "2026-05-24T03:44:55.392029+00:00",
+              "updated_at": "2026-05-24T03:44:55.392033+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M5",
+          "active": [
+            {
+              "type": "scene_rule",
+              "content": "孩子喜欢自然和动物",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "孩子动物",
+                "C01"
+              ],
+              "id": "mem_42c57c10",
+              "created_at": "2026-05-24T03:44:55.392006+00:00",
+              "updated_at": "2026-05-24T03:44:55.392011+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "家庭旅行避开人挤人的网红点",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "避开网红",
+                "C01"
+              ],
+              "id": "mem_92ffe33e",
+              "created_at": "2026-05-24T03:44:55.392029+00:00",
+              "updated_at": "2026-05-24T03:44:55.392033+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "scene_rule",
+              "content": "少步行仅在父亲同行时适用；亲子自然路线仍避开拥挤",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "这次父亲不去，只有我和孩子；避开网红点这条保留，但少步行不适用。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "条件化",
+                "C01"
+              ],
+              "id": "mem_140e1da7",
+              "created_at": "2026-05-24T03:44:55.392524+00:00",
+              "updated_at": "2026-05-24T03:44:55.392529+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "scene_rule",
+              "content": "父亲同行时少步行并安排休息",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "少步行",
+                "C01"
+              ],
+              "id": "mem_18bdbd8a",
+              "created_at": "2026-05-24T03:44:55.391973+00:00",
+              "updated_at": "2026-05-24T03:44:55.392484+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M6",
+          "active": [
+            {
+              "type": "preference",
+              "content": "家庭旅行避开人挤人的网红点",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "避开网红",
+                "C01"
+              ],
+              "id": "mem_92ffe33e",
+              "created_at": "2026-05-24T03:44:55.392029+00:00",
+              "updated_at": "2026-05-24T03:44:55.392033+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "scene_rule",
+              "content": "少步行仅在父亲同行时适用；亲子自然路线仍避开拥挤",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "这次父亲不去，只有我和孩子；避开网红点这条保留，但少步行不适用。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "条件化",
+                "C01"
+              ],
+              "id": "mem_140e1da7",
+              "created_at": "2026-05-24T03:44:55.392524+00:00",
+              "updated_at": "2026-05-24T03:44:55.392529+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "scene_rule",
+              "content": "父亲同行时少步行并安排休息",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "少步行",
+                "C01"
+              ],
+              "id": "mem_18bdbd8a",
+              "created_at": "2026-05-24T03:44:55.391973+00:00",
+              "updated_at": "2026-05-24T03:44:55.392484+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": [
+            {
+              "type": "scene_rule",
+              "content": "孩子喜欢自然和动物",
+              "scope": "life_family_travel",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "deleted",
+              "evidence": [
+                "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "孩子动物",
+                "C01"
+              ],
+              "id": "mem_42c57c10",
+              "created_at": "2026-05-24T03:44:55.392006+00:00",
+              "updated_at": "2026-05-24T03:44:55.392868+00:00",
+              "supersedes": []
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "reset": true,
+        "snapshots": 5,
+        "created": 4,
+        "show_memory": true,
+        "applied_round2": true,
+        "applied_round3": true,
+        "updated": true,
+        "deleted_filtered": true,
+        "delete_reported": true,
+        "deliverable_outputs": 4
+      }
+    },
+    {
+      "id": "C02",
+      "title": "项目周报与决策材料",
+      "domain": "work_report",
+      "goal": "验证 工作流记忆与适用范围模块 在三轮流程和删除复测中的稳定表现。",
+      "module": "工作流记忆与适用范围模块",
+      "score": 100,
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 20,
+        "memory_application": 25,
+        "update_and_decay": 20,
+        "transparency": 10,
+        "result_quality": 15,
+        "total": 100
+      },
+      "rounds": [
+        {
+          "name": "Round 1",
+          "title": "记忆形成",
+          "input": "根据这些进展写一份项目周报。",
+          "skill": "我先按普通方案完成：根据这些进展写一份项目周报。",
+          "memory": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 老板材料先给 3 条结论\n- 老板材料用表格列风险、负责人和下一步",
+          "transition": "M0 -> M1",
+          "gain": "从无偏好 baseline 进入可复用记忆状态。",
+          "action": "新增记忆",
+          "details": [
+            {
+              "text": "我先按普通方案完成：根据这些进展写一份项目周报。\n为避免误记，我先不写长期记忆；如果你给出偏好，我会请求授权后保存。",
+              "memory_actions": [],
+              "applied_memories": [],
+              "asks": [
+                "这是给老板还是跨部门团队？",
+                "需要结论优先还是过程展开？"
+              ]
+            },
+            {
+              "text": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 老板材料先给 3 条结论\n- 老板材料用表格列风险、负责人和下一步",
+              "memory_actions": [
+                {
+                  "action": "add",
+                  "memory_id": "mem_d4fa0c11",
+                  "detail": "老板材料先给 3 条结论",
+                  "version": "M1",
+                  "timestamp": "2026-05-24T03:44:55.393248+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_a2ee3fc8",
+                  "detail": "老板材料用表格列风险、负责人和下一步",
+                  "version": "M2",
+                  "timestamp": "2026-05-24T03:44:55.393254+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 2",
+          "title": "记忆应用",
+          "input": "把这段研发进展整理成给老板看的同步材料。",
+          "skill": "老板同步材料先给 3 条结论，再用风险/负责人/下一步表格。",
+          "memory": "应用 2 条 active 记忆",
+          "transition": "M1 保持",
+          "gain": "相似但不同任务中减少重复说明。",
+          "action": "应用记忆",
+          "details": [
+            {
+              "text": "当前 active 记忆：\n- mem_d4fa0c11 [workflow_rule/work_report] 老板材料先给 3 条结论\n- mem_a2ee3fc8 [format_preference/work_report] 老板材料用表格列风险、负责人和下一步",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_d4fa0c11",
+                "mem_a2ee3fc8"
+              ],
+              "asks": []
+            },
+            {
+              "text": "老板同步材料先给 3 条结论，再用风险/负责人/下一步表格。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_d4fa0c11",
+                "mem_a2ee3fc8"
+              ],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 3",
+          "title": "更新淘汰",
+          "input": "写一份给设计、研发、运营的跨部门同步。",
+          "skill": "跨部门同步不套老板模板，改为协作事项、依赖和需要对齐的问题。",
+          "memory": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：跨部门同步不要那么管理层风格，风险表只用于老板材料。\n新反馈缩小适用范围：跨部门同步不要那么管理层风格，风险表只用于老板材料。\n风险表仅用于老板材料，跨部门同步改为协作事项和依赖",
+          "transition": "M1 -> M2",
+          "gain": "新规则生效，旧规则降权或条件化。",
+          "action": "更新 / 降权",
+          "details": [
+            {
+              "text": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：跨部门同步不要那么管理层风格，风险表只用于老板材料。\n新反馈缩小适用范围：跨部门同步不要那么管理层风格，风险表只用于老板材料。\n风险表仅用于老板材料，跨部门同步改为协作事项和依赖",
+              "memory_actions": [
+                {
+                  "action": "downgrade",
+                  "memory_id": "mem_d4fa0c11",
+                  "detail": "新反馈缩小适用范围：跨部门同步不要那么管理层风格，风险表只用于老板材料。",
+                  "version": "M3",
+                  "timestamp": "2026-05-24T03:44:55.393528+00:00"
+                },
+                {
+                  "action": "downgrade",
+                  "memory_id": "mem_a2ee3fc8",
+                  "detail": "新反馈缩小适用范围：跨部门同步不要那么管理层风格，风险表只用于老板材料。",
+                  "version": "M4",
+                  "timestamp": "2026-05-24T03:44:55.393540+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_eb4f845e",
+                  "detail": "风险表仅用于老板材料，跨部门同步改为协作事项和依赖",
+                  "version": "M5",
+                  "timestamp": "2026-05-24T03:44:55.393581+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            },
+            {
+              "text": "跨部门同步不套老板模板，改为协作事项、依赖和需要对齐的问题。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_eb4f845e"
+              ],
+              "asks": []
+            }
+          ]
+        }
+      ],
+      "memory_journey": [
+        {
+          "state": "M0",
+          "title": "空白记忆",
+          "effort_level": "高",
+          "effort_score": 72,
+          "reason": "用户需要完整说明偏好与约束。"
+        },
+        {
+          "state": "M1",
+          "title": "偏好已保存",
+          "effort_level": "中",
+          "effort_score": 38,
+          "reason": "用户只需给相似任务，系统能主动应用。"
+        },
+        {
+          "state": "M2",
+          "title": "规则已更新",
+          "effort_level": "低",
+          "effort_score": 18,
+          "reason": "用户只需说明例外或新场景，系统能处理边界。"
+        }
+      ],
+      "ablation": {
+        "module": "工作流记忆与适用范围模块",
+        "off": [
+          "重复询问基础偏好",
+          "旧规则继续干扰",
+          "删除后仍可能命中旧记忆"
+        ],
+        "on": [
+          "只追问缺口",
+          "旧规则降权/条件化",
+          "deleted 记忆被过滤"
+        ]
+      },
+      "delete_retest": {
+        "text": "已删除 3 条结论记忆；老板材料不再强制三结论开头，仍可保留风险表等未删除规则。",
+        "memory_actions": [
+          {
+            "action": "delete",
+            "memory_id": "mem_d4fa0c11",
+            "detail": "user_requested_delete",
+            "version": "M5",
+            "timestamp": "2026-05-24T03:44:55.393851+00:00"
+          }
+        ],
+        "applied_memories": [
+          "mem_eb4f845e"
+        ],
+        "asks": []
+      },
+      "snapshots": [
+        {
+          "version": "M0",
+          "active": [],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M2",
+          "active": [
+            {
+              "type": "workflow_rule",
+              "content": "老板材料先给 3 条结论",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "3条结论",
+                "C02"
+              ],
+              "id": "mem_d4fa0c11",
+              "created_at": "2026-05-24T03:44:55.393201+00:00",
+              "updated_at": "2026-05-24T03:44:55.393210+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "format_preference",
+              "content": "老板材料用表格列风险、负责人和下一步",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "风险表",
+                "C02"
+              ],
+              "id": "mem_a2ee3fc8",
+              "created_at": "2026-05-24T03:44:55.393231+00:00",
+              "updated_at": "2026-05-24T03:44:55.393235+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M2",
+          "active": [
+            {
+              "type": "workflow_rule",
+              "content": "老板材料先给 3 条结论",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "3条结论",
+                "C02"
+              ],
+              "id": "mem_d4fa0c11",
+              "created_at": "2026-05-24T03:44:55.393201+00:00",
+              "updated_at": "2026-05-24T03:44:55.393210+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "format_preference",
+              "content": "老板材料用表格列风险、负责人和下一步",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "风险表",
+                "C02"
+              ],
+              "id": "mem_a2ee3fc8",
+              "created_at": "2026-05-24T03:44:55.393231+00:00",
+              "updated_at": "2026-05-24T03:44:55.393235+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M5",
+          "active": [
+            {
+              "type": "workflow_rule",
+              "content": "风险表仅用于老板材料，跨部门同步改为协作事项和依赖",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "跨部门同步不要那么管理层风格，风险表只用于老板材料。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "条件化",
+                "C02"
+              ],
+              "id": "mem_eb4f845e",
+              "created_at": "2026-05-24T03:44:55.393566+00:00",
+              "updated_at": "2026-05-24T03:44:55.393575+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "workflow_rule",
+              "content": "老板材料先给 3 条结论",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "3条结论",
+                "C02"
+              ],
+              "id": "mem_d4fa0c11",
+              "created_at": "2026-05-24T03:44:55.393201+00:00",
+              "updated_at": "2026-05-24T03:44:55.393522+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "format_preference",
+              "content": "老板材料用表格列风险、负责人和下一步",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "风险表",
+                "C02"
+              ],
+              "id": "mem_a2ee3fc8",
+              "created_at": "2026-05-24T03:44:55.393231+00:00",
+              "updated_at": "2026-05-24T03:44:55.393536+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M6",
+          "active": [
+            {
+              "type": "workflow_rule",
+              "content": "风险表仅用于老板材料，跨部门同步改为协作事项和依赖",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "跨部门同步不要那么管理层风格，风险表只用于老板材料。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "条件化",
+                "C02"
+              ],
+              "id": "mem_eb4f845e",
+              "created_at": "2026-05-24T03:44:55.393566+00:00",
+              "updated_at": "2026-05-24T03:44:55.393575+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "format_preference",
+              "content": "老板材料用表格列风险、负责人和下一步",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "风险表",
+                "C02"
+              ],
+              "id": "mem_a2ee3fc8",
+              "created_at": "2026-05-24T03:44:55.393231+00:00",
+              "updated_at": "2026-05-24T03:44:55.393536+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": [
+            {
+              "type": "workflow_rule",
+              "content": "老板材料先给 3 条结论",
+              "scope": "work_report",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "deleted",
+              "evidence": [
+                "以后写给老板的项目材料，请先给 3 条结论，再用表格列风险、负责人和下一步。"
+              ],
+              "applies_when": [
+                "work_report"
+              ],
+              "user_approved": true,
+              "tags": [
+                "3条结论",
+                "C02"
+              ],
+              "id": "mem_d4fa0c11",
+              "created_at": "2026-05-24T03:44:55.393201+00:00",
+              "updated_at": "2026-05-24T03:44:55.393844+00:00",
+              "supersedes": []
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "reset": true,
+        "snapshots": 5,
+        "created": 3,
+        "show_memory": true,
+        "applied_round2": true,
+        "applied_round3": true,
+        "updated": true,
+        "deleted_filtered": true,
+        "delete_reported": true,
+        "deliverable_outputs": 4
+      }
+    },
+    {
+      "id": "C03",
+      "title": "考试复习计划",
+      "domain": "study_plan",
+      "goal": "验证 学习偏好与冲刺模式模块 在三轮流程和删除复测中的稳定表现。",
+      "module": "学习偏好与冲刺模式模块",
+      "score": 100,
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 20,
+        "memory_application": 25,
+        "update_and_decay": 20,
+        "transparency": 10,
+        "result_quality": 15,
+        "total": 100
+      },
+      "rounds": [
+        {
+          "name": "Round 1",
+          "title": "记忆形成",
+          "input": "帮我做一个 7 天英语复习计划。",
+          "skill": "我先按普通方案完成：帮我做一个 7 天英语复习计划。",
+          "memory": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 学习计划按 25 分钟番茄钟安排\n- 先看例题再讲知识点\n- 每天最后安排 5 道自测题",
+          "transition": "M0 -> M1",
+          "gain": "从无偏好 baseline 进入可复用记忆状态。",
+          "action": "新增记忆",
+          "details": [
+            {
+              "text": "我先按普通方案完成：帮我做一个 7 天英语复习计划。\n为避免误记，我先不写长期记忆；如果你给出偏好，我会请求授权后保存。",
+              "memory_actions": [],
+              "applied_memories": [],
+              "asks": [
+                "你偏好整块学习还是番茄钟？",
+                "是打基础还是冲刺？"
+              ]
+            },
+            {
+              "text": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 学习计划按 25 分钟番茄钟安排\n- 先看例题再讲知识点\n- 每天最后安排 5 道自测题",
+              "memory_actions": [
+                {
+                  "action": "add",
+                  "memory_id": "mem_2ea86c1b",
+                  "detail": "学习计划按 25 分钟番茄钟安排",
+                  "version": "M1",
+                  "timestamp": "2026-05-24T03:44:55.394171+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_9e8782a6",
+                  "detail": "先看例题再讲知识点",
+                  "version": "M2",
+                  "timestamp": "2026-05-24T03:44:55.394177+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_d493c09f",
+                  "detail": "每天最后安排 5 道自测题",
+                  "version": "M3",
+                  "timestamp": "2026-05-24T03:44:55.394181+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 2",
+          "title": "记忆应用",
+          "input": "帮我做一个 5 天高数复习计划。",
+          "skill": "高数复习计划采用番茄钟、例题先行，并每天保留 5 道自测题。",
+          "memory": "应用 3 条 active 记忆",
+          "transition": "M1 保持",
+          "gain": "相似但不同任务中减少重复说明。",
+          "action": "应用记忆",
+          "details": [
+            {
+              "text": "当前 active 记忆：\n- mem_2ea86c1b [learning_preference/study_plan] 学习计划按 25 分钟番茄钟安排\n- mem_9e8782a6 [learning_preference/study_plan] 先看例题再讲知识点\n- mem_d493c09f [learning_preference/study_plan] 每天最后安排 5 道自测题",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_2ea86c1b",
+                "mem_9e8782a6",
+                "mem_d493c09f"
+              ],
+              "asks": []
+            },
+            {
+              "text": "高数复习计划采用番茄钟、例题先行，并每天保留 5 道自测题。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_2ea86c1b",
+                "mem_9e8782a6",
+                "mem_d493c09f"
+              ],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 3",
+          "title": "更新淘汰",
+          "input": "帮我做 2 天线性代数冲刺。",
+          "skill": "线代 2 天冲刺按高频考点组织，不再机械套番茄钟，保留例题先行。",
+          "memory": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：考试只剩两天了，番茄钟不用了，改成按高频考点冲刺；但例题先行还保留。\n临近考试改用高频考点冲刺，保留例题先行",
+          "transition": "M1 -> M2",
+          "gain": "新规则生效，旧规则降权或条件化。",
+          "action": "更新 / 降权",
+          "details": [
+            {
+              "text": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：考试只剩两天了，番茄钟不用了，改成按高频考点冲刺；但例题先行还保留。\n临近考试改用高频考点冲刺，保留例题先行",
+              "memory_actions": [
+                {
+                  "action": "downgrade",
+                  "memory_id": "mem_2ea86c1b",
+                  "detail": "新反馈缩小适用范围：考试只剩两天了，番茄钟不用了，改成按高频考点冲刺；但例题先行还保留。",
+                  "version": "M4",
+                  "timestamp": "2026-05-24T03:44:55.394664+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_518397b4",
+                  "detail": "临近考试改用高频考点冲刺，保留例题先行",
+                  "version": "M5",
+                  "timestamp": "2026-05-24T03:44:55.394731+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            },
+            {
+              "text": "线代 2 天冲刺按高频考点组织，不再机械套番茄钟，保留例题先行。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_9e8782a6",
+                "mem_d493c09f",
+                "mem_518397b4"
+              ],
+              "asks": []
+            }
+          ]
+        }
+      ],
+      "memory_journey": [
+        {
+          "state": "M0",
+          "title": "空白记忆",
+          "effort_level": "高",
+          "effort_score": 72,
+          "reason": "用户需要完整说明偏好与约束。"
+        },
+        {
+          "state": "M1",
+          "title": "偏好已保存",
+          "effort_level": "中",
+          "effort_score": 38,
+          "reason": "用户只需给相似任务，系统能主动应用。"
+        },
+        {
+          "state": "M2",
+          "title": "规则已更新",
+          "effort_level": "低",
+          "effort_score": 18,
+          "reason": "用户只需说明例外或新场景，系统能处理边界。"
+        }
+      ],
+      "ablation": {
+        "module": "学习偏好与冲刺模式模块",
+        "off": [
+          "重复询问基础偏好",
+          "旧规则继续干扰",
+          "删除后仍可能命中旧记忆"
+        ],
+        "on": [
+          "只追问缺口",
+          "旧规则降权/条件化",
+          "deleted 记忆被过滤"
+        ]
+      },
+      "delete_retest": {
+        "text": "已删除每日 5 道自测题；物理复习不再强制每日 5 题，保留例题先行等未删除偏好。",
+        "memory_actions": [
+          {
+            "action": "delete",
+            "memory_id": "mem_d493c09f",
+            "detail": "user_requested_delete",
+            "version": "M5",
+            "timestamp": "2026-05-24T03:44:55.395073+00:00"
+          }
+        ],
+        "applied_memories": [
+          "mem_9e8782a6",
+          "mem_518397b4"
+        ],
+        "asks": []
+      },
+      "snapshots": [
+        {
+          "version": "M0",
+          "active": [],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M3",
+          "active": [
+            {
+              "type": "learning_preference",
+              "content": "学习计划按 25 分钟番茄钟安排",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "番茄钟",
+                "C03"
+              ],
+              "id": "mem_2ea86c1b",
+              "created_at": "2026-05-24T03:44:55.394108+00:00",
+              "updated_at": "2026-05-24T03:44:55.394113+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "learning_preference",
+              "content": "先看例题再讲知识点",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "例题先行",
+                "C03"
+              ],
+              "id": "mem_9e8782a6",
+              "created_at": "2026-05-24T03:44:55.394132+00:00",
+              "updated_at": "2026-05-24T03:44:55.394136+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "learning_preference",
+              "content": "每天最后安排 5 道自测题",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "5道自测",
+                "C03"
+              ],
+              "id": "mem_d493c09f",
+              "created_at": "2026-05-24T03:44:55.394153+00:00",
+              "updated_at": "2026-05-24T03:44:55.394157+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M3",
+          "active": [
+            {
+              "type": "learning_preference",
+              "content": "学习计划按 25 分钟番茄钟安排",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "番茄钟",
+                "C03"
+              ],
+              "id": "mem_2ea86c1b",
+              "created_at": "2026-05-24T03:44:55.394108+00:00",
+              "updated_at": "2026-05-24T03:44:55.394113+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "learning_preference",
+              "content": "先看例题再讲知识点",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "例题先行",
+                "C03"
+              ],
+              "id": "mem_9e8782a6",
+              "created_at": "2026-05-24T03:44:55.394132+00:00",
+              "updated_at": "2026-05-24T03:44:55.394136+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "learning_preference",
+              "content": "每天最后安排 5 道自测题",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "5道自测",
+                "C03"
+              ],
+              "id": "mem_d493c09f",
+              "created_at": "2026-05-24T03:44:55.394153+00:00",
+              "updated_at": "2026-05-24T03:44:55.394157+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M5",
+          "active": [
+            {
+              "type": "learning_preference",
+              "content": "先看例题再讲知识点",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "例题先行",
+                "C03"
+              ],
+              "id": "mem_9e8782a6",
+              "created_at": "2026-05-24T03:44:55.394132+00:00",
+              "updated_at": "2026-05-24T03:44:55.394136+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "learning_preference",
+              "content": "每天最后安排 5 道自测题",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "5道自测",
+                "C03"
+              ],
+              "id": "mem_d493c09f",
+              "created_at": "2026-05-24T03:44:55.394153+00:00",
+              "updated_at": "2026-05-24T03:44:55.394157+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "learning_preference",
+              "content": "临近考试改用高频考点冲刺，保留例题先行",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "考试只剩两天了，番茄钟不用了，改成按高频考点冲刺；但例题先行还保留。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "冲刺模式",
+                "C03"
+              ],
+              "id": "mem_518397b4",
+              "created_at": "2026-05-24T03:44:55.394718+00:00",
+              "updated_at": "2026-05-24T03:44:55.394724+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "learning_preference",
+              "content": "学习计划按 25 分钟番茄钟安排",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "番茄钟",
+                "C03"
+              ],
+              "id": "mem_2ea86c1b",
+              "created_at": "2026-05-24T03:44:55.394108+00:00",
+              "updated_at": "2026-05-24T03:44:55.394651+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M6",
+          "active": [
+            {
+              "type": "learning_preference",
+              "content": "先看例题再讲知识点",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "例题先行",
+                "C03"
+              ],
+              "id": "mem_9e8782a6",
+              "created_at": "2026-05-24T03:44:55.394132+00:00",
+              "updated_at": "2026-05-24T03:44:55.394136+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "learning_preference",
+              "content": "临近考试改用高频考点冲刺，保留例题先行",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "考试只剩两天了，番茄钟不用了，改成按高频考点冲刺；但例题先行还保留。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "冲刺模式",
+                "C03"
+              ],
+              "id": "mem_518397b4",
+              "created_at": "2026-05-24T03:44:55.394718+00:00",
+              "updated_at": "2026-05-24T03:44:55.394724+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "learning_preference",
+              "content": "学习计划按 25 分钟番茄钟安排",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "番茄钟",
+                "C03"
+              ],
+              "id": "mem_2ea86c1b",
+              "created_at": "2026-05-24T03:44:55.394108+00:00",
+              "updated_at": "2026-05-24T03:44:55.394651+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": [
+            {
+              "type": "learning_preference",
+              "content": "每天最后安排 5 道自测题",
+              "scope": "study_plan",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "deleted",
+              "evidence": [
+                "以后学习计划请按 25 分钟番茄钟安排；我喜欢先看例题再讲知识点；每天最后要有 5 道自测题。"
+              ],
+              "applies_when": [
+                "study_plan"
+              ],
+              "user_approved": true,
+              "tags": [
+                "5道自测",
+                "C03"
+              ],
+              "id": "mem_d493c09f",
+              "created_at": "2026-05-24T03:44:55.394153+00:00",
+              "updated_at": "2026-05-24T03:44:55.395065+00:00",
+              "supersedes": []
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "reset": true,
+        "snapshots": 5,
+        "created": 4,
+        "show_memory": true,
+        "applied_round2": true,
+        "applied_round3": true,
+        "updated": true,
+        "deleted_filtered": true,
+        "delete_reported": true,
+        "deliverable_outputs": 4
+      }
+    },
+    {
+      "id": "C04",
+      "title": "文献综述与研究设计",
+      "domain": "research_review",
+      "goal": "验证 研究方法模板与模式切换模块 在三轮流程和删除复测中的稳定表现。",
+      "module": "研究方法模板与模式切换模块",
+      "score": 100,
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 20,
+        "memory_application": 25,
+        "update_and_decay": 20,
+        "transparency": 10,
+        "result_quality": 15,
+        "total": 100
+      },
+      "rounds": [
+        {
+          "name": "Round 1",
+          "title": "记忆形成",
+          "input": "帮我整理一段关于多模态检索的文献综述。",
+          "skill": "我先按普通方案完成：帮我整理一段关于多模态检索的文献综述。",
+          "memory": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 文献综述按方法类别组织\n- 每篇文献标数据集、局限和可复现性\n- 研究结论谨慎表述，不夸大",
+          "transition": "M0 -> M1",
+          "gain": "从无偏好 baseline 进入可复用记忆状态。",
+          "action": "新增记忆",
+          "details": [
+            {
+              "text": "我先按普通方案完成：帮我整理一段关于多模态检索的文献综述。\n为避免误记，我先不写长期记忆；如果你给出偏好，我会请求授权后保存。",
+              "memory_actions": [],
+              "applied_memories": [],
+              "asks": [
+                "要综述已有方法还是 brainstorm 研究问题？",
+                "需要关注数据集、局限和可复现性吗？"
+              ]
+            },
+            {
+              "text": "已根据明确反馈提取候选记忆，并在授权后保存；已记录来源、scope 与 evidence。\n- 文献综述按方法类别组织\n- 每篇文献标数据集、局限和可复现性\n- 研究结论谨慎表述，不夸大",
+              "memory_actions": [
+                {
+                  "action": "add",
+                  "memory_id": "mem_c8df0ace",
+                  "detail": "文献综述按方法类别组织",
+                  "version": "M1",
+                  "timestamp": "2026-05-24T03:44:55.395545+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_e996e836",
+                  "detail": "每篇文献标数据集、局限和可复现性",
+                  "version": "M2",
+                  "timestamp": "2026-05-24T03:44:55.395551+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_2aa15036",
+                  "detail": "研究结论谨慎表述，不夸大",
+                  "version": "M3",
+                  "timestamp": "2026-05-24T03:44:55.395555+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 2",
+          "title": "记忆应用",
+          "input": "帮我综述 RAG 评测方法。",
+          "skill": "RAG 评测综述按方法类别组织，并标注数据集、局限、可复现性，避免夸大。",
+          "memory": "应用 3 条 active 记忆",
+          "transition": "M1 保持",
+          "gain": "相似但不同任务中减少重复说明。",
+          "action": "应用记忆",
+          "details": [
+            {
+              "text": "当前 active 记忆：\n- mem_c8df0ace [research_method/research_review] 文献综述按方法类别组织\n- mem_e996e836 [research_method/research_review] 每篇文献标数据集、局限和可复现性\n- mem_2aa15036 [communication_preference/research_review] 研究结论谨慎表述，不夸大",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_c8df0ace",
+                "mem_e996e836",
+                "mem_2aa15036"
+              ],
+              "asks": []
+            },
+            {
+              "text": "RAG 评测综述按方法类别组织，并标注数据集、局限、可复现性，避免夸大。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_c8df0ace",
+                "mem_e996e836",
+                "mem_2aa15036"
+              ],
+              "asks": []
+            }
+          ]
+        },
+        {
+          "name": "Round 3",
+          "title": "更新淘汰",
+          "input": "帮我 brainstorm 3 个 RAG 研究问题。",
+          "skill": "RAG 研究问题 brainstorm 不套综述表格，输出问题、假设、验证路径，并保持谨慎表述。",
+          "memory": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：如果是头脑风暴研究问题，不要用文献综述模板；只保留谨慎表述。\nbrainstorm 研究问题时不用综述模板，仅保留谨慎表述",
+          "transition": "M1 -> M2",
+          "gain": "新规则生效，旧规则降权或条件化。",
+          "action": "更新 / 降权",
+          "details": [
+            {
+              "text": "已处理偏好变化：旧规则被降权/条件化，新规则 active。\n新反馈缩小适用范围：如果是头脑风暴研究问题，不要用文献综述模板；只保留谨慎表述。\nbrainstorm 研究问题时不用综述模板，仅保留谨慎表述",
+              "memory_actions": [
+                {
+                  "action": "downgrade",
+                  "memory_id": "mem_c8df0ace",
+                  "detail": "新反馈缩小适用范围：如果是头脑风暴研究问题，不要用文献综述模板；只保留谨慎表述。",
+                  "version": "M4",
+                  "timestamp": "2026-05-24T03:44:55.395946+00:00"
+                },
+                {
+                  "action": "add",
+                  "memory_id": "mem_5cfe2b3b",
+                  "detail": "brainstorm 研究问题时不用综述模板，仅保留谨慎表述",
+                  "version": "M5",
+                  "timestamp": "2026-05-24T03:44:55.395994+00:00"
+                }
+              ],
+              "applied_memories": [],
+              "asks": []
+            },
+            {
+              "text": "RAG 研究问题 brainstorm 不套综述表格，输出问题、假设、验证路径，并保持谨慎表述。",
+              "memory_actions": [],
+              "applied_memories": [
+                "mem_e996e836",
+                "mem_2aa15036",
+                "mem_5cfe2b3b"
+              ],
+              "asks": []
+            }
+          ]
+        }
+      ],
+      "memory_journey": [
+        {
+          "state": "M0",
+          "title": "空白记忆",
+          "effort_level": "高",
+          "effort_score": 72,
+          "reason": "用户需要完整说明偏好与约束。"
+        },
+        {
+          "state": "M1",
+          "title": "偏好已保存",
+          "effort_level": "中",
+          "effort_score": 38,
+          "reason": "用户只需给相似任务，系统能主动应用。"
+        },
+        {
+          "state": "M2",
+          "title": "规则已更新",
+          "effort_level": "低",
+          "effort_score": 18,
+          "reason": "用户只需说明例外或新场景，系统能处理边界。"
+        }
+      ],
+      "ablation": {
+        "module": "研究方法模板与模式切换模块",
+        "off": [
+          "重复询问基础偏好",
+          "旧规则继续干扰",
+          "删除后仍可能命中旧记忆"
+        ],
+        "on": [
+          "只追问缺口",
+          "旧规则降权/条件化",
+          "deleted 记忆被过滤"
+        ]
+      },
+      "delete_retest": {
+        "text": "已删除可复现性字段记忆；简短综述不再强制可复现性字段，保留谨慎表述。",
+        "memory_actions": [
+          {
+            "action": "delete",
+            "memory_id": "mem_e996e836",
+            "detail": "user_requested_delete",
+            "version": "M5",
+            "timestamp": "2026-05-24T03:44:55.396316+00:00"
+          }
+        ],
+        "applied_memories": [
+          "mem_2aa15036",
+          "mem_5cfe2b3b"
+        ],
+        "asks": []
+      },
+      "snapshots": [
+        {
+          "version": "M0",
+          "active": [],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M3",
+          "active": [
+            {
+              "type": "research_method",
+              "content": "文献综述按方法类别组织",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "文献综述",
+                "C04"
+              ],
+              "id": "mem_c8df0ace",
+              "created_at": "2026-05-24T03:44:55.395472+00:00",
+              "updated_at": "2026-05-24T03:44:55.395481+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "research_method",
+              "content": "每篇文献标数据集、局限和可复现性",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "可复现性",
+                "C04"
+              ],
+              "id": "mem_e996e836",
+              "created_at": "2026-05-24T03:44:55.395503+00:00",
+              "updated_at": "2026-05-24T03:44:55.395507+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "communication_preference",
+              "content": "研究结论谨慎表述，不夸大",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "谨慎表述",
+                "C04"
+              ],
+              "id": "mem_2aa15036",
+              "created_at": "2026-05-24T03:44:55.395525+00:00",
+              "updated_at": "2026-05-24T03:44:55.395529+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M3",
+          "active": [
+            {
+              "type": "research_method",
+              "content": "文献综述按方法类别组织",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "文献综述",
+                "C04"
+              ],
+              "id": "mem_c8df0ace",
+              "created_at": "2026-05-24T03:44:55.395472+00:00",
+              "updated_at": "2026-05-24T03:44:55.395481+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "research_method",
+              "content": "每篇文献标数据集、局限和可复现性",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "可复现性",
+                "C04"
+              ],
+              "id": "mem_e996e836",
+              "created_at": "2026-05-24T03:44:55.395503+00:00",
+              "updated_at": "2026-05-24T03:44:55.395507+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "communication_preference",
+              "content": "研究结论谨慎表述，不夸大",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "谨慎表述",
+                "C04"
+              ],
+              "id": "mem_2aa15036",
+              "created_at": "2026-05-24T03:44:55.395525+00:00",
+              "updated_at": "2026-05-24T03:44:55.395529+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M5",
+          "active": [
+            {
+              "type": "research_method",
+              "content": "每篇文献标数据集、局限和可复现性",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "可复现性",
+                "C04"
+              ],
+              "id": "mem_e996e836",
+              "created_at": "2026-05-24T03:44:55.395503+00:00",
+              "updated_at": "2026-05-24T03:44:55.395507+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "communication_preference",
+              "content": "研究结论谨慎表述，不夸大",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "谨慎表述",
+                "C04"
+              ],
+              "id": "mem_2aa15036",
+              "created_at": "2026-05-24T03:44:55.395525+00:00",
+              "updated_at": "2026-05-24T03:44:55.395529+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "research_method",
+              "content": "brainstorm 研究问题时不用综述模板，仅保留谨慎表述",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "如果是头脑风暴研究问题，不要用文献综述模板；只保留谨慎表述。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "模式切换",
+                "C04"
+              ],
+              "id": "mem_5cfe2b3b",
+              "created_at": "2026-05-24T03:44:55.395979+00:00",
+              "updated_at": "2026-05-24T03:44:55.395987+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "research_method",
+              "content": "文献综述按方法类别组织",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "文献综述",
+                "C04"
+              ],
+              "id": "mem_c8df0ace",
+              "created_at": "2026-05-24T03:44:55.395472+00:00",
+              "updated_at": "2026-05-24T03:44:55.395939+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M6",
+          "active": [
+            {
+              "type": "communication_preference",
+              "content": "研究结论谨慎表述，不夸大",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "谨慎表述",
+                "C04"
+              ],
+              "id": "mem_2aa15036",
+              "created_at": "2026-05-24T03:44:55.395525+00:00",
+              "updated_at": "2026-05-24T03:44:55.395529+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "research_method",
+              "content": "brainstorm 研究问题时不用综述模板，仅保留谨慎表述",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "如果是头脑风暴研究问题，不要用文献综述模板；只保留谨慎表述。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "模式切换",
+                "C04"
+              ],
+              "id": "mem_5cfe2b3b",
+              "created_at": "2026-05-24T03:44:55.395979+00:00",
+              "updated_at": "2026-05-24T03:44:55.395987+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [
+            {
+              "type": "research_method",
+              "content": "文献综述按方法类别组织",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.45,
+              "status": "superseded",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "文献综述",
+                "C04"
+              ],
+              "id": "mem_c8df0ace",
+              "created_at": "2026-05-24T03:44:55.395472+00:00",
+              "updated_at": "2026-05-24T03:44:55.395939+00:00",
+              "supersedes": []
+            }
+          ],
+          "archived": [],
+          "deleted": [
+            {
+              "type": "research_method",
+              "content": "每篇文献标数据集、局限和可复现性",
+              "scope": "research_review",
+              "source": "explicit_feedback",
+              "confidence": 0.9,
+              "status": "deleted",
+              "evidence": [
+                "以后做文献综述时，请按方法类别组织；每篇都标数据集、局限和可复现性；不要夸大结论。"
+              ],
+              "applies_when": [
+                "research_review"
+              ],
+              "user_approved": true,
+              "tags": [
+                "可复现性",
+                "C04"
+              ],
+              "id": "mem_e996e836",
+              "created_at": "2026-05-24T03:44:55.395503+00:00",
+              "updated_at": "2026-05-24T03:44:55.396309+00:00",
+              "supersedes": []
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "reset": true,
+        "snapshots": 5,
+        "created": 4,
+        "show_memory": true,
+        "applied_round2": true,
+        "applied_round3": true,
+        "updated": true,
+        "deleted_filtered": true,
+        "delete_reported": true,
+        "deliverable_outputs": 4
+      }
+    }
+  ]
+}
