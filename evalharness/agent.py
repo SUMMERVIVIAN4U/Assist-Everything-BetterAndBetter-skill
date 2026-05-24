@@ -7,6 +7,7 @@ from typing import Any
 
 from assist_everything_betterandbetter_skill.cases import EvalCase
 
+from .llm import MimoClient, mimo_configured
 from .schemas import HarnessSession, Message, ToolCall, TurnTrace
 from .tools import MemoryToolbox
 
@@ -14,10 +15,18 @@ from .tools import MemoryToolbox
 class HarnessAgent:
     """Conversation harness that lets an agent use the skill through tools."""
 
-    def __init__(self, name: str = "assist-agent", toolbox: MemoryToolbox | None = None) -> None:
+    def __init__(
+        self,
+        name: str = "assist-agent",
+        toolbox: MemoryToolbox | None = None,
+        llm_mode: str = "auto",
+        llm_client: MimoClient | None = None,
+    ) -> None:
         self.name = name
         self.toolbox = toolbox or MemoryToolbox()
         self.session = HarnessSession()
+        self.llm_mode = llm_mode
+        self.llm_client = llm_client
 
     def reply(self, user_text: str, *, stage: str = "chat", case: EvalCase | None = None) -> TurnTrace:
         tool_calls: list[ToolCall] = []
@@ -61,6 +70,7 @@ class HarnessAgent:
                 memory_hint = "；".join(item.content for item in active[:3]) or "暂无可用长期记忆"
                 response.text = f"我按普通任务处理：{user_text}\n当前可参考记忆：{memory_hint}。"
                 response.applied_memories = applied
+        response.text = self._maybe_llm_rewrite(user_text, stage, response.text, response.applied_memories)
 
         user = Message(role="user", content=user_text)
         assistant = Message(role="assistant", content=response.text)
@@ -77,6 +87,43 @@ class HarnessAgent:
         )
         self.session.turns.append(turn)
         return turn
+
+    def _maybe_llm_rewrite(self, user_text: str, stage: str, draft: str, applied_memories: list[str]) -> str:
+        if not self._use_mimo():
+            return draft
+        client = self.llm_client or MimoClient()
+        snapshot = self.toolbox.snapshot()
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
+                    "必须尊重已执行的 memory tool 结果，不要虚构记忆。"
+                    "用中文简洁回答，必要时说明已应用/未应用哪些记忆。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "stage": stage,
+                        "user_message": user_text,
+                        "tool_draft": draft,
+                        "applied_memory_ids": applied_memories,
+                        "memory_snapshot": snapshot,
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ]
+        return client.chat(messages, temperature=0.3).strip()
+
+    def _use_mimo(self) -> bool:
+        if self.llm_mode == "mimo":
+            return True
+        if self.llm_mode == "local":
+            return False
+        return mimo_configured()
 
 
 class ExternalCommandAgent:

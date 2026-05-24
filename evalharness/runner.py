@@ -14,8 +14,8 @@ def _turn(agent: HarnessAgent, text: str, stage: str, case: EvalCase) -> dict[st
     return agent.reply(text, stage=stage, case=case).to_dict()
 
 
-def run_case(case: EvalCase, *, judge_mode: str = "auto") -> dict[str, Any]:
-    agent = HarnessAgent()
+def run_case(case: EvalCase, *, judge_mode: str = "auto", agent_mode: str = "local") -> dict[str, Any]:
+    agent = HarnessAgent(llm_mode=agent_mode)
     turns = [
         _turn(agent, "reset memory", "reset", case),
         _turn(agent, case.initial_task, "round1_task", case),
@@ -72,15 +72,20 @@ def run_case(case: EvalCase, *, judge_mode: str = "auto") -> dict[str, Any]:
     return run
 
 
-def run_all(output_dir: str | Path = "eval/output/latest", *, judge_mode: str = "auto") -> dict[str, Any]:
+def run_all(
+    output_dir: str | Path = "eval/output/latest",
+    *,
+    judge_mode: str = "auto",
+    agent_mode: str = "local",
+) -> dict[str, Any]:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    cases = [run_case(case, judge_mode=judge_mode) for case in CASES]
+    cases = [run_case(case, judge_mode=judge_mode, agent_mode=agent_mode) for case in CASES]
     avg = round(sum(case["score"] for case in cases) / len(cases), 1)
     report = {
         "harness": {
             "name": "assist-everything-betterandbetter-evalharness",
-            "agent_mode": "local_tool_agent",
+            "agent_mode": "mimo_tool_agent" if agent_mode == "mimo" else "local_tool_agent",
             "judge_mode": cases[0]["judge"]["mode"] if cases else judge_mode,
             "supports_external_llm_judge": True,
             "supports_agent_chat": True,

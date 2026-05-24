@@ -34,7 +34,7 @@ Key features:
 - Three-round eval flow with delete retest
 - Agent harness that drives the skill through conversation turns
 - Trace-based eval with memory snapshots and tool calls
-- Offline judge by default, with an external LLM judge adapter
+- Offline judge by default, with configurable Mimo agent/judge adapters
 
 ## Run Eval Harness
 
@@ -73,6 +73,23 @@ python3 scripts/verify_eval.py
 ```
 
 ## Optional External LLM Judge
+
+Both the workbench Agent Chat and eval judge can use Mimo through an OpenAI-compatible chat endpoint.
+
+```bash
+export MIMO_API_KEY="..."
+export MIMO_BASE_URL="https://api.mimo.chat/v1"
+export MIMO_MODEL="mimo-v1"
+
+python3 -m evalharness.cli serve --port 8787 --agent mimo
+python3 -m evalharness.cli run --agent mimo --judge mimo
+```
+
+Defaults:
+
+- no Mimo env: local deterministic agent plus offline trace judge
+- `--agent mimo`: run memory tools first, then ask Mimo to produce the final assistant wording from the tool trace
+- `--judge mimo`: ask Mimo to score the case trace against the six competition dimensions
 
 Set `EVALHARNESS_JUDGE_CMD` to a command that reads case-run JSON from stdin and returns score JSON:
 

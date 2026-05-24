@@ -83,4 +83,19 @@ python3 -m evalharness.cli serve --port 8787
 
 The workbench exposes Dashboard, Cases, Trace, and Agent Chat tabs. Trace is the source of truth: every case turn records user input, assistant output, tool calls, applied memories, and memory snapshots.
 
-For LLM scoring, configure `EVALHARNESS_JUDGE_CMD`. The command receives a case-run JSON payload on stdin and must return a JSON object containing dimension scores and reasons. Without that variable, the harness uses the offline trace judge for reproducible local development.
+For Mimo LLM agent/judge mode, configure:
+
+```bash
+export MIMO_API_KEY="..."
+export MIMO_BASE_URL="https://api.mimo.chat/v1"
+export MIMO_MODEL="mimo-v1"
+```
+
+Then run:
+
+```bash
+python3 -m evalharness.cli serve --port 8787 --agent mimo
+python3 -m evalharness.cli run --agent mimo --judge mimo
+```
+
+Without Mimo env vars, the harness uses the local tool agent and offline trace judge for reproducible local development. `EVALHARNESS_JUDGE_CMD` is still supported for a custom external judge command.

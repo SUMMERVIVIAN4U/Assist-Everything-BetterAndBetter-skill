@@ -12,7 +12,7 @@ from evalharness.runner import run_all
 def main() -> None:
     runs = []
     for idx in range(5):
-        report = run_all(f"eval/output/verify_run_{idx + 1}")
+        report = run_all(f"eval/output/verify_run_{idx + 1}", judge_mode="heuristic", agent_mode="local")
         runs.append(report)
         for case in report["cases"]:
             assert case["score"] >= 90, (idx + 1, case["id"], case["score"])

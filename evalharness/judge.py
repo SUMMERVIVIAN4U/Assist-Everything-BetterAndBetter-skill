@@ -7,6 +7,8 @@ from typing import Any
 
 from assist_everything_betterandbetter_skill.cases import DIMENSIONS
 
+from .llm import MimoClient, mimo_configured
+
 
 class HeuristicJudge:
     """Offline judge used when no external LLM judge is configured."""
@@ -65,7 +67,66 @@ class ExternalCommandJudge:
         return data
 
 
-def build_judge(mode: str = "auto") -> HeuristicJudge | ExternalCommandJudge:
+class MimoJudge:
+    """LLM judge backed by the configured Mimo chat endpoint."""
+
+    name = "mimo-llm-judge"
+
+    def __init__(self, client: MimoClient | None = None) -> None:
+        self.client = client or MimoClient()
+
+    def score(self, case_run: dict[str, Any]) -> dict[str, Any]:
+        compact = {
+            "id": case_run["id"],
+            "title": case_run["title"],
+            "module": case_run["module"],
+            "script": case_run["script"],
+            "rounds": case_run["rounds"],
+            "checks": case_run["checks"],
+            "memory_events": case_run["memory_events"],
+            "turns": [
+                {
+                    "stage": turn["stage"],
+                    "user": turn["user"]["content"],
+                    "assistant": turn["assistant"]["content"],
+                    "tools": [call["name"] for call in turn["tool_calls"]],
+                    "applied_memories": turn["applied_memories"],
+                }
+                for turn in case_run["turns"]
+            ],
+        }
+        data = self.client.json_chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是 WAISC 5 月自我进化 Skill 赛事评委。"
+                        "请按六个维度严格评分，返回 JSON。"
+                        "分值上限：reproducibility 10, memory_extraction 20, "
+                        "memory_application 25, update_and_decay 20, transparency 10, result_quality 15。"
+                        "必须包含 scores.total 和 reasons。"
+                    ),
+                },
+                {"role": "user", "content": json.dumps(compact, ensure_ascii=False)},
+            ],
+            temperature=0.0,
+        )
+        scores = data.get("scores", {})
+        for key, max_score in DIMENSIONS.items():
+            scores[key] = max(0, min(int(scores.get(key, 0)), max_score))
+        scores["total"] = sum(scores[key] for key in DIMENSIONS)
+        return {
+            "judge": self.name,
+            "mode": "mimo_llm",
+            "dimensions": DIMENSIONS,
+            "scores": scores,
+            "reasons": data.get("reasons", {}),
+        }
+
+
+def build_judge(mode: str = "auto") -> HeuristicJudge | ExternalCommandJudge | MimoJudge:
+    if mode == "mimo" or (mode == "auto" and mimo_configured()):
+        return MimoJudge()
     if mode == "external" or (mode == "auto" and os.getenv("EVALHARNESS_JUDGE_CMD")):
         return ExternalCommandJudge()
     return HeuristicJudge()

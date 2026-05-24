@@ -15,8 +15,9 @@ LATEST = Path("eval/output/latest/eval_report.json")
 
 
 class WorkbenchState:
-    def __init__(self) -> None:
-        self.chat_agent = HarnessAgent(name="workbench-chat-agent")
+    def __init__(self, agent_mode: str = "auto") -> None:
+        self.agent_mode = agent_mode
+        self.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=agent_mode)
 
 
 STATE = WorkbenchState()
@@ -42,10 +43,14 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         body = self._read_json()
         if path == "/api/run":
-            report = run_all(judge_mode=body.get("judge", "auto"))
+            report = run_all(judge_mode=body.get("judge", "auto"), agent_mode=body.get("agent", "local"))
             self._send_json(report)
         elif path == "/api/chat":
             message = str(body.get("message", "")).strip()
+            mode = str(body.get("agent", STATE.agent_mode))
+            if mode != STATE.agent_mode:
+                STATE.agent_mode = mode
+                STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode)
             case_id = body.get("case_id")
             case = get_case(case_id) if case_id else None
             stage = str(body.get("stage", "chat"))
@@ -58,7 +63,9 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif path == "/api/reset-chat":
-            STATE.chat_agent = HarnessAgent(name="workbench-chat-agent")
+            mode = str(body.get("agent", STATE.agent_mode))
+            STATE.agent_mode = mode
+            STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode)
             self._send_json({"ok": True, "session": STATE.chat_agent.session.to_dict()})
         else:
             self.send_error(404)
@@ -91,7 +98,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-def serve(host: str = "127.0.0.1", port: int = 8787) -> None:
+def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = "auto") -> None:
+    global STATE
+    STATE = WorkbenchState(agent_mode=agent_mode)
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"Eval Harness Workbench: http://{host}:{port}")
     httpd.serve_forever()
@@ -151,7 +160,8 @@ APP_HTML = r"""<!doctype html>
       <div class="muted">真实工作台：跑 case、看 trace、看 judge 分、直接和 agent harness 对话</div>
     </div>
     <div>
-      <select id="judge"><option value="auto">auto judge</option><option value="heuristic">offline judge</option><option value="external">external LLM judge</option></select>
+      <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option></select>
+      <select id="judge"><option value="auto">auto judge</option><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option></select>
       <button class="primary" onclick="runEval()">Run Eval</button>
     </div>
   </header>
@@ -193,7 +203,7 @@ APP_HTML = r"""<!doctype html>
       renderAll();
     }
     async function runEval() {
-      report = await (await fetch('/api/run', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({judge:document.getElementById('judge').value})})).json();
+      report = await (await fetch('/api/run', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({judge:document.getElementById('judge').value, agent:document.getElementById('agentMode').value})})).json();
       renderAll();
     }
     function setTab(id, el) {
@@ -210,7 +220,7 @@ APP_HTML = r"""<!doctype html>
           <div class="metric"><div class="muted">平均分</div><div class="num">${s.config_average}</div></div>
           <div class="metric"><div class="muted">Case 数</div><div class="num">${s.case_count}</div></div>
           <div class="metric"><div class="muted">全部 > 90</div><div class="num">${s.all_cases_above_90 ? 'YES' : 'NO'}</div></div>
-          <div class="metric"><div class="muted">Judge</div><div class="num" style="font-size:18px">${h.judge_mode}</div></div>
+          <div class="metric"><div class="muted">Agent / Judge</div><div class="num" style="font-size:16px">${h.agent_mode}<br>${h.judge_mode}</div></div>
         </div>`;
     }
     function renderCases() {
@@ -232,12 +242,12 @@ APP_HTML = r"""<!doctype html>
       const input = document.getElementById('chatInput');
       const text = input.value.trim(); if (!text) return;
       input.value = '';
-      const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text})})).json();
+      const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, agent:document.getElementById('agentMode').value})})).json();
       appendMsg('user', text); appendMsg('assistant', data.turn.assistant.content);
       document.getElementById('chatMemory').textContent = JSON.stringify(data.memory, null, 2);
     }
     async function resetChat() {
-      await fetch('/api/reset-chat', {method:'POST'});
+      await fetch('/api/reset-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({agent:document.getElementById('agentMode').value})});
       document.getElementById('chatlog').innerHTML = '';
       document.getElementById('chatMemory').textContent = '{}';
     }
