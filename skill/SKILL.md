@@ -64,10 +64,10 @@ Round cards do not receive full scores. Full six-dimensional score exists only a
 
 ## Eval
 
-Run local eval:
+Run the agent harness eval:
 
 ```bash
-python3 -m assist_everything_betterandbetter_skill.evaluator
+python3 -m evalharness.cli run
 ```
 
 Output:
@@ -75,3 +75,12 @@ Output:
 - `eval/output/latest/eval_report.json`
 - `eval/output/latest/eval_report.md`
 
+Run the interactive workbench:
+
+```bash
+python3 -m evalharness.cli serve --port 8787
+```
+
+The workbench exposes Dashboard, Cases, Trace, and Agent Chat tabs. Trace is the source of truth: every case turn records user input, assistant output, tool calls, applied memories, and memory snapshots.
+
+For LLM scoring, configure `EVALHARNESS_JUDGE_CMD`. The command receives a case-run JSON payload on stdin and must return a JSON object containing dimension scores and reasons. Without that variable, the harness uses the offline trace judge for reproducible local development.
