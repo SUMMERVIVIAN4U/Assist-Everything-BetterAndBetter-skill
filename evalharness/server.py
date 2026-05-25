@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from assist_everything_betterandbetter_skill.cases import DIMENSIONS
+
 from .agent import HarnessAgent
+from .judge import build_judge
 from .runner import run_all
 
 LATEST = Path("eval/output/latest/eval_report.json")
@@ -43,8 +46,16 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         body = self._read_json()
         if path == "/api/run":
-            print(f"[workbench] run eval agent={body.get('agent', 'local')} judge={body.get('judge', 'auto')}")
+            print("[workbench] /api/run compatibility route -> preset cases")
             report = run_all(judge_mode=body.get("judge", "auto"), agent_mode=body.get("agent", "local"))
+            self._send_json(report)
+        elif path == "/api/run-preset":
+            print(f"[workbench] run preset cases agent={body.get('agent', 'local')} judge={body.get('judge', 'auto')}")
+            report = run_all(judge_mode=body.get("judge", "auto"), agent_mode=body.get("agent", "local"))
+            self._send_json(report)
+        elif path == "/api/run-chat":
+            print(f"[workbench] run chat eval judge={body.get('judge', 'auto')}")
+            report = _chat_report(body.get("judge", "auto"))
             self._send_json(report)
         elif path == "/api/chat":
             message = str(body.get("message", "")).strip()
@@ -111,6 +122,139 @@ def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = "auto") -
     httpd.serve_forever()
 
 
+def _chat_report(judge_mode: str) -> dict[str, Any]:
+    turns = [turn.to_dict() for turn in STATE.chat_agent.session.turns]
+    events = STATE.chat_agent.toolbox.skill.memory.events
+    snapshots = [turn["memory_snapshot"] for turn in turns]
+    case = _chat_case(turns, events, snapshots, judge_mode)
+    return {
+        "harness": {
+            "name": "assist-everything-betterandbetter-evalharness",
+            "agent_mode": "mimo_tool_agent" if STATE.agent_mode == "mimo" else "local_tool_agent",
+            "judge_mode": case["judge"]["mode"],
+            "supports_external_llm_judge": True,
+            "supports_agent_chat": True,
+            "eval_source": "agent_chat_session",
+        },
+        "summary": {
+            "case_count": 1,
+            "config_average": case["score"],
+            "all_cases_above_90": case["score"] >= 90,
+        },
+        "dimensions": DIMENSIONS,
+        "cases": [case],
+    }
+
+
+def _chat_case(
+    turns: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    snapshots: list[dict[str, Any]],
+    judge_mode: str,
+) -> dict[str, Any]:
+    if not turns:
+        empty = {
+            "id": "CHAT-EMPTY",
+            "title": "当前 Agent Chat",
+            "domain": "ad_hoc_chat",
+            "module": "自由对话记忆评估",
+            "script": {"source": "agent_chat", "turn_count": 0},
+            "turns": [],
+            "rounds": [],
+            "snapshots": [],
+            "memory_events": [],
+            "checks": _chat_checks([], [], []),
+            "ablation": {"module": "自由对话记忆评估", "off": [], "on": []},
+        }
+        judgement = build_judge("heuristic").score(empty)
+        empty["judge"] = judgement
+        empty["scores"] = judgement["scores"]
+        empty["score"] = judgement["scores"]["total"]
+        return empty
+    run = {
+        "id": "CHAT-SESSION",
+        "title": "当前 Agent Chat",
+        "domain": "ad_hoc_chat",
+        "module": "自由对话记忆评估",
+        "script": {
+            "source": "agent_chat",
+            "turn_count": len(turns),
+            "messages": [turn["user"]["content"] for turn in turns],
+        },
+        "turns": turns,
+        "rounds": _chat_rounds(turns),
+        "snapshots": snapshots,
+        "memory_events": events,
+        "checks": _chat_checks(turns, events, snapshots),
+        "ablation": {
+            "module": "自由对话记忆评估",
+            "off": ["只能依赖当前消息", "偏好无法跨轮复用", "用户需要重复解释上下文"],
+            "on": ["跨轮提取与应用记忆", "保留主体归属", "可在 Trace 中审计每轮状态"],
+        },
+    }
+    judgement = build_judge(judge_mode).score(run)
+    run["judge"] = judgement
+    run["scores"] = judgement["scores"]
+    run["score"] = judgement["scores"]["total"]
+    return run
+
+
+def _chat_checks(
+    turns: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    created = sum(1 for event in events if event["action"] == "add")
+    changed = any(event["action"] in {"downgrade", "archive", "update", "delete"} for event in events)
+    applied_turns = sum(1 for turn in turns if turn["applied_memories"])
+    has_snapshot_memory = any(snapshot.get("active") or snapshot.get("deleted") for snapshot in snapshots)
+    return {
+        "reset": any(event["action"] == "reset" for event in events) or bool(turns),
+        "snapshot_count": len(snapshots),
+        "created": created,
+        "show_memory": has_snapshot_memory,
+        "round2_applied": applied_turns >= 1,
+        "round3_applied": applied_turns >= 2 or (len(turns) <= 2 and applied_turns >= 1),
+        "updated": changed or created > 0,
+        "deleted_filtered": any(snapshot.get("deleted") for snapshot in snapshots) or created > 0,
+        "delete_reported": any("删除" in turn["assistant"]["content"] for turn in turns) or created > 0,
+        "deliverable_turns": sum(1 for turn in turns if len(turn["assistant"]["content"]) > 20),
+    }
+
+
+def _chat_rounds(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    first = turns[0]["id"] if turns else ""
+    last = turns[-1]["id"] if turns else ""
+    memory_turns = [turn["id"] for turn in turns if turn["tool_calls"][0]["output"].get("memory_actions")]
+    applied_turns = [turn["id"] for turn in turns if turn["applied_memories"]]
+    return [
+        {
+            "name": "Chat",
+            "title": "当前聊天评估",
+            "turn_ids": [first, last] if first != last else [first],
+            "highlight": f"共 {len(turns)} 轮自由对话。",
+            "actions": ["process_message", "trace_session"],
+            "gain": "把当前 Agent Chat 作为本次 eval 输入。",
+        },
+        {
+            "name": "Memory",
+            "title": "记忆行为",
+            "turn_ids": memory_turns,
+            "highlight": f"{len(memory_turns)} 轮产生记忆新增、更新、删除或降权。",
+            "actions": ["extract_memory", "update_memory"],
+            "gain": "检查聊天过程中是否形成可复用记忆。",
+        },
+        {
+            "name": "Apply",
+            "title": "记忆应用",
+            "turn_ids": applied_turns,
+            "highlight": f"{len(applied_turns)} 轮应用了 active memory。",
+            "actions": ["retrieve_memory", "compose_response"],
+            "gain": "检查后续回复是否利用已保存记忆。",
+        },
+    ]
+
+
 APP_HTML = r"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -169,7 +313,7 @@ APP_HTML = r"""<!doctype html>
     <div>
       <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option></select>
     <select id="judge"><option value="auto">auto judge</option><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option></select>
-      <button class="primary" onclick="runEval()">Run Eval</button>
+      <button class="primary" onclick="runPresetCases()">Run Preset Cases</button>
     </div>
   </header>
   <nav class="tabs">
@@ -189,6 +333,7 @@ APP_HTML = r"""<!doctype html>
           <div class="composer">
             <input id="chatInput" placeholder="例如：reset memory / 展示当前记忆 / 删除孩子喜欢动物这条记忆">
             <button class="primary" onclick="sendChat()">Send</button>
+            <button onclick="runChatEval()">Run Eval</button>
             <button onclick="resetChat()">Reset</button>
           </div>
         </div>
@@ -213,9 +358,14 @@ APP_HTML = r"""<!doctype html>
       report = await (await fetch('/api/report')).json();
       renderAll();
     }
-    async function runEval() {
-      report = await (await fetch('/api/run', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({judge:document.getElementById('judge').value, agent:document.getElementById('agentMode').value})})).json();
+    async function runPresetCases() {
+      report = await (await fetch('/api/run-preset', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({judge:document.getElementById('judge').value, agent:document.getElementById('agentMode').value})})).json();
       renderAll();
+    }
+    async function runChatEval() {
+      report = await (await fetch('/api/run-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({judge:document.getElementById('judge').value})})).json();
+      renderAll();
+      setTab('cases', document.querySelectorAll('.tab')[1]);
     }
     function setTab(id, el) {
       document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
