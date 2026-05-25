@@ -281,8 +281,26 @@ APP_HTML = r"""<!doctype html>
     .case { margin-bottom:12px; }
     .case-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     .score { font-weight:700; color:var(--accent); }
+    .case-layout { display:grid; grid-template-columns:320px minmax(0,1fr); gap:14px; align-items:start; }
+    .case-list { display:grid; gap:8px; }
+    .case-btn { border:1px solid var(--line); background:#fff; border-radius:8px; padding:11px; text-align:left; cursor:pointer; }
+    .case-btn.active { border-color:var(--accent); box-shadow:0 0 0 3px #dff4ef; }
+    .case-btn-title { font-weight:700; display:flex; justify-content:space-between; gap:8px; }
+    .case-detail { border:1px solid var(--line); border-radius:8px; padding:14px; background:#fff; }
+    .note { background:#fbfcff; border:1px solid var(--line); border-radius:7px; padding:10px; color:#44536a; margin-top:10px; }
     .rounds { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px; margin-top:12px; }
-    .round { background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:10px; min-height:116px; }
+    .round { background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:10px; min-height:280px; position:relative; }
+    .round:not(:last-child)::after { content:"→"; position:absolute; right:-14px; top:44%; color:#98a2b3; font-weight:800; }
+    .field { margin-top:9px; }
+    .field-label { color:var(--muted); font-size:12px; font-weight:700; }
+    .field-body { margin-top:3px; font-size:13px; line-height:1.45; }
+    .gain { margin-top:10px; padding:8px; border:1px solid #cfe8dc; background:#f3fbf6; border-radius:7px; font-size:13px; }
+    .memory-journey { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:10px; }
+    .memory-state { border:1px solid var(--line); border-radius:7px; padding:10px; background:#fff; }
+    .ablation { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+    .ablation .off { border-left:4px solid var(--bad); }
+    .ablation .on { border-left:4px solid var(--accent); }
+    .dim-reason { margin-top:8px; display:grid; gap:6px; }
     .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
     .chip { border:1px solid var(--line); border-radius:999px; padding:3px 7px; font-size:12px; background:#fff; }
     .dims { display:grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap:8px; margin-top:10px; }
@@ -301,7 +319,7 @@ APP_HTML = r"""<!doctype html>
     .msg .content { white-space:pre-wrap; line-height:1.55; margin-top:4px; }
     .composer { display:flex; gap:8px; margin-top:10px; }
     .composer input { flex:1; border:1px solid var(--line); border-radius:6px; padding:9px; }
-    @media (max-width: 900px) { .grid, .rounds, .dims, .chat-layout { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
+    @media (max-width: 900px) { .grid, .case-layout, .rounds, .dims, .chat-layout, .memory-journey, .ablation { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } .round::after { display:none; } }
   </style>
 </head>
 <body>
@@ -346,6 +364,7 @@ APP_HTML = r"""<!doctype html>
   </main>
   <script>
     let report = null;
+    let selectedCaseId = null;
     const dimNames = {
       reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用',
       update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'
@@ -385,12 +404,77 @@ APP_HTML = r"""<!doctype html>
         </div>`;
     }
     function renderCases() {
-      document.getElementById('cases').innerHTML = report.cases.map(c => `
-        <article class="case">
-          <div class="case-head"><div><b>${c.id} ${c.title}</b><div class="muted">${c.module}</div></div><div class="score">${c.score}/100</div></div>
-          <div class="dims">${Object.entries(c.scores).filter(([k])=>k!=='total').map(([k,v])=>`<div class="dim"><span class="muted">${dimNames[k]}</span><b>${v}</b></div>`).join('')}</div>
-          <div class="rounds">${c.rounds.map(r=>`<div class="round"><b>${r.name} · ${r.title}</b><p>${r.highlight}</p><div class="chips">${r.actions.map(a=>`<span class="chip">${a}</span>`).join('')}</div><div class="muted">${r.gain}</div></div>`).join('')}</div>
-        </article>`).join('');
+      if (!report.cases.length) { document.getElementById('cases').innerHTML = '<div class="muted">暂无 Case。</div>'; return; }
+      if (!selectedCaseId || !report.cases.find(c => c.id === selectedCaseId)) selectedCaseId = report.cases[0].id;
+      const selected = report.cases.find(c => c.id === selectedCaseId);
+      document.getElementById('cases').innerHTML = `
+        <div class="case-layout">
+          <aside class="case">
+            <b>历史执行 Case</b>
+            <div class="case-list">${report.cases.map(c => `
+              <button class="case-btn ${c.id === selectedCaseId ? 'active' : ''}" onclick="selectCase('${c.id}')">
+                <div class="case-btn-title"><span>${c.id} ${escapeHtml(c.title)}</span><span class="score">${c.score}</span></div>
+                <div class="muted">${escapeHtml(c.module || c.domain || '')}</div>
+              </button>`).join('')}</div>
+            <div class="note muted">Round 不单独给综合总分；Case 跑完后汇总六维总分。聊天 Eval 会显示当前 Chat Session。</div>
+          </aside>
+          <article class="case-detail">
+            <div class="case-head">
+              <div><h2 style="margin:0">${selected.id} ${escapeHtml(selected.title)}</h2><div class="muted">${escapeHtml(selected.module || '')}</div></div>
+              <div class="score" style="font-size:28px">${selected.score}/100</div>
+            </div>
+            <div class="note">${caseGoal(selected)}</div>
+            <h3>三轮执行与记忆动作</h3>
+            <div class="rounds">${selected.rounds.map(r => roundCard(selected, r)).join('')}</div>
+            <h3>Memory 状态跃迁</h3>
+            <div class="memory-journey">${memoryJourney(selected).map(s => `
+              <div class="memory-state"><b>${s.name}</b><div class="field-body">${s.desc}</div><div class="muted">${s.meta}</div></div>`).join('')}</div>
+            <h3>模块消融对比</h3>
+            <div class="ablation">
+              <div class="case off"><b>OFF</b>${(selected.ablation?.off || []).map(x=>`<div class="field-body">- ${escapeHtml(x)}</div>`).join('')}</div>
+              <div class="case on"><b>ON</b>${(selected.ablation?.on || []).map(x=>`<div class="field-body">- ${escapeHtml(x)}</div>`).join('')}</div>
+            </div>
+            <h3>Case 六维评分</h3>
+            <div class="dims">${Object.entries(selected.scores).filter(([k])=>k!=='total').map(([k,v])=>`<div class="dim"><span class="muted">${dimNames[k]}</span><b>${v}</b></div>`).join('')}</div>
+            <div class="dim-reason">${Object.entries(selected.judge?.reasons || {}).map(([k,v])=>`<div class="field-body"><b>${dimNames[k] || k}：</b>${escapeHtml(v)}</div>`).join('')}</div>
+          </article>
+        </div>`;
+    }
+    function selectCase(id) { selectedCaseId = id; renderCases(); }
+    function caseGoal(c) {
+      if (c.id === 'CHAT-SESSION') return '评估当前 Agent Chat 对话是否形成、应用并透明展示记忆。';
+      return `验证 ${escapeHtml(c.module || c.title)} 在 reset、三轮任务和删除复测中的表现。`;
+    }
+    function roundCard(c, r) {
+      const turns = (r.turn_ids || []).map(id => c.turns.find(t => t.id === id)).filter(Boolean);
+      const first = turns[0] || {};
+      const last = turns[turns.length - 1] || first;
+      const actions = turns.flatMap(t => (t.tool_calls || []).flatMap(call => (call.output.memory_actions || []).map(a => a.action)));
+      const memoryText = actions.length ? actions.join(' / ') : ((last.applied_memories || []).length ? `应用 ${(last.applied_memories || []).length} 条` : '无新增');
+      return `<div class="round">
+        <div class="case-head"><b>${escapeHtml(r.name)} · ${escapeHtml(r.title)}</b><span class="chip">${escapeHtml(memoryText)}</span></div>
+        <div class="field"><div class="field-label">用户输入</div><div class="field-body">“${escapeHtml(first.user?.content || r.highlight || '')}”</div></div>
+        <div class="field"><div class="field-label">Agent 执行</div><div class="field-body">${escapeHtml((last.assistant?.content || '').split('\\n')[0] || r.highlight || '')}</div></div>
+        <div class="field"><div class="field-label">记忆动作</div><div class="field-body">${escapeHtml(memoryText)}</div></div>
+        <div class="field"><div class="field-label">状态跃迁</div><div class="field-body">${stateTransition(turns)}</div></div>
+        <div class="gain"><b>本轮增益：</b>${escapeHtml(r.gain || r.highlight || '')}</div>
+        <details style="margin-top:8px"><summary>展开依据</summary><div class="chips">${(r.actions || []).map(a=>`<span class="chip">${escapeHtml(a)}</span>`).join('')}</div><pre>${escapeHtml(JSON.stringify(turns, null, 2))}</pre></details>
+      </div>`;
+    }
+    function stateTransition(turns) {
+      const versions = turns.map(t => t.memory_snapshot?.version).filter(Boolean);
+      if (!versions.length) return '无 snapshot';
+      return versions[0] === versions[versions.length - 1] ? versions[0] : `${versions[0]} → ${versions[versions.length - 1]}`;
+    }
+    function memoryJourney(c) {
+      const snaps = c.snapshots || [];
+      if (!snaps.length) return [{name:'无快照', desc:'当前 case 没有 memory snapshot。', meta:''}];
+      const pick = [snaps[0], snaps[Math.floor((snaps.length - 1)/2)], snaps[snaps.length - 1]];
+      return pick.map((s, i) => ({
+        name: s.version || `S${i}`,
+        desc: `active ${s.active?.length || 0} / superseded ${s.superseded?.length || 0} / deleted ${s.deleted?.length || 0}`,
+        meta: i === 0 ? '起点' : (i === 1 ? '中段' : '终态')
+      }));
     }
     function renderTrace() {
       document.getElementById('trace').innerHTML = report.cases.map(c => `
