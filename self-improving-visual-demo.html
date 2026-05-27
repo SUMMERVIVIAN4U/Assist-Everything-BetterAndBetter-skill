@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>apriday-self-Improving 自动化演示</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --surface-soft: #f9fbfd;
+      --text: #162033;
+      --muted: #657185;
+      --line: #dbe3ee;
+      --blue: #1769e0;
+      --green: #13864e;
+      --red: #c74444;
+      --orange: #c96418;
+      --violet: #6849c9;
+      --teal: #0e7c86;
+      --radius: 8px;
+      --shadow: 0 10px 26px rgba(20, 34, 57, .08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, input { font: inherit; }
+
+    .page {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+    }
+
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.55;
+      max-width: 920px;
+      font-size: 14px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .btn {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--text);
+      padding: 0 12px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .btn.primary {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+
+    .speed {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .speed input { width: 120px; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat, .panel, .industry-btn, .memory-row, .step-row, .score-row {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .stat {
+      min-height: 86px;
+      padding: 12px;
+      display: grid;
+      align-content: space-between;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .stat-value {
+      font-size: 25px;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      padding: 15px;
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      line-height: 1.3;
+    }
+
+    .industry-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .industry-btn {
+      text-align: left;
+      padding: 12px;
+      cursor: pointer;
+      box-shadow: none;
+      display: grid;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .industry-btn.active {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px #e5efff;
+    }
+
+    .industry-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .industry-name {
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .industry-score {
+      color: var(--blue);
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #edf4ff;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .chip.green { background: #e8f7ef; color: var(--green); }
+    .chip.orange { background: #fff1e5; color: var(--orange); }
+    .chip.red { background: #fff0f0; color: var(--red); }
+    .chip.violet { background: #f1edff; color: var(--violet); }
+    .chip.teal { background: #e8f7f8; color: var(--teal); }
+    .chip.gray { background: #eef2f6; color: #59677c; }
+
+    .scenario-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+
+    .scenario-title {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.25;
+    }
+
+    .scenario-goal {
+      margin-top: 7px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .live-score {
+      min-width: 124px;
+      text-align: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: var(--surface-soft);
+    }
+
+    .live-score strong {
+      display: block;
+      font-size: 30px;
+      line-height: 1;
+      color: var(--blue);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, .9fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .stage {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .stage-title {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .terminal {
+      min-height: 108px;
+      border-radius: var(--radius);
+      background: #111827;
+      color: #e8f0ff;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .step-row {
+      box-shadow: none;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .step-index {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: #eef2f6;
+      color: #59677c;
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    .step-row.done .step-index {
+      background: #e8f7ef;
+      color: var(--green);
+    }
+
+    .step-row.active {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px #e5efff;
+    }
+
+    .step-title {
+      font-weight: 900;
+      line-height: 1.3;
+      margin-bottom: 3px;
+    }
+
+    .step-body {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .memory-list, .score-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .memory-row {
+      box-shadow: none;
+      padding: 10px;
+    }
+
+    .memory-top, .score-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+
+    .memory-id {
+      font-weight: 900;
+      color: var(--blue);
+      font-size: 13px;
+    }
+
+    .memory-content {
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      color: var(--muted);
+      padding: 12px;
+      background: var(--surface-soft);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .score-row {
+      box-shadow: none;
+      padding: 10px;
+    }
+
+    .score-name {
+      font-weight: 900;
+      font-size: 13px;
+    }
+
+    .score-num {
+      font-weight: 900;
+      color: var(--blue);
+      white-space: nowrap;
+    }
+
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #e7edf5;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--blue), var(--green));
+      transition: width .25s ease;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .compare-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: var(--surface-soft);
+      min-height: 92px;
+    }
+
+    .compare-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .compare-item p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 12px;
+    }
+
+    @media (max-width: 1120px) {
+      header, .layout, .grid, .scenario-head {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        padding: 14px;
+      }
+
+      .summary, .comparison {
+        grid-template-columns: 1fr;
+      }
+
+      .step-row {
+        grid-template-columns: 32px minmax(0, 1fr);
+      }
+
+      .step-row .chip {
+        grid-column: 2;
+        justify-self: start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <h1>apriday-self-Improving 自动化演示</h1>
+        <div class="sub">跨行业验证同一个自我进化 Skill：每个案例都会自动执行 reset、记忆写入、记忆应用、偏好更新、删除复测，并按赛事六维标准实时评分。</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn primary" id="run-all">运行全部案例</button>
+        <button class="btn" id="run-current">运行当前案例</button>
+        <button class="btn" id="reset-current">重置当前案例</button>
+        <label class="speed">速度 <input id="speed" type="range" min="350" max="1600" step="50" value="800" /></label>
+      </div>
+    </header>
+
+    <section class="summary" aria-label="演示概览">
+      <div class="stat"><div class="stat-label">行业案例</div><div class="stat-value" id="stat-cases">0</div></div>
+      <div class="stat"><div class="stat-label">平均分</div><div class="stat-value" id="stat-average">0</div></div>
+      <div class="stat"><div class="stat-label">已完成演示</div><div class="stat-value" id="stat-finished">0</div></div>
+      <div class="stat"><div class="stat-label">记忆动作覆盖</div><div class="stat-value" id="stat-actions">0/5</div></div>
+      <div class="stat"><div class="stat-label">当前阶段</div><div class="stat-value" id="stat-stage">待运行</div></div>
+    </section>
+
+    <section class="layout">
+      <aside class="panel">
+        <h2>行业与案例</h2>
+        <div class="industry-list" id="industry-list"></div>
+      </aside>
+
+      <section class="panel">
+        <div class="scenario-head">
+          <div>
+            <h2 class="scenario-title" id="scenario-title"></h2>
+            <div class="scenario-goal" id="scenario-goal"></div>
+            <div class="chips" id="scenario-tags" style="margin-top: 10px;"></div>
+          </div>
+          <div class="live-score">
+            <strong id="live-score">0</strong>
+            <div class="meta">本次自动评分</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <section>
+            <div class="stage">
+              <div class="stage-title">当前自动化命令</div>
+              <div class="terminal" id="terminal">等待运行...</div>
+            </div>
+
+            <h2>演示流程</h2>
+            <div class="step-list" id="step-list"></div>
+
+            <div class="comparison" id="comparison"></div>
+          </section>
+
+          <aside>
+            <h2>记忆账本</h2>
+            <div class="memory-list" id="memory-list"></div>
+            <h2 style="margin-top: 14px;">六维评分</h2>
+            <div class="score-list" id="score-list"></div>
+          </aside>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const dimensions = [
+      ["repro", "可复测性", 10],
+      ["extract", "有效记忆提取", 20],
+      ["apply", "记忆应用效果", 25],
+      ["update", "记忆更新与淘汰", 20],
+      ["control", "用户控制与透明度", 10],
+      ["quality", "结果质量与真实可用性", 15]
+    ];
+
+    const scenarios = [
+      {
+        id: "healthcare",
+        industry: "医疗健康",
+        title: "慢病随访报告助手",
+        goal: "验证 Skill 能记住医生偏好的随访结构、患者禁忌提醒方式，并在指南变化时替换旧规则。",
+        tags: ["隐私控制", "报告结构", "删除复测"],
+        task: "生成糖尿病患者复诊摘要",
+        memory: "以后生成慢病随访报告时，先列异常指标，再给用药风险和复诊提醒。",
+        apply: "生成高血压患者复诊摘要",
+        update: "以后随访报告先按风险等级排序，再列异常指标和复诊提醒。",
+        deleteTarget: "风险等级排序",
+        before: "每次都需要医生重新说明报告顺序和风险提示。",
+        after: "第二次自动套用随访结构，只补充患者本次指标即可。",
+        deleted: "删除排序规则后，不再按风险等级组织报告。"
+      },
+      {
+        id: "education",
+        industry: "教育培训",
+        title: "个性化教案生成助手",
+        goal: "验证 Skill 能记住教师的课堂风格、练习难度和学生反馈，并能在新班级中迁移使用。",
+        tags: ["教学风格", "难度自适应", "反馈学习"],
+        task: "设计一节初中物理浮力课",
+        memory: "以后做教案时先给课堂引入，再给分层练习，最后给学生易错点。",
+        apply: "设计一节初中物理压强课",
+        update: "以后教案减少游戏化引入，优先用真实实验现象开场。",
+        deleteTarget: "真实实验现象",
+        before: "老师需要反复提醒先讲引入、再做分层练习。",
+        after: "新主题自动沿用课堂结构，且根据反馈调整开场方式。",
+        deleted: "删除实验开场后，只保留分层练习和易错点习惯。"
+      },
+      {
+        id: "finance",
+        industry: "金融投研",
+        title: "投研纪要与风控助手",
+        goal: "验证 Skill 能记住分析师的风险披露顺序、估值口径和审慎表达偏好。",
+        tags: ["风险披露", "估值口径", "审计轨迹"],
+        task: "整理新能源公司调研纪要",
+        memory: "以后写投研纪要先列核心假设和风险，再写增长逻辑，避免直接给买卖建议。",
+        apply: "整理半导体公司调研纪要",
+        update: "以后风险部分必须区分行业风险、公司风险和估值风险。",
+        deleteTarget: "估值风险",
+        before: "分析师需要每次强调风控口径和不能直接给建议。",
+        after: "后续纪要自动保留审慎表达，并拆分风险结构。",
+        deleted: "删除估值风险拆分后，不再在风险段强制出现该子项。"
+      },
+      {
+        id: "retail",
+        industry: "电商零售",
+        title: "商品上新运营助手",
+        goal: "验证 Skill 能记住品牌调性、标题禁忌、促销节奏，并在类目变化时保持可迁移。",
+        tags: ["品牌调性", "标题规则", "运营复用"],
+        task: "写一组香薰新品上架文案",
+        memory: "以后写商品文案时不要夸大功效，先写使用场景，再写材质和适用人群。",
+        apply: "写一组睡眠眼罩上架文案",
+        update: "以后标题避免使用全网第一，改用具体场景利益点。",
+        deleteTarget: "具体场景利益点",
+        before: "运营需要重复说明不能夸大、先写场景。",
+        after: "新品类仍能自动遵守品牌表达和标题规则。",
+        deleted: "删除标题规则后，应用阶段不再强制改写标题结构。"
+      },
+      {
+        id: "legal",
+        industry: "法律合规",
+        title: "合同审阅清单助手",
+        goal: "验证 Skill 能记住律师审阅顺序、风险标注方式和客户关注点。",
+        tags: ["合规审阅", "风险分级", "客户偏好"],
+        task: "审阅一份 SaaS 服务合同",
+        memory: "以后审合同先列高风险条款，再给修改建议，并标注是否影响签署。",
+        apply: "审阅一份数据处理协议",
+        update: "以后涉及数据条款时，必须单独列跨境传输和删除义务。",
+        deleteTarget: "跨境传输",
+        before: "律师每次都要重申审阅顺序和风险等级。",
+        after: "新合同类型自动复用审阅清单，并针对数据条款加深检查。",
+        deleted: "删除跨境传输记忆后，不再强制扩展该专项。"
+      },
+      {
+        id: "software",
+        industry: "软件研发",
+        title: "PR Review 自成长助手",
+        goal: "验证 Skill 能记住团队代码审查偏好、测试要求和架构边界。",
+        tags: ["代码审查", "测试策略", "工程习惯"],
+        task: "审查一个登录模块 PR",
+        memory: "以后做代码 review 先找阻断级 bug，再看测试覆盖，最后给简短修改建议。",
+        apply: "审查一个支付回调 PR",
+        update: "以后涉及支付和权限时，必须额外检查幂等、鉴权和审计日志。",
+        deleteTarget: "审计日志",
+        before: "Reviewer 需要反复说明先找 bug，不要先讲风格。",
+        after: "新 PR 自动按团队 review 顺序执行，并对高风险模块加严。",
+        deleted: "删除审计日志要求后，后续只保留幂等和鉴权专项。"
+      },
+      {
+        id: "manufacturing",
+        industry: "制造供应链",
+        title: "供应商异常处理助手",
+        goal: "验证 Skill 能记住异常升级路径、交付优先级和复盘模板。",
+        tags: ["供应链", "异常升级", "复盘模板"],
+        task: "处理一批零件延期交付",
+        memory: "以后处理供应商异常先判断交付影响，再给替代方案和升级对象。",
+        apply: "处理包装材料质量异常",
+        update: "以后重大异常必须增加根因复盘和预防动作。",
+        deleteTarget: "根因复盘",
+        before: "供应链同学需要反复补充升级对象和复盘格式。",
+        after: "新异常自动形成影响判断、替代方案和升级路径。",
+        deleted: "删除复盘要求后，异常处理不再默认追加根因复盘。"
+      }
+    ];
+
+    const state = {
+      selected: 0,
+      running: false,
+      results: {},
+      memories: [],
+      activeStep: -1,
+      completed: new Set()
+    };
+
+    const el = {
+      list: document.getElementById("industry-list"),
+      title: document.getElementById("scenario-title"),
+      goal: document.getElementById("scenario-goal"),
+      tags: document.getElementById("scenario-tags"),
+      liveScore: document.getElementById("live-score"),
+      terminal: document.getElementById("terminal"),
+      steps: document.getElementById("step-list"),
+      memory: document.getElementById("memory-list"),
+      scores: document.getElementById("score-list"),
+      comparison: document.getElementById("comparison"),
+      statCases: document.getElementById("stat-cases"),
+      statAverage: document.getElementById("stat-average"),
+      statFinished: document.getElementById("stat-finished"),
+      statActions: document.getElementById("stat-actions"),
+      statStage: document.getElementById("stat-stage"),
+      runAll: document.getElementById("run-all"),
+      runCurrent: document.getElementById("run-current"),
+      resetCurrent: document.getElementById("reset-current"),
+      speed: document.getElementById("speed")
+    };
+
+    function stepsFor(scenario) {
+      return [
+        {
+          key: "reset",
+          label: "Reset",
+          desc: "清空记忆，从 M0 空白状态开始。",
+          cmd: `python3 scripts/apriday_self_improving.py reset`,
+          action: () => {
+            state.memories = [];
+            return { repro: 10, extract: 0, apply: 0, update: 0, control: 5, quality: 0 };
+          }
+        },
+        {
+          key: "write",
+          label: "记忆写入",
+          desc: "保存用户授权的长期偏好，并记录证据和 scope。",
+          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.memory}" --approve`,
+          action: () => {
+            state.memories.push(memoryItem("mem_0001", "active", "workflow_rule", scenario.memory, []));
+            return { repro: 10, extract: 20, apply: 0, update: 0, control: 8, quality: 3 };
+          }
+        },
+        {
+          key: "apply",
+          label: "记忆应用",
+          desc: "第二个相似任务主动应用 active memory，减少重复说明。",
+          cmd: `python3 scripts/apriday_self_improving.py apply "${scenario.apply}"`,
+          action: () => ({ repro: 10, extract: 20, apply: 25, update: 0, control: 8, quality: 9 })
+        },
+        {
+          key: "update",
+          label: "更新淘汰",
+          desc: "用户偏好变化后，新记忆生效，旧记忆 superseded。",
+          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.update}" --approve`,
+          action: () => {
+            state.memories = state.memories.map(item => item.id === "mem_0001" ? { ...item, status: "superseded" } : item);
+            state.memories.push(memoryItem("mem_0002", "active", "workflow_rule", scenario.update, ["mem_0001"]));
+            return { repro: 10, extract: 20, apply: 25, update: 20, control: 9, quality: 13 };
+          }
+        },
+        {
+          key: "delete",
+          label: "删除复测",
+          desc: "删除当前 active memory，并验证后续任务不再使用它。",
+          cmd: `python3 scripts/apriday_self_improving.py delete mem_0002`,
+          action: () => {
+            state.memories = state.memories.map(item => item.id === "mem_0002" ? { ...item, status: "deleted" } : item);
+            return { repro: 10, extract: 20, apply: 25, update: 20, control: 10, quality: 13 };
+          }
+        },
+        {
+          key: "score",
+          label: "自动评分",
+          desc: "按赛事六维标准汇总本案例得分。",
+          cmd: `python3 scripts/apriday_self_improving.py evaluate --case ${scenario.id}`,
+          action: () => ({ repro: 10, extract: 20, apply: 25, update: 20, control: 10, quality: qualityScore(scenario.id) })
+        }
+      ];
+    }
+
+    function qualityScore(id) {
+      const scores = {
+        healthcare: 14,
+        education: 14,
+        finance: 13,
+        retail: 14,
+        legal: 13,
+        software: 15,
+        manufacturing: 14
+      };
+      return scores[id] || 13;
+    }
+
+    function memoryItem(id, status, type, content, supersedes) {
+      return {
+        id,
+        status,
+        type,
+        content: content.replace(/[。.!！]$/, ""),
+        scope: "industry_workflow",
+        confidence: 0.92,
+        supersedes
+      };
+    }
+
+    function totalScore(scores) {
+      return dimensions.reduce((sum, [key]) => sum + (scores[key] || 0), 0);
+    }
+
+    function render() {
+      const scenario = scenarios[state.selected];
+      const result = state.results[scenario.id] || { scores: {}, total: 0 };
+
+      el.statCases.textContent = scenarios.length;
+      el.statFinished.textContent = state.completed.size;
+      const totals = Object.values(state.results).map(item => item.total).filter(Boolean);
+      el.statAverage.textContent = totals.length ? Math.round(totals.reduce((a, b) => a + b, 0) / totals.length) : 0;
+      el.statActions.textContent = actionCoverage();
+
+      renderIndustryList();
+      el.title.textContent = `${scenario.industry}：${scenario.title}`;
+      el.goal.textContent = scenario.goal;
+      el.tags.innerHTML = scenario.tags.map((tag, index) => `<span class="chip ${chipColor(index)}">${tag}</span>`).join("");
+      el.liveScore.textContent = result.total || 0;
+      renderSteps();
+      renderMemory();
+      renderScores(result.scores || {});
+      renderComparison(scenario);
+    }
+
+    function renderIndustryList() {
+      el.list.innerHTML = scenarios.map((scenario, index) => {
+        const result = state.results[scenario.id];
+        const active = index === state.selected ? " active" : "";
+        const score = result ? `${result.total}/100` : "待运行";
+        return `
+          <button class="industry-btn${active}" data-index="${index}" type="button">
+            <span class="industry-head">
+              <span class="industry-name">${scenario.industry}</span>
+              <span class="industry-score">${score}</span>
+            </span>
+            <span class="meta">${scenario.title}</span>
+            <span class="chips">${scenario.tags.slice(0, 2).map((tag, i) => `<span class="chip ${chipColor(i)}">${tag}</span>`).join("")}</span>
+          </button>
+        `;
+      }).join("");
+      document.querySelectorAll(".industry-btn").forEach(button => {
+        button.addEventListener("click", () => {
+          if (state.running) return;
+          state.selected = Number(button.dataset.index);
+          resetVisualOnly();
+          render();
+        });
+      });
+    }
+
+    function renderSteps() {
+      const scenario = scenarios[state.selected];
+      const steps = stepsFor(scenario);
+      el.steps.innerHTML = steps.map((step, index) => {
+        const done = index < state.activeStep ? " done" : "";
+        const active = index === state.activeStep ? " active" : "";
+        const label = index < state.activeStep ? "完成" : index === state.activeStep ? "运行中" : "等待";
+        const chip = index < state.activeStep ? "green" : index === state.activeStep ? "orange" : "gray";
+        return `
+          <div class="step-row${done}${active}">
+            <div class="step-index">${index + 1}</div>
+            <div>
+              <div class="step-title">${step.label}</div>
+              <div class="step-body">${step.desc}</div>
+            </div>
+            <span class="chip ${chip}">${label}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderMemory() {
+      if (!state.memories.length) {
+        el.memory.innerHTML = `<div class="empty">M0 空白状态。运行写入步骤后，这里会显示可查看、可解释、可删除的结构化记忆。</div>`;
+        return;
+      }
+      el.memory.innerHTML = state.memories.map(item => `
+        <div class="memory-row">
+          <div class="memory-top">
+            <span class="memory-id">${item.id}</span>
+            <span class="chip ${statusColor(item.status)}">${item.status}</span>
+          </div>
+          <div class="memory-content">${item.content}</div>
+          <div class="meta" style="margin-top: 7px;">${item.type} · ${item.scope} · confidence ${item.confidence}${item.supersedes.length ? ` · supersedes ${item.supersedes.join(", ")}` : ""}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderScores(scores) {
+      el.scores.innerHTML = dimensions.map(([key, name, max]) => {
+        const value = scores[key] || 0;
+        return `
+          <div class="score-row">
+            <div class="score-top">
+              <span class="score-name">${name}</span>
+              <span class="score-num">${value}/${max}</span>
+            </div>
+            <div class="bar"><span style="width:${Math.round(value / max * 100)}%"></span></div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderComparison(scenario) {
+      el.comparison.innerHTML = `
+        <div class="compare-item"><strong>M0 首次使用</strong><p>${scenario.before}</p></div>
+        <div class="compare-item"><strong>M1/M2 持续使用</strong><p>${scenario.after}</p></div>
+        <div class="compare-item"><strong>删除后复测</strong><p>${scenario.deleted}</p></div>
+      `;
+    }
+
+    function chipColor(index) {
+      return ["teal", "violet", "orange", "green"][index % 4];
+    }
+
+    function statusColor(status) {
+      if (status === "active") return "green";
+      if (status === "superseded") return "orange";
+      if (status === "deleted") return "red";
+      return "gray";
+    }
+
+    function actionCoverage() {
+      const actionKeys = new Set();
+      Object.values(state.results).forEach(result => {
+        (result.actions || []).forEach(action => actionKeys.add(action));
+      });
+      return `${actionKeys.size}/5`;
+    }
+
+    function resetVisualOnly() {
+      state.memories = [];
+      state.activeStep = -1;
+      el.terminal.textContent = "等待运行...";
+      el.statStage.textContent = "待运行";
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function runScenario(index) {
+      state.selected = index;
+      state.running = true;
+      setButtons(false);
+      resetVisualOnly();
+      render();
+
+      const scenario = scenarios[index];
+      const steps = stepsFor(scenario);
+      let latestScores = {};
+      const actions = ["reset", "write", "apply", "update", "delete"];
+
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        state.activeStep = i;
+        el.statStage.textContent = step.label;
+        el.terminal.textContent = `$ ${step.cmd}\n\n${terminalOutput(step.key, scenario)}`;
+        latestScores = step.action();
+        state.results[scenario.id] = {
+          scores: latestScores,
+          total: totalScore(latestScores),
+          actions: actions.slice(0, Math.min(i + 1, actions.length))
+        };
+        render();
+        await sleep(Number(el.speed.value));
+      }
+
+      state.activeStep = steps.length;
+      state.completed.add(scenario.id);
+      el.statStage.textContent = "评分完成";
+      el.terminal.textContent += `\n\nscore.total = ${state.results[scenario.id].total}/100`;
+      render();
+      state.running = false;
+      setButtons(true);
+    }
+
+    function terminalOutput(key, scenario) {
+      if (key === "reset") return JSON.stringify({ ok: true, memory_state: "M0", memories: [] }, null, 2);
+      if (key === "write") return JSON.stringify({ saved: true, id: "mem_0001", status: "active", evidence: scenario.memory }, null, 2);
+      if (key === "apply") return JSON.stringify({ used_memory_ids: ["mem_0001"], user_effort_reduction: "medium", task: scenario.apply }, null, 2);
+      if (key === "update") return JSON.stringify({ saved: true, id: "mem_0002", status: "active", superseded: ["mem_0001"] }, null, 2);
+      if (key === "delete") return JSON.stringify({ ok: true, id: "mem_0002", status: "deleted", after_delete_used_memory_ids: [] }, null, 2);
+      return JSON.stringify({ rubric: "WASC six-dimension score", case: scenario.id }, null, 2);
+    }
+
+    async function runAll() {
+      for (let i = 0; i < scenarios.length; i++) {
+        await runScenario(i);
+        await sleep(180);
+      }
+    }
+
+    function setButtons(enabled) {
+      el.runAll.disabled = !enabled;
+      el.runCurrent.disabled = !enabled;
+      el.resetCurrent.disabled = !enabled;
+    }
+
+    el.runAll.addEventListener("click", runAll);
+    el.runCurrent.addEventListener("click", () => runScenario(state.selected));
+    el.resetCurrent.addEventListener("click", () => {
+      delete state.results[scenarios[state.selected].id];
+      state.completed.delete(scenarios[state.selected].id);
+      resetVisualOnly();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -61,5 +61,6 @@ This repository also contains the original planning materials:
 
 - Architecture and eval design documents under `docs/`
 - Static eval workbench demo in `eval-case-workbench-simple.html`
+- Cross-industry auto demo in `self-improving-visual-demo.html`
 - Generated diagrams under `assets/`
 - Document generation scripts under `scripts/`
