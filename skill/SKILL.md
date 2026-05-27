@@ -1,0 +1,67 @@
+---
+name: apriday-self-Improving
+description: Use this skill when a user wants an AI assistant to become more useful over repeated interactions by remembering authorized preferences, applying them in later tasks, updating or deleting memory on request, and producing auditable self-improvement evaluation evidence.
+---
+
+# apriday-self-Improving
+
+Use this skill to make an assistant "越用越懂你" while keeping memory explicit, authorized, testable, and reversible.
+
+## Core Workflow
+
+1. Start from a known state.
+   - Run `python3 scripts/apriday_self_improving.py reset` for a clean eval.
+   - Run `python3 scripts/apriday_self_improving.py view` before and after meaningful interactions.
+
+2. Observe user feedback.
+   - Use `observe "<user feedback>" --approve` when the user explicitly authorizes memory or asks you to remember something.
+   - Save only durable preferences, workflow rules, scene rules, and project context.
+   - Do not save temporary instructions such as "这次", "本次", "今天", "临时", or one-off output format requests.
+
+3. Apply memory to a new task.
+   - Run `apply "<task>"` to retrieve active relevant memories.
+   - Explain which memories changed the plan and what user effort was reduced.
+   - If memory is stale or conflicting, prefer asking a narrow clarification over blindly applying it.
+
+4. Update memory when preferences change.
+   - If new approved feedback contradicts old memory, keep the new item active and mark the old one `superseded`.
+   - Record evidence and reason for the transition.
+
+5. Respect user control.
+   - Use `delete <memory_id>` when the user asks to forget a memory.
+   - Deleted memory must not affect future `apply` results.
+   - Use `edit <memory_id> --content ...` only for user-approved corrections.
+
+6. Evaluate automatically.
+   - Run `python3 scripts/apriday_self_improving.py evaluate`.
+   - The evaluation must include reset, first task, feedback, view memory, second task, preference change, third task, and deletion replay.
+
+## Memory Rules
+
+- Prefer fewer, higher-quality memories over broad accumulation.
+- Include evidence, scope, confidence, and status for each memory.
+- Use `global` scope only for stable cross-task preferences.
+- Use task-specific scope for workflow habits such as "architecture planning" or "gift selection".
+- Never store secrets, credentials, payment data, health identifiers, or content the user marks as private.
+
+## Commands
+
+```bash
+python3 scripts/apriday_self_improving.py reset
+python3 scripts/apriday_self_improving.py observe "以后做方案先分析评分标准，再写实现。" --approve
+python3 scripts/apriday_self_improving.py view
+python3 scripts/apriday_self_improving.py apply "帮我做一个新的赛事方案"
+python3 scripts/apriday_self_improving.py edit mem_0001 --content "做架构方案时先分析评分标准，再写实现。"
+python3 scripts/apriday_self_improving.py delete mem_0001
+python3 scripts/apriday_self_improving.py evaluate
+```
+
+## Output Standard
+
+When using this skill in a task, produce:
+
+- the task result,
+- the active memories used,
+- any memory patch made,
+- user-control actions available,
+- and a short self-evaluation note when the task is part of a replay or benchmark.
