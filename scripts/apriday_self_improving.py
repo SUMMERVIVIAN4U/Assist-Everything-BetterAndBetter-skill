@@ -384,6 +384,76 @@ def build_profile(data: dict[str, Any] | None = None) -> dict[str, Any]:
     return profile
 
 
+def retention_reason(memory: dict[str, Any]) -> str:
+    approval = memory.get("approval", "legacy")
+    if memory.get("status") == "deleted":
+        return "deleted_by_user_control; excluded_from_future_application"
+    if memory.get("status") == "superseded":
+        return "superseded_by_newer_conflicting_memory; kept_for_audit"
+    if approval == "explicit":
+        return "explicit_user_approval"
+    if approval == "auto_high_confidence":
+        return "auto_recorded_from_high_confidence_durable_signal"
+    return "legacy_or_manual_memory"
+
+
+def memory_layers() -> dict[str, Any]:
+    data = read_store()
+    active = [m for m in data["memories"] if m.get("status") == "active"]
+    audit = [m for m in data["memories"] if m.get("status") != "active"]
+    snap = snapshot(limit=6)
+    profile = build_profile(data)
+
+    return {
+        "layers": [
+            {
+                "id": "L0",
+                "name": "即时交互层",
+                "status": "ephemeral",
+                "loads_when": "instant mode / [q] / simple greetings",
+                "source": "current user message only",
+                "retention_reason": "avoid unnecessary memory loading and protect privacy for lightweight turns",
+                "items": [],
+            },
+            {
+                "id": "L1",
+                "name": "画像快照层",
+                "status": "active_snapshot",
+                "loads_when": "standard mode",
+                "source": "compressed active memories",
+                "retention_reason": "keep high-signal preferences and interaction style available with low token cost",
+                "compression": snap["compression"],
+                "profile": profile,
+                "items": snap["recent_active_memories"],
+            },
+            {
+                "id": "L2",
+                "name": "长期审计层",
+                "status": "persistent_local_ledger",
+                "loads_when": "deep mode / history review / user inspection",
+                "source": "local memory.json plus events.jsonl",
+                "retention_reason": "support update history, deletion proof, source evidence, and user control",
+                "items": [
+                    {
+                        "id": m["id"],
+                        "type": m["type"],
+                        "status": m["status"],
+                        "content": m["content"],
+                        "source": m.get("source"),
+                        "approval": m.get("approval"),
+                        "confidence": m.get("confidence"),
+                        "evidence": m.get("evidence", [])[-2:],
+                        "supersedes": m.get("supersedes", []),
+                        "retention_reason": retention_reason(m),
+                    }
+                    for m in active + audit
+                ],
+            },
+        ],
+        "privacy": privacy_report(),
+    }
+
+
 def select_memory_mode(task: str) -> dict[str, Any]:
     lowered = task.lower()
     if task.startswith("[q]") or any(k in task for k in ("你好", "在吗", "谢谢", "hi", "hello")):
@@ -636,6 +706,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("snapshot")
     sub.add_parser("profile")
     sub.add_parser("privacy")
+    sub.add_parser("layers")
 
     observe_parser = sub.add_parser("observe")
     observe_parser.add_argument("text")
@@ -673,6 +744,8 @@ def main() -> None:
         print_json(build_profile())
     elif args.command == "privacy":
         print_json(privacy_report())
+    elif args.command == "layers":
+        print_json(memory_layers())
     elif args.command == "observe":
         print_json(observe(args.text, args.approve))
     elif args.command == "apply":

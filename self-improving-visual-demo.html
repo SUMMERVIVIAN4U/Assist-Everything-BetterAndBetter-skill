@@ -374,7 +374,7 @@
       line-height: 1.4;
     }
 
-    .memory-list, .score-list {
+    .memory-list, .score-list, .layer-list {
       display: grid;
       gap: 8px;
     }
@@ -382,6 +382,46 @@
     .memory-row {
       box-shadow: none;
       padding: 10px;
+    }
+
+    .layer-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .layer-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .layer-title {
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .layer-detail {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .source-item {
+      border-left: 3px solid var(--blue);
+      padding-left: 8px;
+      font-size: 12px;
+      line-height: 1.4;
     }
 
     .memory-top, .score-top {
@@ -566,6 +606,8 @@
           <aside>
             <h2>记忆账本</h2>
             <div class="memory-list" id="memory-list"></div>
+            <h2 style="margin-top: 14px;">三层记忆现状</h2>
+            <div class="layer-list" id="layer-list"></div>
             <h2 style="margin-top: 14px;">六维评分</h2>
             <div class="score-list" id="score-list"></div>
           </aside>
@@ -733,6 +775,7 @@
       terminal: document.getElementById("terminal"),
       steps: document.getElementById("step-list"),
       memory: document.getElementById("memory-list"),
+      layers: document.getElementById("layer-list"),
       scores: document.getElementById("score-list"),
       comparison: document.getElementById("comparison"),
       statCases: document.getElementById("stat-cases"),
@@ -875,6 +918,7 @@
       el.liveScore.textContent = result.total || 0;
       renderSteps();
       renderMemory();
+      renderLayers();
       renderScores(result.scores || {});
       renderComparison(scenario);
       renderDirections();
@@ -953,6 +997,60 @@
           <div class="meta" style="margin-top: 7px;">${item.type} · ${item.scope} · ${item.approval} · confidence ${item.confidence}${item.supersedes.length ? ` · supersedes ${item.supersedes.join(", ")}` : ""}</div>
         </div>
       `).join("");
+    }
+
+    function renderLayers() {
+      const active = state.memories.filter(item => item.status === "active");
+      const audit = state.memories.filter(item => item.status !== "active");
+      const hasActive = active.length > 0;
+      const hasAny = state.memories.length > 0;
+      const layerData = [
+        {
+          id: "L0",
+          name: "即时交互层",
+          status: "ephemeral",
+          source: "当前用户输入",
+          reason: "轻量问候或 [q] 模式不加载长期记忆，减少 token 并降低隐私暴露面。",
+          items: ["不沉淀，仅用于当前轮响应。"]
+        },
+        {
+          id: "L1",
+          name: "画像快照层",
+          status: hasActive ? "active_snapshot" : "empty",
+          source: hasActive ? active.map(item => item.id).join(", ") : "暂无 active memory",
+          reason: "只压缩 high-signal active memory，用于个性化结果与交互方式。",
+          items: hasActive ? active.map(item => `${item.id}: ${item.content}`) : ["运行主动识别后生成 profile/snapshot。"]
+        },
+        {
+          id: "L2",
+          name: "长期审计层",
+          status: hasAny ? "persistent_local_ledger" : "empty",
+          source: "memory.json + events.jsonl",
+          reason: "保留来源、证据、supersede/delete 状态，支持用户查看、删除、复测和隐私审计。",
+          items: hasAny ? state.memories.map(item => `${item.id} [${item.status}] 来源: ${item.approval}; 原因: ${retentionReason(item)}`) : ["暂无长期审计记录。"]
+        }
+      ];
+
+      el.layers.innerHTML = layerData.map(layer => `
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-title">${layer.id} · ${layer.name}</span>
+            <span class="chip ${layer.status === "empty" ? "gray" : "green"}">${layer.status}</span>
+          </div>
+          <div class="layer-detail"><strong>来源：</strong>${layer.source}</div>
+          <div class="layer-detail"><strong>沉淀原因：</strong>${layer.reason}</div>
+          <div class="source-list">
+            ${layer.items.map(item => `<div class="source-item">${item}</div>`).join("")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function retentionReason(item) {
+      if (item.status === "deleted") return "用户删除后仅保留删除证明，不再应用。";
+      if (item.status === "superseded") return "被更新偏好替代，保留为审计链路。";
+      if (item.approval === "auto_high_confidence") return "高置信长期信号自动沉淀。";
+      return "显式授权或人工修正。";
     }
 
     function renderScores(scores) {

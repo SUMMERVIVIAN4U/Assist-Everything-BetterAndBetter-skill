@@ -126,6 +126,18 @@ class ApridaySelfImprovingTest(unittest.TestCase):
         self.assertIn("delete", report["controls"])
         self.assertEqual(report["sensitive_storage"], "private_or_sensitive observations are redacted and not saved as memory")
 
+    def test_layers_show_source_and_retention_reason(self):
+        self.run_cli("reset")
+        self.run_cli("observe", "我特别喜欢以后先看结论，再看评分标准。")
+        layers = self.run_cli("layers")
+        self.assertEqual([layer["id"] for layer in layers["layers"]], ["L0", "L1", "L2"])
+        self.assertEqual(layers["layers"][0]["status"], "ephemeral")
+        self.assertGreaterEqual(layers["layers"][1]["compression"]["estimated_savings_percent"], 0)
+        ledger_items = layers["layers"][2]["items"]
+        self.assertEqual(ledger_items[0]["id"], "mem_0001")
+        self.assertIn("retention_reason", ledger_items[0])
+        self.assertIn("evidence", ledger_items[0])
+
     def test_evaluate_reaches_high_score(self):
         report = self.run_cli("evaluate")
         self.assertEqual(report["score"]["total"], 100)
