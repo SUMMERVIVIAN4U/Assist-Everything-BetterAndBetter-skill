@@ -14,7 +14,9 @@ python3 --version
 
 ```bash
 python3 scripts/apriday_self_improving.py reset
+python3 scripts/apriday_self_improving.py observe "我特别喜欢先看结论再看细节。"
 python3 scripts/apriday_self_improving.py observe "以后做架构方案先分析评分标准，再写实现。" --approve
+python3 scripts/apriday_self_improving.py snapshot
 python3 scripts/apriday_self_improving.py view
 python3 scripts/apriday_self_improving.py apply "帮我做一个新的赛事方案"
 ```

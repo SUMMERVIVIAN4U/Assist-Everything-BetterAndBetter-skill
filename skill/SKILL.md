@@ -5,7 +5,7 @@ description: Use this skill when a user wants an AI assistant to become more use
 
 # apriday-self-Improving
 
-Use this skill to make an assistant "越用越懂你" while keeping memory explicit, authorized, testable, and reversible.
+Use this skill to make an assistant "越用越懂你" while keeping memory explicit, testable, and reversible. The memory loop now includes Bio-Memory Pro inspired proactive detection: the user no longer has to say "记住这个" every time.
 
 ## Core Workflow
 
@@ -15,7 +15,8 @@ Use this skill to make an assistant "越用越懂你" while keeping memory expli
 
 2. Observe user feedback.
    - Use `observe "<user feedback>" --approve` when the user explicitly authorizes memory or asks you to remember something.
-   - Save only durable preferences, workflow rules, scene rules, and project context.
+   - Use `observe "<message>"` for normal conversation. The detector will auto-record high-confidence durable signals, ask/confirm medium-confidence signals, and ignore weak signals.
+   - Save only durable preferences, workflow rules, scene rules, project context, todos, decisions, and stable contact facts.
    - Do not save temporary instructions such as "这次", "本次", "今天", "临时", or one-off output format requests.
 
 3. Apply memory to a new task.
@@ -36,6 +37,16 @@ Use this skill to make an assistant "越用越懂你" while keeping memory expli
    - Run `python3 scripts/apriday_self_improving.py evaluate`.
    - The evaluation must include reset, first task, feedback, view memory, second task, preference change, third task, and deletion replay.
 
+## Proactive Memory Policy
+
+- High confidence `>= 0.8`: auto-record with `approval: auto_high_confidence`, then mention it naturally.
+- Medium confidence `0.5-0.8`: do not write memory yet; return a natural confirmation prompt.
+- Low confidence `< 0.5`: ask lightly or ignore, depending on signal strength.
+- Duplicate active memories are rejected by content hash.
+- Simple messages such as `[q] 你好` use instant mode and skip memory loading.
+- Ordinary tasks use standard mode with snapshot plus matching active memories.
+- Deep/history requests use deep mode with snapshot, matching memories, and event log.
+
 ## Memory Rules
 
 - Prefer fewer, higher-quality memories over broad accumulation.
@@ -48,7 +59,9 @@ Use this skill to make an assistant "越用越懂你" while keeping memory expli
 
 ```bash
 python3 scripts/apriday_self_improving.py reset
+python3 scripts/apriday_self_improving.py observe "我特别喜欢先看结论再看细节。"
 python3 scripts/apriday_self_improving.py observe "以后做方案先分析评分标准，再写实现。" --approve
+python3 scripts/apriday_self_improving.py snapshot
 python3 scripts/apriday_self_improving.py view
 python3 scripts/apriday_self_improving.py apply "帮我做一个新的赛事方案"
 python3 scripts/apriday_self_improving.py edit mem_0001 --content "做架构方案时先分析评分标准，再写实现。"

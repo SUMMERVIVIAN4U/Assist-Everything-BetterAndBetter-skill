@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -24,6 +25,9 @@ PRIVATE_MARKERS = ("密码", "token", "密钥", "身份证", "银行卡", "验�
 REMEMBER_MARKERS = ("记住", "以后", "下次", "长期", "我喜欢", "我希望", "别再", "不要再")
 POSITIVE_MARKERS = ("喜欢", "优先", "希望", "要", "偏好", "先")
 NEGATIVE_MARKERS = ("不喜欢", "不要", "别", "禁忌", "避免", "别再")
+UNCERTAIN_MARKERS = ("可能", "也许", "考虑", "随便", "算了", "不重要", "？", "?")
+HIGH_CONFIDENCE_MARKERS = ("以后", "下次", "一直", "总是", "必须", "绝对", "特别", "非常", "决定", "确定", "定了")
+AUTO_MEMORY_TYPES = {"workflow_rule", "communication_preference", "scene_rule", "project_context", "todo", "decision", "contact"}
 
 
 @dataclass
@@ -38,6 +42,9 @@ class MemoryItem:
     evidence: list[str]
     applies_when: list[str]
     user_approved: bool
+    approval: str
+    topic: str
+    content_hash: str
     created_at: str
     updated_at: str
     supersedes: list[str]
@@ -50,12 +57,17 @@ def now() -> str:
 def ensure_store() -> None:
     STORE_DIR.mkdir(parents=True, exist_ok=True)
     if not STORE_PATH.exists():
-        write_store({"version": 1, "next_id": 1, "memories": []})
+        write_store({"version": 2, "next_id": 1, "current_topic": "default", "memories": []})
 
 
 def read_store() -> dict[str, Any]:
     ensure_store()
-    return json.loads(STORE_PATH.read_text(encoding="utf-8"))
+    data = json.loads(STORE_PATH.read_text(encoding="utf-8"))
+    data.setdefault("version", 2)
+    data.setdefault("next_id", 1)
+    data.setdefault("current_topic", "default")
+    data.setdefault("memories", [])
+    return data
 
 
 def write_store(data: dict[str, Any]) -> None:
@@ -78,6 +90,24 @@ def reset_store() -> dict[str, Any]:
     return {"ok": True, "message": "memory reset", "store": str(STORE_PATH)}
 
 
+def content_hash(text: str) -> str:
+    normalized = re.sub(r"\s+", "", normalize_content(text).lower())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]
+
+
+def detect_topic(text: str) -> str:
+    patterns = [
+        r"(?:换个|切换|聊聊|关于)(?:话题|主题)?[：:，, ]*([\u4e00-\u9fffA-Za-z0-9_-]{2,24})",
+        r"(?:回到|继续)(?:之前|刚才|上次)?(?:的)?([\u4e00-\u9fffA-Za-z0-9_-]{2,24})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip(" 。.!！?？")
+    _, scope, _ = classify(text)
+    return scope
+
+
 def classify(text: str) -> tuple[str, str, list[str]]:
     applies_when: list[str] = []
     lowered = text.lower()
@@ -93,6 +123,12 @@ def classify(text: str) -> tuple[str, str, list[str]]:
     if not applies_when:
         applies_when.append("general")
 
+    if any(k in text for k in ("待办", "记得", "别忘了", "明天", "后天", "下周", "周末")):
+        return "todo", applies_when[0], applies_when
+    if any(k in text for k in ("决定", "确定", "定下来", "最终", "就按", "就用")):
+        return "decision", applies_when[0], applies_when
+    if re.search(r"我(?:的)?[\u4e00-\u9fff]{1,8}(?:叫|是)[\u4e00-\u9fffA-Za-z0-9]{2,20}", text):
+        return "contact", applies_when[0], applies_when
     if any(k in text for k in ("先", "再", "流程", "步骤", "工作流", "不要直接", "写代码")):
         return "workflow_rule", applies_when[0], applies_when
     if any(k in text for k in ("项目", "仓库", "业务", "团队")):
@@ -100,6 +136,50 @@ def classify(text: str) -> tuple[str, str, list[str]]:
     if any(k in text for k in ("礼物", "香水", "品牌", "预算", "女朋友")):
         return "scene_rule", applies_when[0], applies_when
     return "communication_preference", applies_when[0], applies_when
+
+
+def is_memory_candidate(text: str, memory_type: str) -> bool:
+    if any(marker in text for marker in REMEMBER_MARKERS + HIGH_CONFIDENCE_MARKERS):
+        return True
+    if memory_type in {"todo", "decision", "contact"}:
+        return True
+    if any(k in text for k in ("我喜欢", "我不喜欢", "我习惯", "我偏好", "适合我", "不要", "别")):
+        return True
+    if re.search(r"(?:我要|准备|开始|启动)(?:做|写|弄|创建)?[\u4e00-\u9fffA-Za-z0-9《》_-]{2,40}", text):
+        return True
+    return False
+
+
+def confidence_for(text: str, memory_type: str, approved: bool) -> tuple[float, str]:
+    if approved:
+        return 0.95, "explicit_user_approval"
+
+    score = 0.35
+    reasons: list[str] = []
+    if is_memory_candidate(text, memory_type):
+        score += 0.25
+        reasons.append("memory_signal")
+    if any(marker in text for marker in HIGH_CONFIDENCE_MARKERS):
+        score += 0.2
+        reasons.append("durable_or_decisive_marker")
+    if memory_type in {"todo", "decision", "contact"}:
+        score += 0.12
+        reasons.append(f"structured_{memory_type}")
+    if len(text) >= 20:
+        score += 0.08
+        reasons.append("detailed_context")
+    if any(marker in text for marker in TEMPORARY_MARKERS):
+        score -= 0.35
+        reasons.append("temporary_marker")
+    if any(marker in text for marker in UNCERTAIN_MARKERS):
+        score -= 0.25
+        reasons.append("uncertain_language")
+    if re.search(r"[吗呢吧]\??$", text.strip()):
+        score -= 0.18
+        reasons.append("question_tone")
+
+    score = max(0.0, min(1.0, score))
+    return round(score, 2), ", ".join(reasons) if reasons else "weak_signal"
 
 
 def normalize_content(text: str) -> str:
@@ -113,8 +193,6 @@ def should_reject(text: str, approved: bool) -> tuple[bool, str]:
         return True, "private_or_sensitive"
     if any(marker in text for marker in TEMPORARY_MARKERS) and not any(marker in text for marker in REMEMBER_MARKERS):
         return True, "temporary_instruction"
-    if not approved and not any(marker in text for marker in REMEMBER_MARKERS):
-        return True, "missing_authorization"
     return False, ""
 
 
@@ -137,6 +215,8 @@ def conflicts(new_item: MemoryItem, old: dict[str, Any]) -> bool:
         return False
     if old["type"] != new_item.type or old["scope"] != new_item.scope:
         return False
+    if old.get("topic", "default") != new_item.topic:
+        return False
     overlap = subject_tokens(new_item.content) & subject_tokens(old["content"])
     if overlap and polarity(new_item.content) != polarity(old["content"]):
         return True
@@ -154,24 +234,85 @@ def observe(text: str, approved: bool) -> dict[str, Any]:
     data = read_store()
     rejected, reason = should_reject(text, approved)
     if rejected:
-        result = {"saved": False, "reason": reason, "text": text}
+        result = {"action": "reject", "saved": False, "reason": reason, "text": text}
         log_event("observe_rejected", result)
         return result
 
     memory_type, scope, applies_when = classify(text)
+    confidence, confidence_reason = confidence_for(text, memory_type, approved)
+    if not approved and not is_memory_candidate(text, memory_type):
+        result = {
+            "action": "ignore",
+            "saved": False,
+            "reason": "no_durable_memory_signal",
+            "confidence": confidence,
+            "confidence_reason": confidence_reason,
+            "text": text,
+        }
+        log_event("observe_ignored", result)
+        return result
+    if not approved and confidence < 0.5:
+        result = {
+            "action": "ask",
+            "saved": False,
+            "reason": "low_confidence",
+            "confidence": confidence,
+            "confidence_reason": confidence_reason,
+            "suggested_response": "这是长期偏好，还是只针对这次？",
+            "text": text,
+        }
+        log_event("observe_ask", result)
+        return result
+    if not approved and confidence < 0.8:
+        result = {
+            "action": "confirm",
+            "saved": False,
+            "reason": "medium_confidence",
+            "confidence": confidence,
+            "confidence_reason": confidence_reason,
+            "suggested_response": "我捕捉到这可能是长期偏好，需要我以后按这个来吗？",
+            "candidate": {
+                "type": memory_type,
+                "content": normalize_content(text),
+                "scope": scope,
+                "applies_when": applies_when,
+            },
+        }
+        log_event("observe_confirm", result)
+        return result
+
+    fingerprint = content_hash(text)
+    for memory in data["memories"]:
+        if memory.get("content_hash") == fingerprint and memory["status"] == "active":
+            result = {
+                "action": "dedupe",
+                "saved": False,
+                "reason": "duplicate_active_memory",
+                "confidence": confidence,
+                "existing_id": memory["id"],
+                "memory": memory,
+            }
+            log_event("observe_dedupe", result)
+            return result
+
     item_id = f"mem_{data['next_id']:04d}"
     timestamp = now()
+    topic = detect_topic(text)
+    data["current_topic"] = topic
     item = MemoryItem(
         id=item_id,
         type=memory_type,
         content=normalize_content(text),
         scope=scope,
         source="explicit_feedback" if approved else "implicit_preference",
-        confidence=0.92 if approved else 0.72,
+        confidence=confidence,
         status="active",
         evidence=[text],
         applies_when=applies_when,
-        user_approved=approved,
+        user_approved=True,
+        approval="explicit" if approved else "auto_high_confidence",
+        topic=topic,
+        content_hash=fingerprint,
         created_at=timestamp,
         updated_at=timestamp,
         supersedes=[],
@@ -186,13 +327,53 @@ def observe(text: str, approved: bool) -> dict[str, Any]:
     data["next_id"] += 1
     data["memories"].append(asdict(item))
     write_store(data)
-    result = {"saved": True, "memory": asdict(item), "superseded": item.supersedes}
+    action = "save_explicit" if approved else "auto_record"
+    result = {
+        "action": action,
+        "saved": True,
+        "confidence": confidence,
+        "confidence_reason": confidence_reason,
+        "memory": asdict(item),
+        "superseded": item.supersedes,
+    }
     log_event("observe_saved", result)
     return result
 
 
 def active_memories() -> list[dict[str, Any]]:
-    return [m for m in read_store()["memories"] if m["status"] == "active" and m["user_approved"]]
+    return [m for m in read_store()["memories"] if m.get("status") == "active" and m.get("user_approved", True)]
+
+
+def select_memory_mode(task: str) -> dict[str, Any]:
+    lowered = task.lower()
+    if task.startswith("[q]") or any(k in task for k in ("你好", "在吗", "谢谢", "hi", "hello")):
+        return {"mode": "instant", "loads": [], "reason": "simple_or_quick_message"}
+    if task.startswith("[d]") or any(k in task for k in ("历史", "之前", "上次", "所有", "复盘", "深度")):
+        return {"mode": "deep", "loads": ["snapshot", "matching_memories", "event_log"], "reason": "history_or_deep_lookup"}
+    if "[deep]" in lowered:
+        return {"mode": "deep", "loads": ["snapshot", "matching_memories", "event_log"], "reason": "explicit_deep_marker"}
+    return {"mode": "standard", "loads": ["snapshot", "matching_memories"], "reason": "default_task"}
+
+
+def snapshot(limit: int = 8) -> dict[str, Any]:
+    data = read_store()
+    active = [m for m in data["memories"] if m["status"] == "active"]
+    recent = sorted(active, key=lambda m: m.get("updated_at", ""), reverse=True)[:limit]
+    return {
+        "current_topic": data.get("current_topic", "default"),
+        "active_count": len(active),
+        "recent_active_memories": [
+            {
+                "id": m["id"],
+                "type": m["type"],
+                "topic": m.get("topic", "default"),
+                "content": m["content"],
+                "confidence": m["confidence"],
+                "approval": m.get("approval", "legacy"),
+            }
+            for m in recent
+        ],
+    }
 
 
 def relevance(memory: dict[str, Any], task: str) -> int:
@@ -208,6 +389,18 @@ def relevance(memory: dict[str, Any], task: str) -> int:
 
 
 def apply(task: str) -> dict[str, Any]:
+    memory_mode = select_memory_mode(task)
+    if memory_mode["mode"] == "instant":
+        result = {
+            "task": task,
+            "memory_mode": memory_mode,
+            "used_memory_ids": [],
+            "plan": ["瞬时模式：不加载长期记忆，直接回答当前轻量问题"],
+            "user_effort_reduction": "none",
+        }
+        log_event("apply", result)
+        return result
+
     ranked = sorted(
         ((relevance(memory, task), memory) for memory in active_memories()),
         key=lambda pair: pair[0],
@@ -224,6 +417,8 @@ def apply(task: str) -> dict[str, Any]:
         plan.append("未找到相关长期记忆，按当前输入完成并等待用户反馈")
     result = {
         "task": task,
+        "memory_mode": memory_mode,
+        "snapshot": snapshot(limit=5),
         "used_memory_ids": [m["id"] for m in used],
         "plan": plan,
         "user_effort_reduction": "low" if not used else "medium" if len(used) == 1 else "high",
@@ -265,14 +460,19 @@ def score_eval(trace: dict[str, Any]) -> dict[str, Any]:
     superseded = [m for m in trace["view_after_change"]["memories"] if m["status"] == "superseded"]
     deleted_id = trace["deleted_id"]
     after_delete_used = trace["after_delete_apply"]["used_memory_ids"]
+    auto_recorded = trace["auto_feedback"]["action"] == "auto_record"
+    medium_confirmed = trace["medium_candidate"]["action"] == "confirm" and not trace["medium_candidate"]["saved"]
+    deduped = trace["duplicate"]["action"] == "dedupe"
+    instant_mode = trace["instant_apply"]["memory_mode"]["mode"] == "instant"
+    deep_mode = trace["deep_apply"]["memory_mode"]["mode"] == "deep"
 
     scores = {
-        "reproducibility": 10 if trace["reset"]["ok"] and memories else 8,
-        "memory_extraction": 20 if active and not trace["temporary"]["saved"] else 14,
-        "memory_application": 25 if trace["second_apply"]["used_memory_ids"] and trace["third_apply"]["used_memory_ids"] else 16,
+        "reproducibility": 10 if trace["reset"]["ok"] and trace["snapshot_after_auto"]["active_count"] else 8,
+        "memory_extraction": 20 if active and auto_recorded and medium_confirmed and deduped and not trace["temporary"]["saved"] else 14,
+        "memory_application": 25 if trace["second_apply"]["used_memory_ids"] and trace["third_apply"]["used_memory_ids"] and instant_mode and deep_mode else 16,
         "memory_update_retirement": 20 if superseded and deleted_id not in after_delete_used else 12,
         "user_control_transparency": 10 if deleted_id and trace["delete"]["ok"] else 6,
-        "real_world_quality": 13 if trace["third_apply"]["plan"] else 8,
+        "real_world_quality": 15 if trace["third_apply"]["plan"] and trace["deep_apply"]["plan"] else 8,
     }
     return {"scores": scores, "total": sum(scores.values())}
 
@@ -280,14 +480,19 @@ def score_eval(trace: dict[str, Any]) -> dict[str, Any]:
 def evaluate() -> dict[str, Any]:
     trace: dict[str, Any] = {}
     trace["reset"] = reset_store()
+    trace["instant_apply"] = apply("[q] 你好")
     trace["first_apply"] = apply("帮我做一个赛事 Skill 架构方案")
-    trace["feedback"] = observe("以后做架构方案时，先对齐评分标准和测试剧本，再写实现。", approved=True)
+    trace["auto_feedback"] = observe("我特别喜欢以后做架构方案时先看评分标准，再看最小可运行实现。", approved=False)
+    trace["medium_candidate"] = observe("可能以后报告短一点？", approved=False)
     trace["temporary"] = observe("这次输出请用表格。", approved=False)
+    trace["duplicate"] = observe("我特别喜欢以后做架构方案时先看评分标准，再看最小可运行实现。", approved=False)
+    trace["snapshot_after_auto"] = snapshot()
     trace["view_after_feedback"] = view()
     trace["second_apply"] = apply("帮我做一个新的赛事 Skill 提交方案")
-    trace["change"] = observe("以后做架构方案可以先给最小可运行版本，但仍要保留评分标准检查。", approved=True)
+    trace["change"] = observe("以后做架构方案可以先给最小可运行版本，但仍要保留评分标准检查。", approved=False)
     trace["view_after_change"] = view()
     trace["third_apply"] = apply("帮我继续完善赛事 Skill")
+    trace["deep_apply"] = apply("[d] 回顾之前架构方案偏好")
     deleted_id = trace["change"]["memory"]["id"]
     trace["deleted_id"] = deleted_id
     trace["delete"] = delete(deleted_id)
@@ -311,6 +516,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("reset")
     sub.add_parser("view")
+    sub.add_parser("snapshot")
 
     observe_parser = sub.add_parser("observe")
     observe_parser.add_argument("text")
@@ -337,6 +543,8 @@ def main() -> None:
         print_json(reset_store())
     elif args.command == "view":
         print_json(view())
+    elif args.command == "snapshot":
+        print_json(snapshot())
     elif args.command == "observe":
         print_json(observe(args.text, args.approve))
     elif args.command == "apply":

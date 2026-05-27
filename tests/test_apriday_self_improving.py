@@ -44,6 +44,26 @@ class ApridaySelfImprovingTest(unittest.TestCase):
         self.assertFalse(result["saved"])
         self.assertEqual(result["reason"], "temporary_instruction")
 
+    def test_high_confidence_preference_auto_records_without_approve(self):
+        self.run_cli("reset")
+        result = self.run_cli("observe", "我特别喜欢先看结论再看细节。")
+        self.assertTrue(result["saved"])
+        self.assertEqual(result["action"], "auto_record")
+        self.assertEqual(result["memory"]["approval"], "auto_high_confidence")
+
+    def test_medium_confidence_candidate_asks_for_confirmation(self):
+        self.run_cli("reset")
+        result = self.run_cli("observe", "可能以后报告短一点？")
+        self.assertFalse(result["saved"])
+        self.assertIn(result["action"], {"ask", "confirm"})
+
+    def test_duplicate_memory_is_deduped(self):
+        self.run_cli("reset")
+        self.run_cli("observe", "我特别喜欢先看结论再看细节。")
+        result = self.run_cli("observe", "我特别喜欢先看结论再看细节。")
+        self.assertFalse(result["saved"])
+        self.assertEqual(result["action"], "dedupe")
+
     def test_memory_is_applied_to_later_task(self):
         self.run_cli("reset")
         self.run_cli("observe", "以后做架构方案时先分析评分标准，再写实现。", "--approve")
@@ -68,9 +88,28 @@ class ApridaySelfImprovingTest(unittest.TestCase):
         result = self.run_cli("apply", "帮我做一个新的架构方案")
         self.assertNotIn("mem_0001", result["used_memory_ids"])
 
+    def test_instant_mode_skips_memory_loading(self):
+        self.run_cli("reset")
+        self.run_cli("observe", "以后做架构方案时先分析评分标准，再写实现。", "--approve")
+        result = self.run_cli("apply", "[q] 你好")
+        self.assertEqual(result["memory_mode"]["mode"], "instant")
+        self.assertEqual(result["used_memory_ids"], [])
+
+    def test_snapshot_shows_recent_active_memory(self):
+        self.run_cli("reset")
+        self.run_cli("observe", "以后做架构方案时先分析评分标准，再写实现。", "--approve")
+        result = self.run_cli("snapshot")
+        self.assertEqual(result["active_count"], 1)
+        self.assertEqual(result["recent_active_memories"][0]["id"], "mem_0001")
+
     def test_evaluate_reaches_high_score(self):
         report = self.run_cli("evaluate")
-        self.assertGreaterEqual(report["score"]["total"], 90)
+        self.assertEqual(report["score"]["total"], 100)
+        self.assertEqual(report["trace"]["auto_feedback"]["action"], "auto_record")
+        self.assertEqual(report["trace"]["medium_candidate"]["action"], "confirm")
+        self.assertEqual(report["trace"]["duplicate"]["action"], "dedupe")
+        self.assertEqual(report["trace"]["instant_apply"]["memory_mode"]["mode"], "instant")
+        self.assertEqual(report["trace"]["deep_apply"]["memory_mode"]["mode"], "deep")
         self.assertEqual(report["score"]["scores"]["reproducibility"], 10)
         self.assertEqual(report["score"]["scores"]["user_control_transparency"], 10)
 

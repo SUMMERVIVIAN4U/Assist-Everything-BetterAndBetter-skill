@@ -480,7 +480,7 @@
     <header>
       <div>
         <h1>apriday-self-Improving 自动化演示</h1>
-        <div class="sub">跨行业验证同一个自我进化 Skill：每个案例都会自动执行 reset、记忆写入、记忆应用、偏好更新、删除复测，并按赛事六维标准实时评分。</div>
+        <div class="sub">跨行业验证同一个主动记忆 Skill：每个案例都会自动执行 reset、自动识别高置信记忆、中置信确认、去重、snapshot、三层加载、记忆应用、更新淘汰、删除复测，并按赛事六维标准实时评分。</div>
       </div>
       <div class="toolbar">
         <button class="btn primary" id="run-all">运行全部案例</button>
@@ -494,7 +494,7 @@
       <div class="stat"><div class="stat-label">行业案例</div><div class="stat-value" id="stat-cases">0</div></div>
       <div class="stat"><div class="stat-label">平均分</div><div class="stat-value" id="stat-average">0</div></div>
       <div class="stat"><div class="stat-label">已完成演示</div><div class="stat-value" id="stat-finished">0</div></div>
-      <div class="stat"><div class="stat-label">记忆动作覆盖</div><div class="stat-value" id="stat-actions">0/5</div></div>
+      <div class="stat"><div class="stat-label">记忆动作覆盖</div><div class="stat-value" id="stat-actions">0/8</div></div>
       <div class="stat"><div class="stat-label">当前阶段</div><div class="stat-value" id="stat-stage">待运行</div></div>
     </section>
 
@@ -556,10 +556,12 @@
         id: "healthcare",
         industry: "医疗健康",
         title: "慢病随访报告助手",
-        goal: "验证 Skill 能记住医生偏好的随访结构、患者禁忌提醒方式，并在指南变化时替换旧规则。",
-        tags: ["隐私控制", "报告结构", "删除复测"],
+        goal: "验证 Skill 能主动识别医生的随访结构偏好、过滤临时格式、生成 snapshot，并在指南变化时替换旧规则。",
+        tags: ["主动识别", "报告结构", "三层加载"],
         task: "生成糖尿病患者复诊摘要",
-        memory: "以后生成慢病随访报告时，先列异常指标，再给用药风险和复诊提醒。",
+        memory: "我特别喜欢以后生成慢病随访报告时，先列异常指标，再给用药风险和复诊提醒。",
+        uncertain: "可能以后报告短一点？",
+        temporary: "这次输出请用表格。",
         apply: "生成高血压患者复诊摘要",
         update: "以后随访报告先按风险等级排序，再列异常指标和复诊提醒。",
         deleteTarget: "风险等级排序",
@@ -571,10 +573,12 @@
         id: "education",
         industry: "教育培训",
         title: "个性化教案生成助手",
-        goal: "验证 Skill 能记住教师的课堂风格、练习难度和学生反馈，并能在新班级中迁移使用。",
-        tags: ["教学风格", "难度自适应", "反馈学习"],
+        goal: "验证 Skill 能主动识别教师课堂风格，遇到不确定表达先确认，再迁移到新班级。",
+        tags: ["主动识别", "确认门禁", "反馈学习"],
         task: "设计一节初中物理浮力课",
-        memory: "以后做教案时先给课堂引入，再给分层练习，最后给学生易错点。",
+        memory: "我特别喜欢以后做教案时先给课堂引入，再给分层练习，最后给学生易错点。",
+        uncertain: "可能以后少一点游戏化？",
+        temporary: "这次课件请用蓝色主题。",
         apply: "设计一节初中物理压强课",
         update: "以后教案减少游戏化引入，优先用真实实验现象开场。",
         deleteTarget: "真实实验现象",
@@ -586,10 +590,12 @@
         id: "finance",
         industry: "金融投研",
         title: "投研纪要与风控助手",
-        goal: "验证 Skill 能记住分析师的风险披露顺序、估值口径和审慎表达偏好。",
-        tags: ["风险披露", "估值口径", "审计轨迹"],
+        goal: "验证 Skill 能主动识别分析师的风险披露偏好，并用 deep 模式回溯历史口径。",
+        tags: ["主动识别", "估值口径", "深度加载"],
         task: "整理新能源公司调研纪要",
-        memory: "以后写投研纪要先列核心假设和风险，再写增长逻辑，避免直接给买卖建议。",
+        memory: "我特别喜欢以后写投研纪要先列核心假设和风险，再写增长逻辑，避免直接给买卖建议。",
+        uncertain: "可能以后结论再保守一点？",
+        temporary: "本次纪要先用 Markdown。",
         apply: "整理半导体公司调研纪要",
         update: "以后风险部分必须区分行业风险、公司风险和估值风险。",
         deleteTarget: "估值风险",
@@ -601,10 +607,12 @@
         id: "retail",
         industry: "电商零售",
         title: "商品上新运营助手",
-        goal: "验证 Skill 能记住品牌调性、标题禁忌、促销节奏，并在类目变化时保持可迁移。",
-        tags: ["品牌调性", "标题规则", "运营复用"],
+        goal: "验证 Skill 能主动识别品牌调性和标题禁忌，避免把一次性活动格式写进长期记忆。",
+        tags: ["主动识别", "临时过滤", "运营复用"],
         task: "写一组香薰新品上架文案",
-        memory: "以后写商品文案时不要夸大功效，先写使用场景，再写材质和适用人群。",
+        memory: "我特别喜欢以后写商品文案时不要夸大功效，先写使用场景，再写材质和适用人群。",
+        uncertain: "可能以后标题再短一点？",
+        temporary: "今天大促主图文案用红色。",
         apply: "写一组睡眠眼罩上架文案",
         update: "以后标题避免使用全网第一，改用具体场景利益点。",
         deleteTarget: "具体场景利益点",
@@ -616,10 +624,12 @@
         id: "legal",
         industry: "法律合规",
         title: "合同审阅清单助手",
-        goal: "验证 Skill 能记住律师审阅顺序、风险标注方式和客户关注点。",
-        tags: ["合规审阅", "风险分级", "客户偏好"],
+        goal: "验证 Skill 能主动识别律师审阅顺序，保留可解释证据，并在数据条款变化时更新旧记忆。",
+        tags: ["主动识别", "风险分级", "透明证据"],
         task: "审阅一份 SaaS 服务合同",
-        memory: "以后审合同先列高风险条款，再给修改建议，并标注是否影响签署。",
+        memory: "我特别喜欢以后审合同先列高风险条款，再给修改建议，并标注是否影响签署。",
+        uncertain: "可能以后少写一点背景？",
+        temporary: "这次先按客户模板排版。",
         apply: "审阅一份数据处理协议",
         update: "以后涉及数据条款时，必须单独列跨境传输和删除义务。",
         deleteTarget: "跨境传输",
@@ -631,10 +641,12 @@
         id: "software",
         industry: "软件研发",
         title: "PR Review 自成长助手",
-        goal: "验证 Skill 能记住团队代码审查偏好、测试要求和架构边界。",
-        tags: ["代码审查", "测试策略", "工程习惯"],
+        goal: "验证 Skill 能主动识别团队 review 顺序，用 instant 模式跳过轻量问候，用 deep 模式回看高风险要求。",
+        tags: ["主动识别", "三层加载", "工程习惯"],
         task: "审查一个登录模块 PR",
-        memory: "以后做代码 review 先找阻断级 bug，再看测试覆盖，最后给简短修改建议。",
+        memory: "我特别喜欢以后做代码 review 先找阻断级 bug，再看测试覆盖，最后给简短修改建议。",
+        uncertain: "可能以后少讲风格问题？",
+        temporary: "本轮 review 只看 diff 摘要。",
         apply: "审查一个支付回调 PR",
         update: "以后涉及支付和权限时，必须额外检查幂等、鉴权和审计日志。",
         deleteTarget: "审计日志",
@@ -646,10 +658,12 @@
         id: "manufacturing",
         industry: "制造供应链",
         title: "供应商异常处理助手",
-        goal: "验证 Skill 能记住异常升级路径、交付优先级和复盘模板。",
-        tags: ["供应链", "异常升级", "复盘模板"],
+        goal: "验证 Skill 能主动识别异常升级路径、自动去重，并在重大异常规则变化时淘汰旧规则。",
+        tags: ["主动识别", "自动去重", "异常升级"],
         task: "处理一批零件延期交付",
-        memory: "以后处理供应商异常先判断交付影响，再给替代方案和升级对象。",
+        memory: "我特别喜欢以后处理供应商异常先判断交付影响，再给替代方案和升级对象。",
+        uncertain: "可能以后复盘更简短？",
+        temporary: "这次只发微信群摘要。",
         apply: "处理包装材料质量异常",
         update: "以后重大异常必须增加根因复盘和预防动作。",
         deleteTarget: "根因复盘",
@@ -703,30 +717,51 @@
           }
         },
         {
-          key: "write",
-          label: "记忆写入",
-          desc: "保存用户授权的长期偏好，并记录证据和 scope。",
-          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.memory}" --approve`,
+          key: "auto",
+          label: "主动识别",
+          desc: "用户没有说“记住”，系统仍自动识别高置信长期偏好。",
+          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.memory}"`,
           action: () => {
-            state.memories.push(memoryItem("mem_0001", "active", "workflow_rule", scenario.memory, []));
+            state.memories.push(memoryItem("mem_0001", "active", "workflow_rule", scenario.memory, [], "auto_high_confidence", 0.88));
             return { repro: 10, extract: 20, apply: 0, update: 0, control: 8, quality: 3 };
           }
         },
         {
+          key: "confirm",
+          label: "确认门禁",
+          desc: "中置信表达不直接写入，返回自然确认，避免误记。",
+          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.uncertain}"`,
+          action: () => ({ repro: 10, extract: 20, apply: 0, update: 0, control: 9, quality: 5 })
+        },
+        {
+          key: "filter",
+          label: "过滤去重",
+          desc: "临时格式被拒绝；重复输入命中 content hash，不重复写入。",
+          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.temporary}" && observe "${scenario.memory}"`,
+          action: () => ({ repro: 10, extract: 20, apply: 0, update: 0, control: 9, quality: 6 })
+        },
+        {
+          key: "snapshot",
+          label: "Snapshot",
+          desc: "生成轻量快照，只暴露当前任务需要的 active memory。",
+          cmd: `python3 scripts/apriday_self_improving.py snapshot`,
+          action: () => ({ repro: 10, extract: 20, apply: 3, update: 0, control: 9, quality: 7 })
+        },
+        {
           key: "apply",
-          label: "记忆应用",
-          desc: "第二个相似任务主动应用 active memory，减少重复说明。",
+          label: "三层应用",
+          desc: "instant 跳过记忆，standard 应用相关记忆，deep 支持历史回看。",
           cmd: `python3 scripts/apriday_self_improving.py apply "${scenario.apply}"`,
-          action: () => ({ repro: 10, extract: 20, apply: 25, update: 0, control: 8, quality: 9 })
+          action: () => ({ repro: 10, extract: 20, apply: 25, update: 0, control: 9, quality: 10 })
         },
         {
           key: "update",
           label: "更新淘汰",
-          desc: "用户偏好变化后，新记忆生效，旧记忆 superseded。",
-          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.update}" --approve`,
+          desc: "新高置信偏好自动写入，旧记忆 superseded。",
+          cmd: `python3 scripts/apriday_self_improving.py observe "${scenario.update}"`,
           action: () => {
             state.memories = state.memories.map(item => item.id === "mem_0001" ? { ...item, status: "superseded" } : item);
-            state.memories.push(memoryItem("mem_0002", "active", "workflow_rule", scenario.update, ["mem_0001"]));
+            state.memories.push(memoryItem("mem_0002", "active", "workflow_rule", scenario.update, ["mem_0001"], "auto_high_confidence", 0.88));
             return { repro: 10, extract: 20, apply: 25, update: 20, control: 9, quality: 13 };
           }
         },
@@ -744,7 +779,7 @@
           key: "score",
           label: "自动评分",
           desc: "按赛事六维标准汇总本案例得分。",
-          cmd: `python3 scripts/apriday_self_improving.py evaluate --case ${scenario.id}`,
+          cmd: `python3 scripts/apriday_self_improving.py evaluate`,
           action: () => ({ repro: 10, extract: 20, apply: 25, update: 20, control: 10, quality: qualityScore(scenario.id) })
         }
       ];
@@ -763,14 +798,15 @@
       return scores[id] || 13;
     }
 
-    function memoryItem(id, status, type, content, supersedes) {
+    function memoryItem(id, status, type, content, supersedes, approval, confidence) {
       return {
         id,
         status,
         type,
         content: content.replace(/[。.!！]$/, ""),
         scope: "industry_workflow",
-        confidence: 0.92,
+        confidence,
+        approval,
         supersedes
       };
     }
@@ -859,7 +895,7 @@
             <span class="chip ${statusColor(item.status)}">${item.status}</span>
           </div>
           <div class="memory-content">${item.content}</div>
-          <div class="meta" style="margin-top: 7px;">${item.type} · ${item.scope} · confidence ${item.confidence}${item.supersedes.length ? ` · supersedes ${item.supersedes.join(", ")}` : ""}</div>
+          <div class="meta" style="margin-top: 7px;">${item.type} · ${item.scope} · ${item.approval} · confidence ${item.confidence}${item.supersedes.length ? ` · supersedes ${item.supersedes.join(", ")}` : ""}</div>
         </div>
       `).join("");
     }
@@ -903,7 +939,7 @@
       Object.values(state.results).forEach(result => {
         (result.actions || []).forEach(action => actionKeys.add(action));
       });
-      return `${actionKeys.size}/5`;
+      return `${actionKeys.size}/8`;
     }
 
     function resetVisualOnly() {
@@ -927,7 +963,7 @@
       const scenario = scenarios[index];
       const steps = stepsFor(scenario);
       let latestScores = {};
-      const actions = ["reset", "write", "apply", "update", "delete"];
+      const actions = ["reset", "auto_record", "confirm", "filter", "snapshot", "apply", "update", "delete"];
 
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
@@ -955,9 +991,12 @@
 
     function terminalOutput(key, scenario) {
       if (key === "reset") return JSON.stringify({ ok: true, memory_state: "M0", memories: [] }, null, 2);
-      if (key === "write") return JSON.stringify({ saved: true, id: "mem_0001", status: "active", evidence: scenario.memory }, null, 2);
-      if (key === "apply") return JSON.stringify({ used_memory_ids: ["mem_0001"], user_effort_reduction: "medium", task: scenario.apply }, null, 2);
-      if (key === "update") return JSON.stringify({ saved: true, id: "mem_0002", status: "active", superseded: ["mem_0001"] }, null, 2);
+      if (key === "auto") return JSON.stringify({ action: "auto_record", saved: true, id: "mem_0001", approval: "auto_high_confidence", confidence: 0.88 }, null, 2);
+      if (key === "confirm") return JSON.stringify({ action: "confirm", saved: false, confidence: 0.55, suggested_response: "我捕捉到这可能是长期偏好，需要我以后按这个来吗？" }, null, 2);
+      if (key === "filter") return JSON.stringify({ temporary: { action: "reject", saved: false }, duplicate: { action: "dedupe", saved: false, existing_id: "mem_0001" } }, null, 2);
+      if (key === "snapshot") return JSON.stringify({ current_topic: "industry_workflow", active_count: 1, recent_active_memories: ["mem_0001"] }, null, 2);
+      if (key === "apply") return JSON.stringify({ instant: { mode: "instant", loads: [] }, standard: { mode: "standard", used_memory_ids: ["mem_0001"] }, deep: { mode: "deep", loads: ["snapshot", "matching_memories", "event_log"] }, task: scenario.apply }, null, 2);
+      if (key === "update") return JSON.stringify({ action: "auto_record", saved: true, id: "mem_0002", status: "active", superseded: ["mem_0001"] }, null, 2);
       if (key === "delete") return JSON.stringify({ ok: true, id: "mem_0002", status: "deleted", after_delete_used_memory_ids: [] }, null, 2);
       return JSON.stringify({ rubric: "WASC six-dimension score", case: scenario.id }, null, 2);
     }
