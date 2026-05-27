@@ -554,6 +554,7 @@
         <div class="sub">跨行业验证同一个主动记忆 Skill：每个案例都会自动执行 reset、自动识别高置信记忆、中置信确认、去重、snapshot、三层加载、记忆应用、更新淘汰、删除复测，并按赛事六维标准实时评分。</div>
       </div>
       <div class="toolbar">
+        <button class="btn" id="open-profile">用户人设与记忆</button>
         <button class="btn primary" id="run-all">运行全部案例</button>
         <button class="btn" id="run-current">运行当前案例</button>
         <button class="btn" id="reset-current">重置当前案例</button>
@@ -1169,6 +1170,9 @@
 
     el.runAll.addEventListener("click", runAll);
     el.runCurrent.addEventListener("click", () => runScenario(state.selected));
+    document.getElementById("open-profile").addEventListener("click", () => {
+      window.location.href = "user-memory-profile.html";
+    });
     el.resetCurrent.addEventListener("click", () => {
       delete state.results[scenarios[state.selected].id];
       state.completed.delete(scenarios[state.selected].id);

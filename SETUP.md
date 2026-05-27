@@ -66,3 +66,4 @@ Then open:
 
 - `http://127.0.0.1:8000/eval-case-workbench-simple.html`
 - `http://127.0.0.1:8000/self-improving-visual-demo.html`
+- `http://127.0.0.1:8000/user-memory-profile.html`

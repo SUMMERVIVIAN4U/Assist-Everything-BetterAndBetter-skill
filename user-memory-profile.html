@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>apriday-self-Improving 用户人设与记忆</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #fff;
+      --panel-soft: #fafbfc;
+      --text: #1d2433;
+      --muted: #737d8f;
+      --line: #e2e7ef;
+      --blue: #2f6fed;
+      --green: #2e7d32;
+      --orange: #c66a1f;
+      --red: #c74444;
+      --radius: 8px;
+      --shadow: 0 10px 30px rgba(20, 32, 55, .06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+
+    .topbar {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 0 22px;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 900;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #2f6fed, #28a17d);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .nav {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav a, .nav button {
+      border: 1px solid transparent;
+      background: transparent;
+      min-height: 34px;
+      padding: 0 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav a.active {
+      color: var(--text);
+      border-color: var(--line);
+      background: var(--panel-soft);
+      font-weight: 800;
+    }
+
+    .page {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 26px 22px 40px;
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .sidebar {
+      display: grid;
+      gap: 16px;
+      position: sticky;
+      top: 82px;
+    }
+
+    .agent-card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .agent-card {
+      padding: 22px;
+      text-align: center;
+    }
+
+    .avatar {
+      width: 86px;
+      height: 86px;
+      margin: 0 auto 12px;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 35% 30%, #fff 0 10%, transparent 11%),
+        linear-gradient(135deg, #dfe8f6, #f1f5f9 45%, #c8d7ea);
+      border: 1px solid #d8e0ec;
+      display: grid;
+      place-items: center;
+      color: #526078;
+      font-weight: 900;
+      font-size: 26px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    .agent-name {
+      font-size: 22px;
+      font-weight: 900;
+      margin-bottom: 7px;
+    }
+
+    .agent-desc {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      min-height: 42px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 14px;
+    }
+
+    .chip {
+      display: inline-flex;
+      min-height: 24px;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .chip.green { background: #eaf7ef; color: var(--green); }
+    .chip.orange { background: #fff1e5; color: var(--orange); }
+    .chip.red { background: #fff0f0; color: var(--red); }
+    .chip.gray { background: #edf1f6; color: #5c6778; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 22px 0;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .primary-btn {
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-radius: 999px;
+      background: #20242c;
+      color: #fff;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .heatmap {
+      padding: 14px;
+    }
+
+    .heatmap h2 {
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+
+    .heat-grid {
+      display: grid;
+      grid-template-columns: 34px repeat(12, 14px);
+      gap: 5px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      background: #edf1f6;
+    }
+
+    .dot.on1 { background: #c8e6c9; }
+    .dot.on2 { background: #81c784; }
+    .dot.on3 { background: #2e7d32; }
+
+    .content {
+      display: grid;
+      gap: 14px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .tab {
+      min-height: 40px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      padding: 0 16px;
+      border-radius: var(--radius);
+      white-space: nowrap;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .tab.active {
+      color: var(--text);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+
+    .panel-title {
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    .panel-sub {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .ghost-btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      min-height: 32px;
+      padding: 0 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .doc {
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      border-radius: var(--radius);
+      padding: 16px;
+      color: #4b5567;
+      line-height: 1.75;
+      font-size: 14px;
+    }
+
+    .doc h3 {
+      color: var(--text);
+      font-size: 15px;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    .doc h3:first-child { margin-top: 0; }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .memory-layer, .memory-card, .control-row {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+      padding: 12px;
+    }
+
+    .memory-layer {
+      display: grid;
+      gap: 9px;
+    }
+
+    .layer-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .layer-top strong {
+      font-size: 15px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .kv b {
+      color: #4b5567;
+    }
+
+    .memory-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .memory-card {
+      background: #fff;
+    }
+
+    .memory-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .memory-card p {
+      color: #4b5567;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .control-row strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .control-row span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .switch {
+      width: 44px;
+      height: 25px;
+      border-radius: 999px;
+      background: var(--blue);
+      position: relative;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 19px;
+      height: 19px;
+      border-radius: 999px;
+      background: #fff;
+    }
+
+    .switch.off {
+      background: #c7ced8;
+    }
+
+    .switch.off::after {
+      right: auto;
+      left: 3px;
+    }
+
+    .files {
+      display: grid;
+      gap: 10px;
+    }
+
+    .file-row {
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+      padding: 8px 10px;
+    }
+
+    .file-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: #eef4ff;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    @media (max-width: 980px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+      }
+
+      .grid2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">A</span>
+      <span>apriday-self-Improving</span>
+    </div>
+    <nav class="nav">
+      <a class="active" href="#persona">智能体</a>
+      <a href="self-improving-visual-demo.html">自动演示</a>
+      <a href="eval-case-workbench-simple.html">Eval 工作台</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <aside class="sidebar">
+      <section class="agent-card">
+        <div class="avatar">AI</div>
+        <h1 class="agent-name">沙漏AI</h1>
+        <p class="agent-desc">不是每次都像第一次见你。它会沉淀偏好、调整交互、保留证据，也允许你随时撤回。</p>
+        <div class="chips">
+          <span class="chip green">在线</span>
+          <span class="chip">模型：GLM-5.1</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><strong>42</strong><span>陪伴天数</span></div>
+          <div class="stat"><strong>1203</strong><span>近期消息</span></div>
+          <div class="stat"><strong>15</strong><span>记忆证据</span></div>
+        </div>
+        <button class="primary-btn" type="button">去对话</button>
+      </section>
+
+      <section class="agent-card heatmap">
+        <h2>记忆活跃度</h2>
+        <div class="heat-grid" aria-label="对话统计">
+          <span>周日</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot on1"></span><span class="dot"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot"></span><span class="dot"></span>
+          <span>周一</span><span class="dot"></span><span class="dot on1"></span><span class="dot"></span><span class="dot"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot on2"></span><span class="dot"></span><span class="dot"></span><span class="dot on1"></span><span class="dot on3"></span><span class="dot"></span>
+          <span>周二</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot on3"></span><span class="dot on1"></span><span class="dot on2"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot on2"></span>
+          <span>周三</span><span class="dot"></span><span class="dot"></span><span class="dot on1"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot on2"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot on1"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span>周四</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot on1"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot on2"></span><span class="dot"></span><span class="dot on2"></span><span class="dot on3"></span><span class="dot on1"></span><span class="dot"></span>
+        </div>
+      </section>
+    </aside>
+
+    <section class="content">
+      <div class="tabs">
+        <button class="tab active" data-tab="rules" type="button">行为规则</button>
+        <button class="tab" data-tab="layers" type="button">三层记忆</button>
+        <button class="tab" data-tab="profile" type="button">用户档案</button>
+        <button class="tab" data-tab="privacy" type="button">隐私控制</button>
+        <button class="tab" data-tab="files" type="button">全部文件</button>
+      </div>
+
+      <section class="panel view" id="rules">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">SOUL.md</h2>
+            <p class="panel-sub">智能体必须遵守的底线规则、安全框架和核心价值观。</p>
+          </div>
+          <button class="ghost-btn" type="button">编辑</button>
+        </div>
+        <div class="doc">
+          <h3>## 你是谁</h3>
+          <p>你不是一个只会复述的对话框。你正在通过被授权的记忆、可解释的证据和可撤回的控制，持续成为更懂用户的协作伙伴。</p>
+          <h3>## 交互偏好</h3>
+          <p>默认先给结论，再给关键依据。遇到架构、评测、方案类任务，先对齐评分标准和最小可运行版本，再进入实现。</p>
+          <h3>## 安全配置修改权限</h3>
+          <p>敏感信息不沉淀。密码、密钥、token、身份证、银行卡、验证码等输入只触发拒绝与脱敏，不写入长期记忆。</p>
+          <h3>## 延续</h3>
+          <p>每次醒来都是新的，但三层记忆让你不会每次都从零开始。L0 服务当前轮，L1 提供画像快照，L2 保留本地审计账本。</p>
+        </div>
+      </section>
+
+      <section class="panel view" id="layers" hidden>
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">三层记忆现状</h2>
+            <p class="panel-sub">展示每层记忆的当前状态、来源、沉淀原因和隐私控制边界。</p>
+          </div>
+          <a class="ghost-btn" href="self-improving-visual-demo.html">查看自动演示</a>
+        </div>
+        <div class="grid2">
+          <div class="memory-layer">
+            <div class="layer-top"><strong>L0 即时交互层</strong><span class="chip gray">ephemeral</span></div>
+            <div class="kv"><b>来源</b><span>当前用户消息，只在当前轮使用。</span></div>
+            <div class="kv"><b>沉淀原因</b><span>不沉淀。用于 `[q]`、问候和轻量回复，避免无意义读取长期记忆。</span></div>
+            <div class="memory-card"><strong>当前内容</strong><p>无持久化内容。刷新或下一轮即消失。</p></div>
+          </div>
+
+          <div class="memory-layer">
+            <div class="layer-top"><strong>L1 画像快照层</strong><span class="chip green">active snapshot</span></div>
+            <div class="kv"><b>来源</b><span>从 active memories 压缩生成，命令：`snapshot` / `profile`。</span></div>
+            <div class="kv"><b>沉淀原因</b><span>保留高信号偏好，支持个性化结果与交互方式。</span></div>
+            <div class="memory-card"><strong>mem_0001</strong><p>用户特别喜欢先看结论，再看评分标准。原因：高置信长期偏好，自动沉淀。</p></div>
+          </div>
+
+          <div class="memory-layer">
+            <div class="layer-top"><strong>L2 长期审计层</strong><span class="chip orange">local ledger</span></div>
+            <div class="kv"><b>来源</b><span>本地 `.apriday_memory/memory.json` 与 `events.jsonl`。</span></div>
+            <div class="kv"><b>沉淀原因</b><span>保留证据、替换、删除状态，支持用户查看、撤销和复测。</span></div>
+            <div class="memory-card"><strong>mem_0002</strong><p>新偏好替换旧偏好。状态：active。supersedes: mem_0001。</p></div>
+            <div class="memory-card"><strong>deleted proof</strong><p>被用户删除的记忆只保留删除证明，不再参与 apply。</p></div>
+          </div>
+
+          <div class="memory-layer">
+            <div class="layer-top"><strong>隐私边界</strong><span class="chip red">redaction</span></div>
+            <div class="kv"><b>来源</b><span>敏感输入检测器。</span></div>
+            <div class="kv"><b>沉淀原因</b><span>不沉淀敏感内容，只记录拒绝动作和脱敏结果。</span></div>
+            <div class="memory-card"><strong>blocked markers</strong><p>密码、token、密钥、身份证、银行卡、验证码、隐私不要记。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel view" id="profile" hidden>
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">用户档案</h2>
+            <p class="panel-sub">画像来自已授权或高置信的 active memory，可解释、可编辑、可删除。</p>
+          </div>
+          <button class="ghost-btn" type="button">导出画像</button>
+        </div>
+        <div class="grid2">
+          <div class="memory-card"><strong>交互方式</strong><p>结论优先、评分标准优先、少绕弯、交付导向。</p></div>
+          <div class="memory-card"><strong>工作流偏好</strong><p>架构方案先分析评分标准，再给最小可运行版本，最后补实现细节。</p></div>
+          <div class="memory-card"><strong>真实场景</strong><p>参赛 Skill、Eval 工作台、可视化演示、OpenClaw / 飞书机器人配置。</p></div>
+          <div class="memory-card"><strong>反馈学习</strong><p>正反馈提高 confidence；负反馈降低 confidence，低于阈值自动归档。</p></div>
+        </div>
+      </section>
+
+      <section class="panel view" id="privacy" hidden>
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">隐私可控的记忆管理</h2>
+            <p class="panel-sub">用户可以查看、编辑、删除、重置；敏感输入只脱敏，不进入长期记忆。</p>
+          </div>
+          <button class="ghost-btn" type="button">运行 privacy</button>
+        </div>
+        <div class="memory-list">
+          <div class="control-row"><div><strong>自动记忆</strong><span>仅高置信、非敏感、非临时内容自动写入。</span></div><span class="switch"></span></div>
+          <div class="control-row"><div><strong>中置信确认</strong><span>不确定内容先确认，不直接保存。</span></div><span class="switch"></span></div>
+          <div class="control-row"><div><strong>敏感信息脱敏</strong><span>密码、token、密钥等直接拒绝并显示 `[redacted]`。</span></div><span class="switch"></span></div>
+          <div class="control-row"><div><strong>删除后不再应用</strong><span>deleted memory 从 apply 检索中排除，只保留审计证明。</span></div><span class="switch"></span></div>
+          <div class="control-row"><div><strong>事件审计</strong><span>observe/apply/feedback/delete 都写入本地事件流。</span></div><span class="switch"></span></div>
+        </div>
+      </section>
+
+      <section class="panel view" id="files" hidden>
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">全部文件</h2>
+            <p class="panel-sub">用于展示 Skill 的行为规则、工作流、用户档案和记忆账本。</p>
+          </div>
+        </div>
+        <div class="files">
+          <div class="file-row"><span class="file-icon">S</span><div><strong>skill/SKILL.md</strong><div class="panel-sub">Skill 行为规则与使用流程</div></div><span class="chip">规则</span></div>
+          <div class="file-row"><span class="file-icon">P</span><div><strong>profile</strong><div class="panel-sub">用户画像聚合命令输出</div></div><span class="chip green">画像</span></div>
+          <div class="file-row"><span class="file-icon">L</span><div><strong>layers</strong><div class="panel-sub">三层记忆现状、来源和沉淀原因</div></div><span class="chip orange">记忆</span></div>
+          <div class="file-row"><span class="file-icon">R</span><div><strong>privacy</strong><div class="panel-sub">隐私控制与敏感信息脱敏报告</div></div><span class="chip red">隐私</span></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
+        document.querySelectorAll(".view").forEach(view => view.hidden = true);
+        tab.classList.add("active");
+        document.getElementById(tab.dataset.tab).hidden = false;
+      });
+    });
+  </script>
+</body>
+</html>
