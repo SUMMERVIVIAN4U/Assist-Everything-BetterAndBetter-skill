@@ -17,8 +17,11 @@ python3 scripts/apriday_self_improving.py reset
 python3 scripts/apriday_self_improving.py observe "我特别喜欢先看结论再看细节。"
 python3 scripts/apriday_self_improving.py observe "以后做架构方案先分析评分标准，再写实现。" --approve
 python3 scripts/apriday_self_improving.py snapshot
+python3 scripts/apriday_self_improving.py profile
 python3 scripts/apriday_self_improving.py view
 python3 scripts/apriday_self_improving.py apply "帮我做一个新的赛事方案"
+python3 scripts/apriday_self_improving.py feedback mem_0001 "这个偏好应用准确，继续保持。" --rating 1
+python3 scripts/apriday_self_improving.py privacy
 ```
 
 Memory is stored locally in `.apriday_memory/memory.json`. Override this path for tests or sandboxed runs:
@@ -34,7 +37,7 @@ python3 scripts/apriday_self_improving.py evaluate
 python3 -m unittest discover -s tests
 ```
 
-The evaluation replays the required continuous-use structure:
+The evaluation replays the required continuous-use structure and six encouraged directions:
 
 1. reset memory
 2. first task
@@ -44,6 +47,11 @@ The evaluation replays the required continuous-use structure:
 6. preference change
 7. third task
 8. deletion replay
+9. profile aggregation
+10. feedback learning
+11. snapshot compression
+12. personalization
+13. privacy redaction and controls
 
 ## Demo Workbench
 

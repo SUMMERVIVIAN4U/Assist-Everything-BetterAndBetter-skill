@@ -11,6 +11,9 @@ The implementation is intentionally local and deterministic. It does not call ex
 - Uses Bio-Memory Pro inspired confidence tiers: auto-record, natural confirmation, light ask, or ignore.
 - Filters temporary instructions such as "这次", "本次", and "临时" so they do not become long-term memory.
 - Provides a lightweight snapshot and instant/standard/deep loading modes to avoid unnecessary memory reads.
+- Builds a compact user profile from active preference, workflow, scene, and project memories.
+- Learns from feedback by adjusting memory confidence after successful or poor applications.
+- Exposes privacy controls and redacts sensitive observations instead of storing them.
 - Stores memory with source evidence, scope, confidence, approval status, and lifecycle status.
 - Applies active memory to later tasks and explains which memory affected the plan.
 - Handles preference changes by superseding older conflicting memory rather than endlessly accumulating rules.
@@ -44,7 +47,10 @@ python3 scripts/apriday_self_improving.py reset
 python3 scripts/apriday_self_improving.py observe "我特别喜欢先看结论再看细节。"
 python3 scripts/apriday_self_improving.py observe "以后做架构方案先分析评分标准，再写实现。" --approve
 python3 scripts/apriday_self_improving.py snapshot
+python3 scripts/apriday_self_improving.py profile
 python3 scripts/apriday_self_improving.py apply "帮我做一个新的赛事方案"
+python3 scripts/apriday_self_improving.py feedback mem_0001 "这个偏好应用准确，继续保持。" --rating 1
+python3 scripts/apriday_self_improving.py privacy
 python3 scripts/apriday_self_improving.py evaluate
 python3 -m unittest discover -s tests
 ```
@@ -72,6 +78,17 @@ The implementation in `scripts/apriday_self_improving.py` is self-contained and 
 | 记忆更新与淘汰 | conflict detection marks old memory as `superseded` |
 | 用户控制与透明度 | all memory is viewable, editable, deletable, and source-linked |
 | 结果质量与真实可用性 | eval script checks final task output after memory changes and deletion |
+
+## Encouraged Direction Coverage
+
+| 鼓励方向 | Runnable evidence |
+| --- | --- |
+| 偏好记忆与画像沉淀 | `profile` aggregates active preferences, workflow rules, and interaction style |
+| 反馈学习与自我调整 | `feedback` adjusts confidence and archives low-confidence memories |
+| 上下文压缩与长期记忆 | `snapshot` returns compression metrics and recent active memory only |
+| 个性化结果与交互方式 | `apply` returns `personalization.interaction_style` and adapts the plan |
+| 隐私可控的记忆管理 | `privacy`, `delete`, `reset`, and redacted sensitive observations |
+| 面向真实工作场景 | `evaluate` and `self-improving-visual-demo.html` cover cross-industry workflows |
 
 ## Existing Planning Artifacts
 

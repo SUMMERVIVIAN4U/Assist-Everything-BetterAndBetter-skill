@@ -33,9 +33,25 @@ Use this skill to make an assistant "越用越懂你" while keeping memory expli
    - Deleted memory must not affect future `apply` results.
    - Use `edit <memory_id> --content ...` only for user-approved corrections.
 
-6. Evaluate automatically.
+6. Learn from feedback.
+   - Use `feedback <memory_id> "<feedback>" --rating 1` when a memory improved the result.
+   - Use `feedback <memory_id> "<feedback>" --rating -1` when a memory was wrong, stale, or over-applied.
+   - Confidence changes must be visible in `view`, `profile`, and later `apply` behavior.
+
+7. Evaluate automatically.
    - Run `python3 scripts/apriday_self_improving.py evaluate`.
-   - The evaluation must include reset, first task, feedback, view memory, second task, preference change, third task, and deletion replay.
+   - The evaluation must include the WASC continuous-use structure plus six encouraged directions.
+
+## Encouraged Direction Coverage
+
+| Direction | Evidence command |
+| --- | --- |
+| 偏好记忆与画像沉淀 | `observe`, then `profile` |
+| 反馈学习与自我调整 | `feedback mem_0001 "...accurate..." --rating 1` |
+| 上下文压缩与长期记忆 | `snapshot` with compression metrics |
+| 个性化结果与交互方式 | `apply` returns `personalization.interaction_style` |
+| 隐私可控的记忆管理 | `privacy`, `delete`, redacted sensitive observations |
+| 面向真实工作场景 | `evaluate` and cross-industry demo cases |
 
 ## Proactive Memory Policy
 
@@ -62,8 +78,11 @@ python3 scripts/apriday_self_improving.py reset
 python3 scripts/apriday_self_improving.py observe "我特别喜欢先看结论再看细节。"
 python3 scripts/apriday_self_improving.py observe "以后做方案先分析评分标准，再写实现。" --approve
 python3 scripts/apriday_self_improving.py snapshot
+python3 scripts/apriday_self_improving.py profile
 python3 scripts/apriday_self_improving.py view
 python3 scripts/apriday_self_improving.py apply "帮我做一个新的赛事方案"
+python3 scripts/apriday_self_improving.py feedback mem_0001 "这个偏好应用准确，继续保持。" --rating 1
+python3 scripts/apriday_self_improving.py privacy
 python3 scripts/apriday_self_improving.py edit mem_0001 --content "做架构方案时先分析评分标准，再写实现。"
 python3 scripts/apriday_self_improving.py delete mem_0001
 python3 scripts/apriday_self_improving.py evaluate

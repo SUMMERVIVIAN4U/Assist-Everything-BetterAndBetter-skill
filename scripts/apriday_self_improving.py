@@ -234,7 +234,8 @@ def observe(text: str, approved: bool) -> dict[str, Any]:
     data = read_store()
     rejected, reason = should_reject(text, approved)
     if rejected:
-        result = {"action": "reject", "saved": False, "reason": reason, "text": text}
+        visible_text = "[redacted]" if reason == "private_or_sensitive" else text
+        result = {"action": "reject", "saved": False, "reason": reason, "text": visible_text}
         log_event("observe_rejected", result)
         return result
 
@@ -344,6 +345,45 @@ def active_memories() -> list[dict[str, Any]]:
     return [m for m in read_store()["memories"] if m.get("status") == "active" and m.get("user_approved", True)]
 
 
+def build_profile(data: dict[str, Any] | None = None) -> dict[str, Any]:
+    data = data or read_store()
+    active = [m for m in data["memories"] if m.get("status") == "active"]
+    profile = {
+        "current_topic": data.get("current_topic", "default"),
+        "preference_memory": [],
+        "workflow_rules": [],
+        "project_context": [],
+        "scene_rules": [],
+        "interaction_style": [],
+        "confidence_avg": 0.0,
+    }
+    if not active:
+        return profile
+
+    for memory in active:
+        item = {"id": memory["id"], "content": memory["content"], "confidence": memory["confidence"]}
+        if memory["type"] == "workflow_rule":
+            profile["workflow_rules"].append(item)
+        elif memory["type"] == "project_context":
+            profile["project_context"].append(item)
+        elif memory["type"] == "scene_rule":
+            profile["scene_rules"].append(item)
+        else:
+            profile["preference_memory"].append(item)
+
+        content = memory["content"]
+        if "结论" in content:
+            profile["interaction_style"].append("conclusion_first")
+        if "简短" in content or "短一点" in content:
+            profile["interaction_style"].append("concise")
+        if "评分标准" in content:
+            profile["interaction_style"].append("rubric_first")
+
+    profile["interaction_style"] = sorted(set(profile["interaction_style"]))
+    profile["confidence_avg"] = round(sum(m["confidence"] for m in active) / len(active), 2)
+    return profile
+
+
 def select_memory_mode(task: str) -> dict[str, Any]:
     lowered = task.lower()
     if task.startswith("[q]") or any(k in task for k in ("你好", "在吗", "谢谢", "hi", "hello")):
@@ -359,9 +399,18 @@ def snapshot(limit: int = 8) -> dict[str, Any]:
     data = read_store()
     active = [m for m in data["memories"] if m["status"] == "active"]
     recent = sorted(active, key=lambda m: m.get("updated_at", ""), reverse=True)[:limit]
+    full_tokens = max(1, sum(len(m["content"]) for m in data["memories"]) // 2)
+    snapshot_tokens = max(1, sum(len(m["content"]) for m in recent) // 2)
+    savings = max(0, round((1 - min(snapshot_tokens, full_tokens) / full_tokens) * 100))
     return {
         "current_topic": data.get("current_topic", "default"),
         "active_count": len(active),
+        "compression": {
+            "strategy": "recent_active_memory_only",
+            "estimated_full_tokens": full_tokens,
+            "estimated_snapshot_tokens": snapshot_tokens,
+            "estimated_savings_percent": savings,
+        },
         "recent_active_memories": [
             {
                 "id": m["id"],
@@ -390,12 +439,14 @@ def relevance(memory: dict[str, Any], task: str) -> int:
 
 def apply(task: str) -> dict[str, Any]:
     memory_mode = select_memory_mode(task)
+    profile = build_profile()
     if memory_mode["mode"] == "instant":
         result = {
             "task": task,
             "memory_mode": memory_mode,
             "used_memory_ids": [],
             "plan": ["瞬时模式：不加载长期记忆，直接回答当前轻量问题"],
+            "personalization": {"interaction_style": [], "reason": "instant_mode_skips_profile"},
             "user_effort_reduction": "none",
         }
         log_event("apply", result)
@@ -413,12 +464,19 @@ def apply(task: str) -> dict[str, Any]:
     ]
     for memory in used:
         plan.append(f"应用 {memory['id']}：{memory['content']}")
+    if profile["interaction_style"]:
+        plan.append(f"按用户画像调整交互方式：{', '.join(profile['interaction_style'])}")
     if not used:
         plan.append("未找到相关长期记忆，按当前输入完成并等待用户反馈")
     result = {
         "task": task,
         "memory_mode": memory_mode,
         "snapshot": snapshot(limit=5),
+        "profile": profile,
+        "personalization": {
+            "interaction_style": profile["interaction_style"],
+            "workflow_rule_count": len(profile["workflow_rules"]),
+        },
         "used_memory_ids": [m["id"] for m in used],
         "plan": plan,
         "user_effort_reduction": "low" if not used else "medium" if len(used) == 1 else "high",
@@ -429,6 +487,57 @@ def apply(task: str) -> dict[str, Any]:
 
 def view() -> dict[str, Any]:
     return read_store()
+
+
+def feedback(memory_id: str, text: str, rating: int) -> dict[str, Any]:
+    data = read_store()
+    for memory in data["memories"]:
+        if memory["id"] == memory_id:
+            before = memory["confidence"]
+            delta = 0.08 if rating > 0 else -0.18
+            memory["confidence"] = round(max(0.1, min(0.99, before + delta)), 2)
+            memory["evidence"].append(f"feedback({rating}): {text}")
+            if rating < 0 and memory["confidence"] < 0.45:
+                memory["status"] = "archived"
+            memory["updated_at"] = now()
+            write_store(data)
+            result = {
+                "ok": True,
+                "id": memory_id,
+                "before_confidence": before,
+                "after_confidence": memory["confidence"],
+                "status": memory["status"],
+                "learning": "positive_reinforcement" if rating > 0 else "negative_adjustment",
+            }
+            log_event("feedback", result)
+            return result
+    return {"ok": False, "error": f"memory not found: {memory_id}"}
+
+
+def privacy_report() -> dict[str, Any]:
+    data = read_store()
+    memories = data["memories"]
+    counts: dict[str, int] = {}
+    for memory in memories:
+        counts[memory["status"]] = counts.get(memory["status"], 0) + 1
+    return {
+        "memory_counts_by_status": counts,
+        "private_markers_blocked": list(PRIVATE_MARKERS),
+        "controls": ["reset", "view", "snapshot", "edit", "delete", "privacy"],
+        "retention_policy": "local_only_until_user_deletes_or_resets",
+        "sensitive_storage": "private_or_sensitive observations are redacted and not saved as memory",
+    }
+
+
+def direction_coverage(trace: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "偏好记忆与画像沉淀": bool(trace["profile_after_auto"]["workflow_rules"] or trace["profile_after_auto"]["preference_memory"]),
+        "反馈学习与自我调整": trace["feedback_learning"]["ok"] and trace["feedback_learning"]["after_confidence"] > trace["feedback_learning"]["before_confidence"],
+        "上下文压缩与长期记忆": trace["snapshot_after_auto"]["compression"]["estimated_savings_percent"] >= 0 and trace["snapshot_after_auto"]["active_count"] > 0,
+        "个性化结果与交互方式": bool(trace["third_apply"]["personalization"]["interaction_style"]),
+        "隐私可控的记忆管理": trace["privacy_reject"]["text"] == "[redacted]" and "delete" in trace["privacy_report"]["controls"],
+        "面向真实工作场景": bool(trace["second_apply"]["used_memory_ids"] and trace["third_apply"]["used_memory_ids"]),
+    }
 
 
 def edit(memory_id: str, content: str | None, status: str | None) -> dict[str, Any]:
@@ -465,16 +574,20 @@ def score_eval(trace: dict[str, Any]) -> dict[str, Any]:
     deduped = trace["duplicate"]["action"] == "dedupe"
     instant_mode = trace["instant_apply"]["memory_mode"]["mode"] == "instant"
     deep_mode = trace["deep_apply"]["memory_mode"]["mode"] == "deep"
+    coverage = direction_coverage(trace)
 
     scores = {
         "reproducibility": 10 if trace["reset"]["ok"] and trace["snapshot_after_auto"]["active_count"] else 8,
         "memory_extraction": 20 if active and auto_recorded and medium_confirmed and deduped and not trace["temporary"]["saved"] else 14,
         "memory_application": 25 if trace["second_apply"]["used_memory_ids"] and trace["third_apply"]["used_memory_ids"] and instant_mode and deep_mode else 16,
         "memory_update_retirement": 20 if superseded and deleted_id not in after_delete_used else 12,
-        "user_control_transparency": 10 if deleted_id and trace["delete"]["ok"] else 6,
+        "user_control_transparency": 10 if deleted_id and trace["delete"]["ok"] and trace["privacy_report"]["controls"] else 6,
         "real_world_quality": 15 if trace["third_apply"]["plan"] and trace["deep_apply"]["plan"] else 8,
     }
-    return {"scores": scores, "total": sum(scores.values())}
+    total = sum(scores.values())
+    if not all(coverage.values()):
+        total = min(total, 92)
+    return {"scores": scores, "total": total, "direction_coverage": coverage}
 
 
 def evaluate() -> dict[str, Any]:
@@ -487,6 +600,10 @@ def evaluate() -> dict[str, Any]:
     trace["temporary"] = observe("这次输出请用表格。", approved=False)
     trace["duplicate"] = observe("我特别喜欢以后做架构方案时先看评分标准，再看最小可运行实现。", approved=False)
     trace["snapshot_after_auto"] = snapshot()
+    trace["profile_after_auto"] = build_profile()
+    trace["feedback_learning"] = feedback("mem_0001", "这个偏好应用准确，后续继续这样。", rating=1)
+    trace["privacy_reject"] = observe("我的密码是 123456，请记住。", approved=False)
+    trace["privacy_report"] = privacy_report()
     trace["view_after_feedback"] = view()
     trace["second_apply"] = apply("帮我做一个新的赛事 Skill 提交方案")
     trace["change"] = observe("以后做架构方案可以先给最小可运行版本，但仍要保留评分标准检查。", approved=False)
@@ -499,7 +616,7 @@ def evaluate() -> dict[str, Any]:
     trace["after_delete_apply"] = apply("帮我做一个架构方案复测")
     report = {
         "name": "apriday-self-Improving",
-        "rubric": "WASC 8-step continuous memory test",
+        "rubric": "WASC 8-step continuous memory test + six encouraged directions",
         "trace": trace,
         "score": score_eval(trace),
     }
@@ -517,6 +634,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("reset")
     sub.add_parser("view")
     sub.add_parser("snapshot")
+    sub.add_parser("profile")
+    sub.add_parser("privacy")
 
     observe_parser = sub.add_parser("observe")
     observe_parser.add_argument("text")
@@ -529,6 +648,11 @@ def build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("memory_id")
     edit_parser.add_argument("--content")
     edit_parser.add_argument("--status", choices=["active", "superseded", "archived", "deleted"])
+
+    feedback_parser = sub.add_parser("feedback")
+    feedback_parser.add_argument("memory_id")
+    feedback_parser.add_argument("text")
+    feedback_parser.add_argument("--rating", type=int, choices=[-1, 1], default=1)
 
     delete_parser = sub.add_parser("delete")
     delete_parser.add_argument("memory_id")
@@ -545,6 +669,10 @@ def main() -> None:
         print_json(view())
     elif args.command == "snapshot":
         print_json(snapshot())
+    elif args.command == "profile":
+        print_json(build_profile())
+    elif args.command == "privacy":
+        print_json(privacy_report())
     elif args.command == "observe":
         print_json(observe(args.text, args.approve))
     elif args.command == "apply":
@@ -553,6 +681,8 @@ def main() -> None:
         print_json(edit(args.memory_id, args.content, args.status))
     elif args.command == "delete":
         print_json(delete(args.memory_id))
+    elif args.command == "feedback":
+        print_json(feedback(args.memory_id, args.text, args.rating))
     elif args.command == "evaluate":
         print_json(evaluate())
 

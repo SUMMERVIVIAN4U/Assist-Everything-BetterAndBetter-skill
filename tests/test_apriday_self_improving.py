@@ -101,6 +101,30 @@ class ApridaySelfImprovingTest(unittest.TestCase):
         result = self.run_cli("snapshot")
         self.assertEqual(result["active_count"], 1)
         self.assertEqual(result["recent_active_memories"][0]["id"], "mem_0001")
+        self.assertIn("compression", result)
+
+    def test_profile_aggregates_interaction_style(self):
+        self.run_cli("reset")
+        self.run_cli("observe", "我特别喜欢以后先看结论，再看评分标准。")
+        result = self.run_cli("profile")
+        self.assertIn("conclusion_first", result["interaction_style"])
+        self.assertIn("rubric_first", result["interaction_style"])
+
+    def test_feedback_learning_adjusts_confidence(self):
+        self.run_cli("reset")
+        self.run_cli("observe", "我特别喜欢以后先看结论，再看评分标准。")
+        result = self.run_cli("feedback", "mem_0001", "这个偏好应用准确，继续保持。", "--rating", "1")
+        self.assertTrue(result["ok"])
+        self.assertGreater(result["after_confidence"], result["before_confidence"])
+
+    def test_privacy_report_and_redaction(self):
+        self.run_cli("reset")
+        rejected = self.run_cli("observe", "我的密码是 123456，请记住。")
+        self.assertEqual(rejected["reason"], "private_or_sensitive")
+        self.assertEqual(rejected["text"], "[redacted]")
+        report = self.run_cli("privacy")
+        self.assertIn("delete", report["controls"])
+        self.assertEqual(report["sensitive_storage"], "private_or_sensitive observations are redacted and not saved as memory")
 
     def test_evaluate_reaches_high_score(self):
         report = self.run_cli("evaluate")
@@ -110,6 +134,7 @@ class ApridaySelfImprovingTest(unittest.TestCase):
         self.assertEqual(report["trace"]["duplicate"]["action"], "dedupe")
         self.assertEqual(report["trace"]["instant_apply"]["memory_mode"]["mode"], "instant")
         self.assertEqual(report["trace"]["deep_apply"]["memory_mode"]["mode"], "deep")
+        self.assertTrue(all(report["score"]["direction_coverage"].values()))
         self.assertEqual(report["score"]["scores"]["reproducibility"], 10)
         self.assertEqual(report["score"]["scores"]["user_control_transparency"], 10)
 
