@@ -1,0 +1,1417 @@
+{
+  "run_id": "agent_chat_session-20260528T063408523436Z",
+  "created_at": "2026-05-28T06:34:08.523472+00:00",
+  "harness": {
+    "name": "assist-everything-betterandbetter-evalharness",
+    "agent_mode": "mimo_tool_agent",
+    "judge_mode": "mimo_llm",
+    "supports_external_llm_judge": true,
+    "supports_agent_chat": true,
+    "eval_source": "agent_chat_session"
+  },
+  "summary": {
+    "case_count": 1,
+    "config_average": 49.0,
+    "all_cases_above_90": false,
+    "effort_average": 30.0,
+    "effort_reduction": 24.0,
+    "saved_effort_average": 24.0
+  },
+  "dimensions": {
+    "reproducibility": 10,
+    "memory_extraction": 20,
+    "memory_application": 25,
+    "update_and_decay": 20,
+    "transparency": 10,
+    "result_quality": 15
+  },
+  "cases": [
+    {
+      "id": "CHAT-SESSION",
+      "title": "当前 Agent Chat",
+      "domain": "relationship_gift",
+      "module": "自由对话记忆评估",
+      "script": {
+        "source": "agent_chat",
+        "turn_count": 2,
+        "messages": [
+          "帮我给女朋友选个礼物",
+          "那是上次的事儿了，她又要过生日了"
+        ]
+      },
+      "turns": [
+        {
+          "id": "turn_001",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "帮我给女朋友选个礼物",
+            "timestamp": "2026-05-28T06:32:52.229715+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "你之前不是定了周大生玫瑰金手链吗？要我帮你看看哪买更划算，还是说想再挑个别的？",
+            "timestamp": "2026-05-28T06:32:52.229734+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "帮我给女朋友选个礼物",
+                "context": ""
+              },
+              "output": {
+                "text": "推荐：玫瑰金耳钉。\n理由：它匹配首饰材质偏好，预算也容易控制在 1000 元以内。",
+                "memory_actions": [],
+                "applied_memories": [
+                  "mem_22387d42",
+                  "mem_403aad49",
+                  "mem_61e8cb8c",
+                  "mem_8aebedec",
+                  "mem_9e2a58e6",
+                  "mem_f9610f59"
+                ],
+                "asks": []
+              },
+              "timestamp": "2026-05-28T06:32:02.786910+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_22387d42",
+            "mem_403aad49",
+            "mem_61e8cb8c",
+            "mem_8aebedec",
+            "mem_9e2a58e6",
+            "mem_f9610f59"
+          ],
+          "memory_snapshot": {
+            "version": "M6",
+            "active": [
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元以内",
+                "scope": "relationship_gift",
+                "subject": "user",
+                "target": "girlfriend",
+                "object": "1000 元以内",
+                "predicate": "budget_limit",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "预算 1000 元左右"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "预算"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_22387d42",
+                "created_at": "2026-05-28T06:17:14.923281+00:00",
+                "updated_at": "2026-05-28T06:17:14.923295+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "小众香氛礼盒",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "小众香氛礼盒"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_403aad49",
+                "created_at": "2026-05-28T06:16:52.345929+00:00",
+                "updated_at": "2026-05-28T06:16:52.345944+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "context_fact",
+                "content": "给女朋友选礼物需参考闺蜜线索：她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款",
+                "scope": "relationship_gift",
+                "subject": "girlfriend_friend",
+                "target": "girlfriend",
+                "object": "项链",
+                "predicate": "social_signal",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "闺蜜",
+                  "礼物"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_61e8cb8c",
+                "created_at": "2026-05-28T06:18:02.426413+00:00",
+                "updated_at": "2026-05-28T06:18:02.426430+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "preference",
+                "content": "女朋友喜欢玫瑰金",
+                "scope": "relationship_gift",
+                "subject": "girlfriend",
+                "target": "",
+                "object": "玫瑰金",
+                "predicate": "likes",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "她喜欢玫瑰金的首饰"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "女朋友",
+                  "玫瑰金",
+                  "首饰"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_8aebedec",
+                "created_at": "2026-05-28T06:19:02.402939+00:00",
+                "updated_at": "2026-05-28T06:19:02.402953+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：玫瑰金耳钉",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "玫瑰金耳钉",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：玫瑰金耳钉。\n理由：它匹配首饰材质偏好，预算也容易控制在 1000 元以内。\n\n行，这个我记住了：女朋友喜欢玫瑰金。"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "玫瑰金耳钉"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_9e2a58e6",
+                "created_at": "2026-05-28T06:19:02.439217+00:00",
+                "updated_at": "2026-05-28T06:19:02.439228+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "preference",
+                "content": "就周大生玫瑰金手链吧",
+                "scope": "relationship_gift",
+                "subject": "user",
+                "target": "girlfriend",
+                "object": "手链",
+                "predicate": "prefers",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "就周大生玫瑰金手链吧"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "玫瑰金",
+                  "手链"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_f9610f59",
+                "created_at": "2026-05-28T06:21:45.582111+00:00",
+                "updated_at": "2026-05-28T06:21:45.582125+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": [
+            "本轮检索并应用了 active 记忆。"
+          ]
+        },
+        {
+          "id": "turn_002",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "那是上次的事儿了，她又要过生日了",
+            "timestamp": "2026-05-28T06:33:28.533007+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "行，那上次的手链就算交代了。这次生日，再配一副同系列的玫瑰金耳钉怎么样？正好凑一对，她平时也能搭着戴，1000块左右能拿下。",
+            "timestamp": "2026-05-28T06:33:28.533025+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "那是上次的事儿了，她又要过生日了",
+                "context": "user: 帮我给女朋友选个礼物\nassistant: 你之前不是定了周大生玫瑰金手链吗？要我帮你看看哪买更划算，还是说想再挑个别的？"
+              },
+              "output": {
+                "text": "推荐：玫瑰金耳钉。\n理由：它匹配首饰材质偏好，预算也容易控制在 1000 元以内。",
+                "memory_actions": [],
+                "applied_memories": [
+                  "mem_22387d42",
+                  "mem_403aad49",
+                  "mem_61e8cb8c",
+                  "mem_8aebedec",
+                  "mem_9e2a58e6",
+                  "mem_f9610f59"
+                ],
+                "asks": []
+              },
+              "timestamp": "2026-05-28T06:33:13.192307+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_22387d42",
+            "mem_403aad49",
+            "mem_61e8cb8c",
+            "mem_8aebedec",
+            "mem_9e2a58e6",
+            "mem_f9610f59"
+          ],
+          "memory_snapshot": {
+            "version": "M6",
+            "active": [
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元以内",
+                "scope": "relationship_gift",
+                "subject": "user",
+                "target": "girlfriend",
+                "object": "1000 元以内",
+                "predicate": "budget_limit",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "预算 1000 元左右"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "预算"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_22387d42",
+                "created_at": "2026-05-28T06:17:14.923281+00:00",
+                "updated_at": "2026-05-28T06:17:14.923295+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "小众香氛礼盒",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "小众香氛礼盒"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_403aad49",
+                "created_at": "2026-05-28T06:16:52.345929+00:00",
+                "updated_at": "2026-05-28T06:16:52.345944+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "context_fact",
+                "content": "给女朋友选礼物需参考闺蜜线索：她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款",
+                "scope": "relationship_gift",
+                "subject": "girlfriend_friend",
+                "target": "girlfriend",
+                "object": "项链",
+                "predicate": "social_signal",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "闺蜜",
+                  "礼物"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_61e8cb8c",
+                "created_at": "2026-05-28T06:18:02.426413+00:00",
+                "updated_at": "2026-05-28T06:18:02.426430+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "preference",
+                "content": "女朋友喜欢玫瑰金",
+                "scope": "relationship_gift",
+                "subject": "girlfriend",
+                "target": "",
+                "object": "玫瑰金",
+                "predicate": "likes",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "她喜欢玫瑰金的首饰"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "女朋友",
+                  "玫瑰金",
+                  "首饰"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_8aebedec",
+                "created_at": "2026-05-28T06:19:02.402939+00:00",
+                "updated_at": "2026-05-28T06:19:02.402953+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：玫瑰金耳钉",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "玫瑰金耳钉",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：玫瑰金耳钉。\n理由：它匹配首饰材质偏好，预算也容易控制在 1000 元以内。\n\n行，这个我记住了：女朋友喜欢玫瑰金。"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "玫瑰金耳钉"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_9e2a58e6",
+                "created_at": "2026-05-28T06:19:02.439217+00:00",
+                "updated_at": "2026-05-28T06:19:02.439228+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "preference",
+                "content": "就周大生玫瑰金手链吧",
+                "scope": "relationship_gift",
+                "subject": "user",
+                "target": "girlfriend",
+                "object": "手链",
+                "predicate": "prefers",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "就周大生玫瑰金手链吧"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "玫瑰金",
+                  "手链"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_f9610f59",
+                "created_at": "2026-05-28T06:21:45.582111+00:00",
+                "updated_at": "2026-05-28T06:21:45.582125+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": [
+            "本轮检索并应用了 active 记忆。"
+          ]
+        }
+      ],
+      "rounds": [
+        {
+          "name": "Chat",
+          "title": "当前聊天评估",
+          "turn_ids": [
+            "turn_001",
+            "turn_002"
+          ],
+          "highlight": "共 2 轮自由对话。",
+          "actions": [
+            "process_message",
+            "trace_session"
+          ],
+          "gain": "把当前 Agent Chat 作为本次 eval 输入。"
+        },
+        {
+          "name": "Memory",
+          "title": "记忆行为",
+          "turn_ids": [],
+          "highlight": "0 轮产生记忆新增、更新、删除或降权。",
+          "actions": [
+            "extract_memory",
+            "update_memory"
+          ],
+          "gain": "检查聊天过程中是否形成可复用记忆。"
+        },
+        {
+          "name": "Apply",
+          "title": "记忆应用",
+          "turn_ids": [
+            "turn_001",
+            "turn_002"
+          ],
+          "highlight": "2 轮应用了 active memory。",
+          "actions": [
+            "retrieve_memory",
+            "compose_response"
+          ],
+          "gain": "检查后续回复是否利用已保存记忆。"
+        }
+      ],
+      "snapshots": [
+        {
+          "version": "M6",
+          "active": [
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物预算在 1000 元以内",
+              "scope": "relationship_gift",
+              "subject": "user",
+              "target": "girlfriend",
+              "object": "1000 元以内",
+              "predicate": "budget_limit",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "预算 1000 元左右"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "预算"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_22387d42",
+              "created_at": "2026-05-28T06:17:14.923281+00:00",
+              "updated_at": "2026-05-28T06:17:14.923295+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "小众香氛礼盒",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "小众香氛礼盒"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_403aad49",
+              "created_at": "2026-05-28T06:16:52.345929+00:00",
+              "updated_at": "2026-05-28T06:16:52.345944+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "context_fact",
+              "content": "给女朋友选礼物需参考闺蜜线索：她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款",
+              "scope": "relationship_gift",
+              "subject": "girlfriend_friend",
+              "target": "girlfriend",
+              "object": "项链",
+              "predicate": "social_signal",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "闺蜜",
+                "礼物"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_61e8cb8c",
+              "created_at": "2026-05-28T06:18:02.426413+00:00",
+              "updated_at": "2026-05-28T06:18:02.426430+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "女朋友喜欢玫瑰金",
+              "scope": "relationship_gift",
+              "subject": "girlfriend",
+              "target": "",
+              "object": "玫瑰金",
+              "predicate": "likes",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "她喜欢玫瑰金的首饰"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "女朋友",
+                "玫瑰金",
+                "首饰"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_8aebedec",
+              "created_at": "2026-05-28T06:19:02.402939+00:00",
+              "updated_at": "2026-05-28T06:19:02.402953+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：玫瑰金耳钉",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "玫瑰金耳钉",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：玫瑰金耳钉。\n理由：它匹配首饰材质偏好，预算也容易控制在 1000 元以内。\n\n行，这个我记住了：女朋友喜欢玫瑰金。"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "玫瑰金耳钉"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_9e2a58e6",
+              "created_at": "2026-05-28T06:19:02.439217+00:00",
+              "updated_at": "2026-05-28T06:19:02.439228+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "就周大生玫瑰金手链吧",
+              "scope": "relationship_gift",
+              "subject": "user",
+              "target": "girlfriend",
+              "object": "手链",
+              "predicate": "prefers",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "就周大生玫瑰金手链吧"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "玫瑰金",
+                "手链"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_f9610f59",
+              "created_at": "2026-05-28T06:21:45.582111+00:00",
+              "updated_at": "2026-05-28T06:21:45.582125+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M6",
+          "active": [
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物预算在 1000 元以内",
+              "scope": "relationship_gift",
+              "subject": "user",
+              "target": "girlfriend",
+              "object": "1000 元以内",
+              "predicate": "budget_limit",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "预算 1000 元左右"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "预算"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_22387d42",
+              "created_at": "2026-05-28T06:17:14.923281+00:00",
+              "updated_at": "2026-05-28T06:17:14.923295+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "小众香氛礼盒",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "小众香氛礼盒"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_403aad49",
+              "created_at": "2026-05-28T06:16:52.345929+00:00",
+              "updated_at": "2026-05-28T06:16:52.345944+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "context_fact",
+              "content": "给女朋友选礼物需参考闺蜜线索：她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款",
+              "scope": "relationship_gift",
+              "subject": "girlfriend_friend",
+              "target": "girlfriend",
+              "object": "项链",
+              "predicate": "social_signal",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "闺蜜",
+                "礼物"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_61e8cb8c",
+              "created_at": "2026-05-28T06:18:02.426413+00:00",
+              "updated_at": "2026-05-28T06:18:02.426430+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "女朋友喜欢玫瑰金",
+              "scope": "relationship_gift",
+              "subject": "girlfriend",
+              "target": "",
+              "object": "玫瑰金",
+              "predicate": "likes",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "她喜欢玫瑰金的首饰"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "女朋友",
+                "玫瑰金",
+                "首饰"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_8aebedec",
+              "created_at": "2026-05-28T06:19:02.402939+00:00",
+              "updated_at": "2026-05-28T06:19:02.402953+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：玫瑰金耳钉",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "玫瑰金耳钉",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：玫瑰金耳钉。\n理由：它匹配首饰材质偏好，预算也容易控制在 1000 元以内。\n\n行，这个我记住了：女朋友喜欢玫瑰金。"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "玫瑰金耳钉"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_9e2a58e6",
+              "created_at": "2026-05-28T06:19:02.439217+00:00",
+              "updated_at": "2026-05-28T06:19:02.439228+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "就周大生玫瑰金手链吧",
+              "scope": "relationship_gift",
+              "subject": "user",
+              "target": "girlfriend",
+              "object": "手链",
+              "predicate": "prefers",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "就周大生玫瑰金手链吧"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "玫瑰金",
+                "手链"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_f9610f59",
+              "created_at": "2026-05-28T06:21:45.582111+00:00",
+              "updated_at": "2026-05-28T06:21:45.582125+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        }
+      ],
+      "memory_events": [
+        {
+          "action": "add",
+          "memory_id": "mem_61b5e121",
+          "detail": "本次给女朋友的礼物已选定为玫瑰金耳钉",
+          "version": "M7",
+          "timestamp": "2026-05-28T06:33:53.761922+00:00"
+        }
+      ],
+      "checks": {
+        "reset": true,
+        "snapshot_count": 2,
+        "created": 0,
+        "show_memory": true,
+        "round2_applied": true,
+        "round3_applied": true,
+        "updated": false,
+        "deleted_filtered": false,
+        "delete_reported": false,
+        "deliverable_turns": 2,
+        "task_turns": 1,
+        "delivered_task_turns": 0,
+        "compound_followup_delivered": true,
+        "polluted_memories": 0,
+        "polluted_memory_details": [],
+        "semantic_violations": 0,
+        "semantic_violation_details": [],
+        "unresolved_dissatisfaction": false,
+        "correction_turns": 0,
+        "repeated_memory_turns": 0,
+        "satisfaction_signal": false,
+        "effort_final": 30,
+        "effort_reduction": 24
+      },
+      "ablation": {
+        "module": "自由对话记忆评估",
+        "off": [
+          "只能依赖当前消息",
+          "偏好无法跨轮复用",
+          "用户需要重复解释上下文"
+        ],
+        "on": [
+          "跨轮提取与应用记忆",
+          "保留主体归属",
+          "可在 Trace 中审计每轮状态"
+        ]
+      },
+      "user_effort": {
+        "scale": "lower is less user effort; raw additive effort points",
+        "initial_score": 0,
+        "final_score": 30,
+        "saved_score": 24,
+        "reduction": 24,
+        "estimated_without_memory": 54,
+        "turns": [
+          {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "帮我给女朋友选个礼物",
+            "assistant_brief": "你之前不是定了周大生玫瑰金手链吗？要我帮你看看哪买更划算，还是说想再挑个别的？",
+            "before": 0,
+            "delta": 21,
+            "after": 21,
+            "saved_before": 0,
+            "saved_delta": 12,
+            "saved_after": 12,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "任务未交付 +12"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          },
+          {
+            "turn_id": "turn_002",
+            "stage": "chat",
+            "user": "那是上次的事儿了，她又要过生日了",
+            "assistant_brief": "行，那上次的手链就算交代了。这次生日，再配一副同系列的玫瑰金耳钉怎么样？正好凑一对，她平时也能搭着戴，1000块左右能拿下。",
+            "before": 21,
+            "delta": 9,
+            "after": 30,
+            "saved_before": 12,
+            "saved_delta": 12,
+            "saved_after": 24,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "quality": {
+        "delivered_task_turn_ids": [],
+        "polluted_memory_events": [],
+        "semantic_violations": [],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "eval_timeline": [
+        {
+          "turn_id": "turn_001",
+          "stage": "chat",
+          "user": "帮我给女朋友选个礼物",
+          "assistant": "你之前不是定了周大生玫瑰金手链吗？要我帮你看看哪买更划算，还是说想再挑个别的？",
+          "memory": {
+            "applied_ids": [
+              "mem_22387d42",
+              "mem_403aad49",
+              "mem_61e8cb8c",
+              "mem_8aebedec",
+              "mem_9e2a58e6",
+              "mem_f9610f59"
+            ],
+            "applied": [
+              {
+                "id": "mem_22387d42",
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元以内"
+              },
+              {
+                "id": "mem_403aad49",
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒"
+              },
+              {
+                "id": "mem_61e8cb8c",
+                "type": "context_fact",
+                "content": "给女朋友选礼物需参考闺蜜线索：她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款"
+              },
+              {
+                "id": "mem_8aebedec",
+                "type": "preference",
+                "content": "女朋友喜欢玫瑰金"
+              },
+              {
+                "id": "mem_9e2a58e6",
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：玫瑰金耳钉"
+              },
+              {
+                "id": "mem_f9610f59",
+                "type": "preference",
+                "content": "就周大生玫瑰金手链吧"
+              }
+            ],
+            "actions": [],
+            "snapshot_version": "M6",
+            "explanation": "应用 6 条 active 记忆"
+          },
+          "effort": {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "帮我给女朋友选个礼物",
+            "assistant_brief": "你之前不是定了周大生玫瑰金手链吗？要我帮你看看哪买更划算，还是说想再挑个别的？",
+            "before": 0,
+            "delta": 21,
+            "after": 21,
+            "saved_before": 0,
+            "saved_delta": 12,
+            "saved_after": 12,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "任务未交付 +12"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "memory_application"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1；任务未交付 +12。节省项：正确应用记忆 saved +12。记忆行为：应用 6 条 active 记忆"
+          }
+        },
+        {
+          "turn_id": "turn_002",
+          "stage": "chat",
+          "user": "那是上次的事儿了，她又要过生日了",
+          "assistant": "行，那上次的手链就算交代了。这次生日，再配一副同系列的玫瑰金耳钉怎么样？正好凑一对，她平时也能搭着戴，1000块左右能拿下。",
+          "memory": {
+            "applied_ids": [
+              "mem_22387d42",
+              "mem_403aad49",
+              "mem_61e8cb8c",
+              "mem_8aebedec",
+              "mem_9e2a58e6",
+              "mem_f9610f59"
+            ],
+            "applied": [
+              {
+                "id": "mem_22387d42",
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元以内"
+              },
+              {
+                "id": "mem_403aad49",
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒"
+              },
+              {
+                "id": "mem_61e8cb8c",
+                "type": "context_fact",
+                "content": "给女朋友选礼物需参考闺蜜线索：她闺蜜晒过一条 tiffnay 的微笑项链，她表示过挺羡慕的，但是肯定不能送同款"
+              },
+              {
+                "id": "mem_8aebedec",
+                "type": "preference",
+                "content": "女朋友喜欢玫瑰金"
+              },
+              {
+                "id": "mem_9e2a58e6",
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：玫瑰金耳钉"
+              },
+              {
+                "id": "mem_f9610f59",
+                "type": "preference",
+                "content": "就周大生玫瑰金手链吧"
+              }
+            ],
+            "actions": [],
+            "snapshot_version": "M6",
+            "explanation": "应用 6 条 active 记忆"
+          },
+          "effort": {
+            "turn_id": "turn_002",
+            "stage": "chat",
+            "user": "那是上次的事儿了，她又要过生日了",
+            "assistant_brief": "行，那上次的手链就算交代了。这次生日，再配一副同系列的玫瑰金耳钉怎么样？正好凑一对，她平时也能搭着戴，1000块左右能拿下。",
+            "before": 21,
+            "delta": 9,
+            "after": 30,
+            "saved_before": 12,
+            "saved_delta": 12,
+            "saved_after": 24,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "memory_application"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1。节省项：正确应用记忆 saved +12。记忆行为：应用 6 条 active 记忆"
+          }
+        }
+      ],
+      "judge": {
+        "judge": "mimo-llm-judge",
+        "mode": "mimo_llm",
+        "dimensions": {
+          "reproducibility": 10,
+          "memory_extraction": 20,
+          "memory_application": 25,
+          "update_and_decay": 20,
+          "transparency": 10,
+          "result_quality": 15
+        },
+        "scores": {
+          "reproducibility": 6,
+          "memory_extraction": 0,
+          "memory_application": 25,
+          "update_and_decay": 0,
+          "transparency": 6,
+          "result_quality": 12,
+          "total": 49
+        },
+        "reasons": {
+          "reproducibility": "Agent 的记忆应用行为高度依赖于无法从给定数据中复现的特定记忆 ID（如 mem_22387d42）。虽然对话流程清晰，但核心的记忆状态不透明，导致整个交互无法被严格复现。",
+          "memory_extraction": "根据评估数据，整个会话过程中（rounds 的 Memory 阶段）未发生任何记忆新增、更新或删除事件（Memory highlight: 0 轮产生记忆新增...）。Agent 仅应用了已有的记忆，没有从当前对话中提取新的信息。因此，此项得分为 0。",
+          "memory_application": "Agent 在每一轮都成功检索并应用了相关的 active memory 来提供个性化、连贯的回复。例如，第一轮准确引用了用户之前关于“周大生玫瑰金手链”的决策；第二轮在用户澄清后，能基于此背景推荐同系列耳钉，体现了优秀的记忆关联能力。此维度表现满分。",
+          "update_and_decay": "与 memory_extraction 类似，评估数据中未记录任何记忆更新或衰减事件。虽然对话暗示了历史记忆，但没有证据表明 Agent 对这些记忆进行了主动管理（如更新生日事件、标记礼物已送等）。因此，此项得分为 0。",
+          "transparency": "Agent 的回复自然流畅，用户能理解其推理（如基于历史礼物推荐搭配），但未主动说明其推理所依赖的具体记忆内容。对于用户和评委而言，记忆应用的过程是隐式的，缺乏显式的解释或确认机制。",
+          "result_quality": "Agent 提供了具体、相关且可行的礼物建议（玫瑰金耳钉，约1000元），并解释了其合理性（与手链搭配），直接回应了用户需求。然而，作为任务轮，它更倾向于推荐而非完成一个完整的决策（如直接提供购买链接或方案对比），交付程度略有不足。",
+          "total": "总分基于各维度加权计算。Agent 在记忆应用方面表现出色，为对话个性化提供了关键支持。然而，由于缺乏记忆提取和更新的证据，以及复现性和透明度有限，总体得分受到制约。"
+        }
+      },
+      "scores": {
+        "reproducibility": 6,
+        "memory_extraction": 0,
+        "memory_application": 25,
+        "update_and_decay": 0,
+        "transparency": 6,
+        "result_quality": 12,
+        "total": 49
+      },
+      "score": 49
+    }
+  ]
+}
