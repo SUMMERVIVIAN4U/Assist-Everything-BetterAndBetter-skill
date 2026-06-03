@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eval Harness Workbench</title>
+  <link rel="stylesheet" href="/static/workbench.css">
+
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Assist Everything BetterAndBetter Eval Harness</h1>
+      <div class="muted">真实工作台：跑 case、看 trace、看 judge 分、直接和 agent harness 对话</div>
+    </div>
+    <div>
+      <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option><option value="auto">auto agent</option></select>
+    <select id="judge"><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option><option value="auto">auto judge</option></select>
+      <button class="primary" onclick="runPresetCases()">Run Preset Cases</button>
+      <button onclick="checkMimoHealth()">Check Mimo</button>
+      <span id="llmHealth" class="muted"></span>
+    </div>
+  </header>
+  <nav class="tabs">
+    <button class="tab active" onclick="setTab('dashboard', this)">Dashboard</button>
+    <button class="tab" onclick="setTab('cases', this)">Cases</button>
+    <button class="tab" onclick="setTab('trace', this)">Trace</button>
+    <button class="tab" onclick="setTab('chat', this)">Agent Chat</button>
+  </nav>
+  <main>
+    <section id="dashboard"></section>
+    <section id="cases" class="hidden"></section>
+    <section id="trace" class="hidden"></section>
+    <section id="chat" class="hidden">
+      <div class="chat-layout">
+        <div>
+          <div id="chatlog" class="chatlog"></div>
+          <div class="composer">
+            <input id="chatInput" placeholder="例如：展示当前记忆 / 删除孩子喜欢动物这条记忆">
+            <button class="primary" onclick="sendChat()">Send</button>
+            <button id="chatEvalBtn" onclick="runChatEval()">Run Eval</button>
+            <button onclick="resetSession()">Reset Session</button>
+            <button onclick="resetMemory()">Reset Memory</button>
+          </div>
+        </div>
+        <div class="chat-side">
+          <div class="chatbox">
+            <div class="chat-eval-head">
+              <div>
+                <b>当前对话 Eval</b>
+                <div id="chatEvalStatus" class="muted chat-eval-status">点击 Run Eval 后在这里显示当前 Agent Chat 的评分结果。</div>
+              </div>
+            </div>
+            <div id="chatEvalPanel" class="field-body muted">暂无评分。</div>
+          </div>
+          <div class="chatbox">
+            <b>当前记忆状态</b>
+            <pre id="chatMemory">{}</pre>
+          </div>
+          <div class="chatbox">
+            <div class="ab-head">
+              <div>
+                <b>礼物脚本 A/B 对比</b>
+                <div id="abStatus" class="muted chat-eval-status">运行两轮送礼脚本，对比 Memory Agent 和 No-skill Baseline 的费力度。</div>
+              </div>
+              <button id="abRunBtn" onclick="runGiftAB()">Run A/B</button>
+            </div>
+            <div id="abPanel" class="field-body muted">暂无对比结果。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="/static/workbench.js"></script>
