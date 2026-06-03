@@ -2,6 +2,7 @@ import tempfile
 import unittest
 
 from assist_everything_betterandbetter_skill.skill import AssistSkill
+from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
 
 class MemoryAdvantagesTest(unittest.TestCase):
@@ -52,6 +53,33 @@ class MemoryAdvantagesTest(unittest.TestCase):
         privacy = self.skill.privacy_report()
         self.assertIn("delete", privacy["controls"])
         self.assertEqual(privacy["sensitive_storage"], "private_or_sensitive observations are redacted and not saved as memory")
+
+    def test_mem0_backend_syncs_added_memory_without_external_call(self):
+        skill = AssistSkill(
+            memory_dir=self.tmp.name,
+            persist=True,
+            mem0_config=Mem0Config(enabled=True, base_url="https://mem0.example", api_key="test-key", user_id="u1"),
+        )
+
+        class FakeMem0:
+            def __init__(self):
+                self.added = []
+
+            def add(self, item):
+                self.added.append(item.content)
+                return {"event_id": "evt_1", "status": "queued"}
+
+            def search(self, query, top_k=8):
+                return []
+
+        fake = FakeMem0()
+        skill.mem0_client = fake
+        response = skill.process_message("我特别喜欢以后先看结论，再看评分标准。")
+
+        add_action = next(action for action in response.memory_actions if action["action"] == "add")
+        self.assertEqual(fake.added, ["我特别喜欢先看结论，再看评分标准"])
+        self.assertEqual(add_action["remote"]["backend"], "mem0")
+        self.assertTrue(add_action["remote"]["ok"])
 
 
 if __name__ == "__main__":

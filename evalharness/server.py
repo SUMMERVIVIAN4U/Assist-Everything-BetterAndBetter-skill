@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from assist_everything_betterandbetter_skill.cases import DIMENSIONS
+from assist_everything_betterandbetter_skill.mem0_backend import Mem0Client, Mem0Config, config_from_dict
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
@@ -22,6 +23,7 @@ from .runner import run_all
 
 LATEST = Path("eval/output/latest/eval_report.json")
 PRIVACY_SETTINGS = Path("memories/workbench/_privacy.json")
+BACKEND_SETTINGS = Path("memories/workbench/_backend.json")
 
 
 class WorkbenchState:
@@ -52,6 +54,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": True})
         elif path == "/api/llm-health":
             self._send_json(_llm_health())
+        elif path == "/api/mem0-health":
+            self._send_json(_mem0_health())
         else:
             self.send_error(404)
 
@@ -129,6 +133,13 @@ class Handler(BaseHTTPRequestHandler):
             _apply_privacy_settings(STATE.chat_agent)
             print(f"[workbench] saved privacy items count={len(_privacy_items())}")
             self._send_json({"ok": True, "settings": _settings_payload()})
+        elif path == "/api/settings/memory-backend":
+            current = _memory_backend_config()
+            config = _config_from_backend_body(body, current)
+            _save_memory_backend_config(config)
+            STATE.chat_agent = _new_workbench_agent(STATE.agent_mode)
+            print(f"[workbench] saved memory backend={config.get('backend', 'local')}")
+            self._send_json({"ok": True, "settings": _settings_payload()})
         else:
             self.send_error(404)
 
@@ -169,9 +180,103 @@ def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = "local") 
 
 
 def _new_workbench_agent(agent_mode: str) -> HarnessAgent:
-    agent = HarnessAgent(name="workbench-chat-agent", llm_mode=agent_mode, memory_dir="memories/workbench")
+    agent = HarnessAgent(
+        name="workbench-chat-agent",
+        llm_mode=agent_mode,
+        memory_dir="memories/workbench",
+        mem0_config=_mem0_config(),
+    )
     _apply_privacy_settings(agent)
     return agent
+
+
+def _memory_backend_config() -> dict[str, Any]:
+    if BACKEND_SETTINGS.exists():
+        try:
+            data = json.loads(BACKEND_SETTINGS.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return _normalize_backend_config(data)
+        except Exception:
+            pass
+    return _normalize_backend_config({})
+
+
+def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
+    backend = str(data.get("backend") or "local").strip().lower()
+    if backend not in {"local", "mem0"}:
+        backend = "local"
+    return {
+        "backend": backend,
+        "mem0": {
+            "base_url": str(data.get("mem0", {}).get("base_url") or ""),
+            "api_key": str(data.get("mem0", {}).get("api_key") or ""),
+            "user_id": str(data.get("mem0", {}).get("user_id") or "workbench-user"),
+            "app_id": str(data.get("mem0", {}).get("app_id") or "test-self-improving-202606"),
+            "project_name": str(data.get("mem0", {}).get("project_name") or "test-self-improving-202606"),
+            "timeout": float(data.get("mem0", {}).get("timeout") or 15.0),
+        },
+    }
+
+
+def _mem0_config() -> Mem0Config:
+    data = _memory_backend_config()
+    mem0 = dict(data["mem0"])
+    mem0["enabled"] = data["backend"] == "mem0"
+    return config_from_dict(mem0)
+
+
+def _public_backend_config() -> dict[str, Any]:
+    data = _memory_backend_config()
+    mem0 = data["mem0"]
+    return {
+        "backend": data["backend"],
+        "mem0": {
+            "base_url": mem0["base_url"],
+            "api_key_configured": bool(mem0["api_key"]),
+            "user_id": mem0["user_id"],
+            "app_id": mem0["app_id"],
+            "project_name": mem0["project_name"],
+            "timeout": mem0["timeout"],
+        },
+    }
+
+
+def _config_from_backend_body(body: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    config = _normalize_backend_config(current)
+    backend = str(body.get("backend") or config["backend"]).strip().lower()
+    config["backend"] = backend if backend in {"local", "mem0"} else "local"
+    mem0_body = body.get("mem0") if isinstance(body.get("mem0"), dict) else {}
+    mem0 = dict(config["mem0"])
+    for key in ["base_url", "user_id", "app_id", "project_name"]:
+        if key in mem0_body:
+            mem0[key] = str(mem0_body.get(key) or "").strip()
+    if "timeout" in mem0_body:
+        try:
+            mem0["timeout"] = float(mem0_body.get("timeout") or 15.0)
+        except (TypeError, ValueError):
+            mem0["timeout"] = 15.0
+    api_key = str(mem0_body.get("api_key") or "").strip()
+    if api_key:
+        mem0["api_key"] = api_key
+    config["mem0"] = mem0
+    return config
+
+
+def _save_memory_backend_config(config: dict[str, Any]) -> None:
+    BACKEND_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    BACKEND_SETTINGS.write_text(json.dumps(_normalize_backend_config(config), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _mem0_health() -> dict[str, Any]:
+    config = _mem0_config()
+    if not config.ready:
+        return {"ok": False, "stage": "config", "backend": _public_backend_config(), "error": "Mem0 is not enabled or missing base_url/api_key/user_id"}
+    try:
+        result = Mem0Client(config).health()
+        result["backend"] = _public_backend_config()
+        return result
+    except Exception as exc:
+        return {"ok": False, "stage": "request", "backend": _public_backend_config(), "error": str(exc)}
 
 
 def _apply_privacy_settings(agent: HarnessAgent) -> None:
@@ -229,6 +334,7 @@ def _settings_payload() -> dict[str, Any]:
         "privacy_items": _privacy_items(),
         "default_privacy_items": list(PRIVATE_MARKERS),
         "privacy_report": privacy_report,
+        "memory_backend": _public_backend_config(),
     }
 
 
@@ -1015,10 +1121,14 @@ APP_HTML = r"""<!doctype html>
     .privacy-editor { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.55fr); gap:12px; align-items:start; }
     .privacy-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
     .status-line { min-height:20px; color:var(--muted); font-size:13px; }
+    .settings-form { display:grid; grid-template-columns:180px minmax(0,1fr); gap:9px 12px; align-items:center; margin-top:10px; max-width:880px; }
+    .settings-form label { color:var(--muted); font-size:13px; }
+    .settings-form input { border:1px solid var(--line); border-radius:6px; padding:8px; min-width:0; }
+    .settings-form .wide { grid-column:1 / -1; }
     .loading-row { display:flex; align-items:center; gap:8px; color:var(--muted); }
     .spinner { width:14px; height:14px; border:2px solid #d7dee8; border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    @media (max-width: 980px) { .chat-layout, .cases-layout, .dialog, .subgrid, .dims, .metrics, .privacy-editor { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
+    @media (max-width: 980px) { .chat-layout, .cases-layout, .dialog, .subgrid, .dims, .metrics, .privacy-editor, .settings-form { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } .settings-form .wide { grid-column:auto; } }
   </style>
 </head>
 <body>
@@ -1078,33 +1188,56 @@ APP_HTML = r"""<!doctype html>
     <section id="stats" class="hidden"></section>
     <section id="settings" class="hidden">
       <div class="grid">
-        <div class="panel"><h2>Agent 配置</h2><div id="settingsAgent" class="muted"></div></div>
+        <div class="panel">
+          <h2>Agent 配置</h2>
+          <div id="settingsAgent" class="muted"></div>
+          <div class="settings-form">
+            <label for="memoryBackend">长期记忆后端</label>
+            <select id="memoryBackend"><option value="local">本地 Markdown / JSON</option><option value="mem0">火山引擎 Mem0</option></select>
+            <label for="mem0ProjectName">Mem0 项目名称</label>
+            <input id="mem0ProjectName" placeholder="test-self-improving-202606">
+            <label for="mem0BaseUrl">公网连接地址</label>
+            <input id="mem0BaseUrl" placeholder="https://...mem0.volces.com:8000">
+            <label for="mem0UserId">User ID</label>
+            <input id="mem0UserId" placeholder="workbench-user">
+            <label for="mem0AppId">App ID</label>
+            <input id="mem0AppId" placeholder="test-self-improving-202606">
+            <label for="mem0ApiKey">API Key</label>
+            <input id="mem0ApiKey" type="password" placeholder="留空则保留已有 key">
+            <div class="wide privacy-actions">
+              <button class="primary" onclick="saveMemoryBackend()">保存长期记忆后端</button>
+              <button onclick="checkMem0Health()">Check Mem0</button>
+              <span id="memoryBackendStatus" class="status-line"></span>
+            </div>
+          </div>
+        </div>
         <div class="panel">
           <div class="settings-tabs">
             <button class="settings-tab active" onclick="setSettingsTab('soul', this)">soul.md</button>
             <button class="settings-tab" onclick="setSettingsTab('memory', this)">memory.md</button>
             <button class="settings-tab" onclick="setSettingsTab('workbench', this)">Workbench Memory</button>
+            <button class="settings-tab" onclick="setSettingsTab('privacy', this)">隐私设置</button>
           </div>
           <div id="settingsViewSoul" class="settings-view"><textarea id="soulMd" readonly></textarea></div>
           <div id="settingsViewMemory" class="settings-view hidden"><textarea id="memoryMd" readonly></textarea></div>
           <div id="settingsViewWorkbench" class="settings-view hidden"><pre id="settingsMemory">{}</pre></div>
-        </div>
-        <div class="panel">
-          <div class="case-head"><div><h2>隐私项</h2><div class="muted">逐行填写，命中后不会写入长期记忆。</div></div></div>
-          <div class="privacy-editor">
-            <div>
-              <textarea id="privacyItems" placeholder="例如：身份证&#10;银行卡&#10;家庭住址"></textarea>
-              <div class="privacy-actions">
-                <button class="primary" onclick="savePrivacyItems()">保存隐私项</button>
-                <button onclick="resetDefaultPrivacyItems()">恢复默认</button>
-                <span id="privacyStatus" class="status-line"></span>
+          <div id="settingsViewPrivacy" class="settings-view hidden">
+            <div class="case-head"><div><h2>隐私设置</h2><div class="muted">逐行填写，命中后不会写入长期记忆。</div></div></div>
+            <div class="privacy-editor">
+              <div>
+                <textarea id="privacyItems" placeholder="例如：身份证&#10;银行卡&#10;家庭住址"></textarea>
+                <div class="privacy-actions">
+                  <button class="primary" onclick="savePrivacyItems()">保存隐私设置</button>
+                  <button onclick="resetDefaultPrivacyItems()">恢复默认</button>
+                  <span id="privacyStatus" class="status-line"></span>
+                </div>
               </div>
-            </div>
-            <div>
-              <div class="muted">当前生效</div>
-              <div id="privacyChips" class="chips"></div>
-              <h3>隐私报告</h3>
-              <pre id="privacyReport">{}</pre>
+              <div>
+                <div class="muted">当前生效</div>
+                <div id="privacyChips" class="chips"></div>
+                <h3>隐私报告</h3>
+                <pre id="privacyReport">{}</pre>
+              </div>
             </div>
           </div>
         </div>
@@ -1135,6 +1268,7 @@ APP_HTML = r"""<!doctype html>
       document.getElementById('memoryMd').value = settings.memory_md || '未配置 memory.md';
       document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
+      renderMemoryBackendSettings();
       renderPrivacySettings();
     }
     function setTab(id, el) {
@@ -1181,6 +1315,50 @@ APP_HTML = r"""<!doctype html>
         ? items.map(item => `<span class="chip">${escapeHtml(item)}</span>`).join('')
         : '<span class="muted">暂无隐私项。</span>';
       document.getElementById('privacyReport').textContent = JSON.stringify(settings?.privacy_report || {}, null, 2);
+    }
+    function renderMemoryBackendSettings() {
+      const backend = settings?.memory_backend || {};
+      const mem0 = backend.mem0 || {};
+      document.getElementById('memoryBackend').value = backend.backend || 'local';
+      document.getElementById('mem0ProjectName').value = mem0.project_name || '';
+      document.getElementById('mem0BaseUrl').value = mem0.base_url || '';
+      document.getElementById('mem0UserId').value = mem0.user_id || 'workbench-user';
+      document.getElementById('mem0AppId').value = mem0.app_id || 'test-self-improving-202606';
+      document.getElementById('mem0ApiKey').value = '';
+      document.getElementById('memoryBackendStatus').textContent = mem0.api_key_configured ? 'Mem0 API key 已配置' : 'Mem0 API key 未配置';
+    }
+    async function saveMemoryBackend() {
+      const status = document.getElementById('memoryBackendStatus');
+      status.textContent = 'saving...';
+      const payload = {
+        backend: document.getElementById('memoryBackend').value,
+        mem0: {
+          project_name: document.getElementById('mem0ProjectName').value.trim(),
+          base_url: document.getElementById('mem0BaseUrl').value.trim(),
+          user_id: document.getElementById('mem0UserId').value.trim(),
+          app_id: document.getElementById('mem0AppId').value.trim(),
+          api_key: document.getElementById('mem0ApiKey').value.trim()
+        }
+      };
+      const data = await (await fetch('/api/settings/memory-backend', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify(payload)
+      })).json();
+      if (!data.ok) {
+        status.textContent = data.error || '保存失败';
+        return;
+      }
+      settings = data.settings;
+      renderMemoryBackendSettings();
+      document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
+      status.textContent = `已切换到 ${settings.memory_backend?.backend || 'local'}`;
+    }
+    async function checkMem0Health() {
+      const status = document.getElementById('memoryBackendStatus');
+      status.textContent = 'checking Mem0...';
+      const data = await (await fetch('/api/mem0-health')).json();
+      status.textContent = data.ok ? `Mem0 OK · ${data.stage} · results=${data.result_count ?? 0}` : `Mem0 FAIL · ${data.stage} · ${data.error || ''}`;
     }
     async function runPresetCases() {
       const list = document.getElementById('caseList');

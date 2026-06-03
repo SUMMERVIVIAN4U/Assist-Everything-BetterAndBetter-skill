@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .mem0_backend import Mem0Client, Mem0Config
 from .memory import ACTIVE, DELETED, SUPERSEDED, MemoryItem, MemoryStore
 
 
@@ -56,6 +57,7 @@ class AssistSkill:
         memory_dir: str | Path | None = None,
         persist: bool | None = None,
         privacy_markers: list[str] | tuple[str, ...] | None = None,
+        mem0_config: Mem0Config | None = None,
     ) -> None:
         if persist is None:
             persist = os.getenv("ASSIST_MEMORY_PERSIST", "1") != "0"
@@ -64,6 +66,8 @@ class AssistSkill:
         self.pending_proposals: list[MemoryItem] = []
         env_markers = [item.strip() for item in os.getenv("ASSIST_PRIVACY_MARKERS", "").split(",") if item.strip()]
         self.privacy_markers = tuple(dict.fromkeys([*PRIVATE_MARKERS, *env_markers, *(privacy_markers or [])]))
+        self.mem0_config = mem0_config or _mem0_config_from_env()
+        self.mem0_client = Mem0Client(self.mem0_config) if self.mem0_config.ready else None
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
         command = self._try_memory_command(text)
@@ -293,6 +297,7 @@ class AssistSkill:
             term_hit = any(term and term in haystack for term in terms)
             if scope_hit or term_hit:
                 relevant.append(item)
+        relevant.extend(self._search_mem0(text, existing_ids={item.id for item in relevant}))
         return relevant
 
     def compose_response(
@@ -471,6 +476,9 @@ class AssistSkill:
             event["confidence"] = confidence
             event["reason"] = confidence_reason
             event["approval"] = "auto_high_confidence" if not item.user_approved else "explicit_or_contextual"
+            remote = self._sync_mem0_add(item)
+            if remote:
+                event["remote"] = remote
             actions.append(event)
         return actions
 
@@ -497,7 +505,35 @@ class AssistSkill:
         if self._is_duplicate(item):
             return []
         self.memory.add(item)
-        return [self.memory.events[-1]]
+        event = dict(self.memory.events[-1])
+        remote = self._sync_mem0_add(item)
+        if remote:
+            event["remote"] = remote
+        return [event]
+
+    def _sync_mem0_add(self, item: MemoryItem) -> dict[str, Any] | None:
+        if not self.mem0_client:
+            return None
+        try:
+            result = self.mem0_client.add(item)
+            return {"backend": "mem0", "ok": True, "result": _compact_remote_result(result)}
+        except Exception as exc:
+            return {"backend": "mem0", "ok": False, "error": str(exc)}
+
+    def _search_mem0(self, text: str, *, existing_ids: set[str]) -> list[MemoryItem]:
+        if not self.mem0_client:
+            return []
+        try:
+            remote_items = self.mem0_client.search(text, top_k=8)
+        except Exception:
+            return []
+        output = []
+        for item in remote_items:
+            if item.id in existing_ids:
+                continue
+            if item.status == ACTIVE and not _is_polluted_memory_item(item):
+                output.append(item)
+        return output
 
     def extract_memory_candidates(self, text: str, context: str = "") -> list[MemoryItem]:
         normalized = text.strip()
@@ -690,6 +726,28 @@ def _memory_block_reason(text: str, private_markers: list[str] | tuple[str, ...]
     if any(marker in text for marker in TEMPORARY_MARKERS) and not has_durable_marker:
         return True, "temporary_instruction"
     return False, ""
+
+
+def _mem0_config_from_env() -> Mem0Config:
+    backend = os.getenv("ASSIST_MEMORY_BACKEND", "local").strip().lower()
+    return Mem0Config(
+        enabled=backend == "mem0",
+        base_url=os.getenv("MEM0_BASE_URL", "").strip(),
+        api_key=os.getenv("MEM0_API_KEY", "").strip(),
+        user_id=os.getenv("MEM0_USER_ID", "workbench-user").strip(),
+        app_id=os.getenv("MEM0_APP_ID", "assist-everything-betterandbetter-skill").strip(),
+        project_name=os.getenv("MEM0_PROJECT_NAME", "").strip(),
+        timeout=float(os.getenv("MEM0_TIMEOUT", "15") or 15),
+    )
+
+
+def _compact_remote_result(result: dict[str, Any]) -> dict[str, Any]:
+    compact = {
+        "event_id": result.get("event_id"),
+        "status": result.get("status"),
+        "message": result.get("message"),
+    }
+    return {key: value for key, value in compact.items() if value is not None}
 
 
 def _confidence_for_memory(text: str, item: MemoryItem) -> tuple[float, str]:

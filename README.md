@@ -64,6 +64,21 @@ ASSIST_MEMORY_DIR=memories/default
 
 `memories/` is git-ignored so local user memory and secrets do not leak into commits.
 
+The workbench also supports an optional Mem0-compatible backend. In Settings, switch `长期记忆后端` from local storage to Mem0, then fill in the project endpoint, user id, app id, and API key. The API key is stored only in the git-ignored workbench settings file and is never returned to the browser in plaintext.
+
+Environment variables are also supported:
+
+```dotenv
+ASSIST_MEMORY_BACKEND=mem0
+MEM0_PROJECT_NAME=test-self-improving-202606
+MEM0_BASE_URL=https://...
+MEM0_API_KEY=...
+MEM0_USER_ID=workbench-user
+MEM0_APP_ID=test-self-improving-202606
+```
+
+When Mem0 is enabled, local memory still keeps the trace/audit state needed by the eval workbench, while long-term additions are mirrored to Mem0 and retrieval merges relevant Mem0 search results.
+
 ## Memory Introspection
 
 The runtime exposes the lightweight evidence views migrated from the self-improving prototype:

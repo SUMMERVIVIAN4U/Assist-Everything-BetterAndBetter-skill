@@ -47,6 +47,14 @@ Simple `[q]` or greeting turns use instant mode and skip long-term memory retrie
 
 By default, runtime memory is persisted as Markdown files. `ASSIST_MEMORY_DIR` controls the storage directory, and `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs. Workbench uses `memories/workbench/`.
 
+The workbench can switch long-term memory to a Mem0-compatible backend. Keep local storage as the trace/audit layer, but mirror added long-term memories to Mem0 and merge Mem0 search results during retrieval. Configure it through Settings or environment variables:
+
+- `ASSIST_MEMORY_BACKEND=local|mem0`
+- `MEM0_BASE_URL`
+- `MEM0_API_KEY`
+- `MEM0_USER_ID`
+- `MEM0_APP_ID`
+
 Statuses:
 
 - `active`: can be retrieved and applied

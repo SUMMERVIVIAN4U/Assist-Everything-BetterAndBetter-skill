@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from assist_everything_betterandbetter_skill.skill import AssistSkill, SkillResponse
+from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
 from .schemas import ToolCall
 
@@ -16,8 +17,9 @@ class MemoryToolbox:
         *,
         memory_dir: str | None = None,
         persist: bool | None = None,
+        mem0_config: Mem0Config | None = None,
     ) -> None:
-        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist)
+        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist, mem0_config=mem0_config)
 
     def reset_memory(self) -> tuple[SkillResponse, ToolCall]:
         response = self.skill.reset_memory()

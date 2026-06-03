@@ -11,6 +11,7 @@ from .schemas import HarnessSession, Message, TurnTrace
 from .soul import load_soul_prompt
 from .tools import MemoryToolbox
 from assist_everything_betterandbetter_skill.memory import MemoryItem
+from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 from assist_everything_betterandbetter_skill.skill import DECISION, HISTORY
 
 
@@ -25,9 +26,10 @@ class HarnessAgent:
         llm_client: MimoClient | None = None,
         memory_dir: str | None = None,
         persist_memory: bool | None = None,
+        mem0_config: Mem0Config | None = None,
     ) -> None:
         self.name = name
-        self.toolbox = toolbox or MemoryToolbox(memory_dir=memory_dir, persist=persist_memory)
+        self.toolbox = toolbox or MemoryToolbox(memory_dir=memory_dir, persist=persist_memory, mem0_config=mem0_config)
         self.session = HarnessSession()
         self.llm_mode = llm_mode
         self.llm_client = llm_client
