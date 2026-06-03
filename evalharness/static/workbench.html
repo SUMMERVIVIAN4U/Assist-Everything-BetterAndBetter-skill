@@ -65,36 +65,30 @@
     <section id="settings" class="hidden">
       <div class="grid">
         <div class="panel">
-          <h2>Agent 配置</h2>
-          <div id="settingsAgent" class="muted"></div>
-          <div class="settings-form">
-            <label for="memoryBackend">长期记忆后端</label>
-            <select id="memoryBackend"><option value="local">本地 Markdown / JSON</option><option value="mem0">火山引擎 Mem0</option></select>
-            <label for="mem0ProjectName">Mem0 项目名称</label>
-            <input id="mem0ProjectName" placeholder="test-self-improving-202606">
-            <label for="mem0BaseUrl">公网连接地址</label>
-            <input id="mem0BaseUrl" placeholder="https://...mem0.volces.com:8000">
-            <label for="mem0UserId">User ID</label>
-            <input id="mem0UserId" placeholder="workbench-user">
-            <label for="mem0AppId">App ID</label>
-            <input id="mem0AppId" placeholder="test-self-improving-202606">
-            <label for="mem0ApiKey">API Key</label>
-            <input id="mem0ApiKey" type="password" placeholder="留空则保留已有 key">
-            <div class="wide privacy-actions">
-              <button class="primary" onclick="saveMemoryBackend()">保存长期记忆后端</button>
-              <button onclick="checkMem0Health()">Check Mem0</button>
-              <span id="memoryBackendStatus" class="status-line"></span>
-            </div>
-          </div>
-        </div>
-        <div class="panel">
           <div class="settings-tabs">
-            <button class="settings-tab active" onclick="setSettingsTab('soul', this)">soul.md</button>
+            <button class="settings-tab active" onclick="setSettingsTab('agent', this)">Agent 配置</button>
+            <button class="settings-tab" onclick="setSettingsTab('soul', this)">soul.md</button>
             <button class="settings-tab" onclick="setSettingsTab('memory', this)">memory.md</button>
             <button class="settings-tab" onclick="setSettingsTab('workbench', this)">Workbench Memory</button>
             <button class="settings-tab" onclick="setSettingsTab('privacy', this)">隐私设置</button>
           </div>
-          <div id="settingsViewSoul" class="settings-view"><textarea id="soulMd" readonly></textarea></div>
+          <div id="settingsViewAgent" class="settings-view">
+            <h2>Agent 配置</h2>
+            <div id="settingsAgent" class="muted"></div>
+            <div class="settings-form">
+              <label for="memoryBackend">长期记忆后端</label>
+              <select id="memoryBackend"><option value="local">本地 Markdown / JSON</option><option value="mem0">火山引擎 Mem0</option></select>
+              <div class="wide privacy-actions">
+                <button class="primary" onclick="saveMemoryBackend()">保存长期记忆后端</button>
+                <button onclick="checkMem0Health()">Check Mem0</button>
+                <span id="memoryBackendStatus" class="status-line"></span>
+              </div>
+            </div>
+            <h3>Mem0 配置来源</h3>
+            <div class="note">Mem0 的项目名称、公网地址、User ID、App ID、API Key 以 `.env` 或本地 git-ignored 配置为准，不在页面中编辑。</div>
+            <pre id="memoryBackendSummary">{}</pre>
+          </div>
+          <div id="settingsViewSoul" class="settings-view hidden"><textarea id="soulMd" readonly></textarea></div>
           <div id="settingsViewMemory" class="settings-view hidden"><textarea id="memoryMd" readonly></textarea></div>
           <div id="settingsViewWorkbench" class="settings-view hidden"><pre id="settingsMemory">{}</pre></div>
           <div id="settingsViewPrivacy" class="settings-view hidden">

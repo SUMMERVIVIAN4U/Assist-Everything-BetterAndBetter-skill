@@ -30,7 +30,8 @@
 
 - **Workbench UI 结构**：
   - 顶部主 tab：`Agent Chat`、`History Evals`、`统计`、`设置`
-  - 设置页中，`soul.md`、`memory.md`、`Workbench Memory`、`隐私设置` 必须放在同一组 tab 内，不要把隐私设置另起一行。
+  - 设置页中，`Agent 配置`、`soul.md`、`memory.md`、`Workbench Memory`、`隐私设置` 必须放在同一组 tab 内，不要把 Agent 配置或隐私设置另起一行。
+  - `Agent 配置` 只允许用户切换“长期记忆后端”；Mem0 项目名、公网地址、User ID、App ID、API Key 以 `.env` 或本地 git-ignored 配置为准，不在页面中编辑。
   - `隐私设置` 是用户可编辑项，逐行填写，命中后不会写入长期记忆。
 
 - **长期记忆后端**：
@@ -58,6 +59,8 @@
 - 2026-06-03：从 `feature/self_improving_yjw` 迁移优势能力到主项目：三层记忆视图、profile、compact snapshot、privacy report、instant/standard/deep memory mode、置信度分层。
 - 2026-06-03：优化设置页，把 `soul.md`、`memory.md`、`Workbench Memory`、`隐私设置` 合并为同一组 tab。
 - 2026-06-03：增加长期记忆后端开关，支持本地存储与火山引擎 Mem0 切换；Mem0 配置在设置页可编辑。
+- 2026-06-03：将 Workbench 演示界面从 `evalharness/server.py` 内嵌字符串拆分为 `evalharness/static/workbench.html`、`workbench.css`、`workbench.js`，`server.py` 只负责 API 和静态文件返回。
+- 2026-06-03：设置页把 `Agent 配置` 也并入同一组 tab；Agent 配置只保留长期记忆后端开关，其余 Mem0 参数以 `.env` 或本地配置为准。
 
 ## 记忆
 
@@ -94,12 +97,9 @@
 ## 教训（LRN）
 
 - **不要把复杂 UI 长期塞在 `server.py` 里**：
-  - 当前 Workbench HTML/CSS/JS 仍内嵌在 `evalharness/server.py` 的 `APP_HTML` 中，方便零构建启动。
-  - 随着设置页、隐私设置、Mem0 开关变复杂，后续应拆为：
-    - `evalharness/static/workbench.html`
-    - `evalharness/static/workbench.css`
-    - `evalharness/static/workbench.js`
-  - `server.py` 应逐步只保留 API 和静态文件返回。
+  - Workbench HTML/CSS/JS 已拆到 `evalharness/static/`。
+  - `server.py` 只负责 API、`/` 返回 `workbench.html`、`/static/...` 返回静态资源。
+  - 后续 UI 改动优先改静态文件，不要再把大段 HTML 字符串塞回 Python。
 
 - **远程记忆后端不能替代本地 trace**：
   - Eval Harness 需要本地 snapshots、events、memory status 来评分和解释。

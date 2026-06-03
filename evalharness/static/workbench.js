@@ -73,25 +73,24 @@ let report = null;
       const backend = settings?.memory_backend || {};
       const mem0 = backend.mem0 || {};
       document.getElementById('memoryBackend').value = backend.backend || 'local';
-      document.getElementById('mem0ProjectName').value = mem0.project_name || '';
-      document.getElementById('mem0BaseUrl').value = mem0.base_url || '';
-      document.getElementById('mem0UserId').value = mem0.user_id || 'workbench-user';
-      document.getElementById('mem0AppId').value = mem0.app_id || 'test-self-improving-202606';
-      document.getElementById('mem0ApiKey').value = '';
+      document.getElementById('memoryBackendSummary').textContent = JSON.stringify({
+        backend: backend.backend || 'local',
+        mem0: {
+          project_name: mem0.project_name || '',
+          base_url: mem0.base_url || '',
+          user_id: mem0.user_id || '',
+          app_id: mem0.app_id || '',
+          api_key_configured: !!mem0.api_key_configured,
+          timeout: mem0.timeout
+        }
+      }, null, 2);
       document.getElementById('memoryBackendStatus').textContent = mem0.api_key_configured ? 'Mem0 API key 已配置' : 'Mem0 API key 未配置';
     }
     async function saveMemoryBackend() {
       const status = document.getElementById('memoryBackendStatus');
       status.textContent = 'saving...';
       const payload = {
-        backend: document.getElementById('memoryBackend').value,
-        mem0: {
-          project_name: document.getElementById('mem0ProjectName').value.trim(),
-          base_url: document.getElementById('mem0BaseUrl').value.trim(),
-          user_id: document.getElementById('mem0UserId').value.trim(),
-          app_id: document.getElementById('mem0AppId').value.trim(),
-          api_key: document.getElementById('mem0ApiKey').value.trim()
-        }
+        backend: document.getElementById('memoryBackend').value
       };
       const data = await (await fetch('/api/settings/memory-backend', {
         method:'POST',
