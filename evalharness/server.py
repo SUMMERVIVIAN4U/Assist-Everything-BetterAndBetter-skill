@@ -165,14 +165,6 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def _send_html(self, html: str) -> None:
-        payload = html.encode("utf-8")
-        self.send_response(200)
-        self.send_header("content-type", "text/html; charset=utf-8")
-        self.send_header("content-length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
-
     def _send_static(self, path: str) -> None:
         name = path.removeprefix("/static/")
         if "/" in name or not name:

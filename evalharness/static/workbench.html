@@ -10,65 +10,117 @@
 <body>
   <header>
     <div>
-      <h1>Assist Everything BetterAndBetter Eval Harness</h1>
-      <div class="muted">真实工作台：跑 case、看 trace、看 judge 分、直接和 agent harness 对话</div>
+      <h1>Memory Eval Workbench</h1>
+      <div class="muted">当前对话、历史 eval 结果、统计和配置分开管理；Agent Chat 与 History Evals 使用同一套 eval 输出。</div>
     </div>
     <div>
       <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option><option value="auto">auto agent</option></select>
-    <select id="judge"><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option><option value="auto">auto judge</option></select>
-      <button class="primary" onclick="runPresetCases()">Run Preset Cases</button>
+      <select id="judge"><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option><option value="auto">auto judge</option></select>
       <button onclick="checkMimoHealth()">Check Mimo</button>
       <span id="llmHealth" class="muted"></span>
     </div>
   </header>
-  <nav class="tabs">
-    <button class="tab active" onclick="setTab('dashboard', this)">Dashboard</button>
-    <button class="tab" onclick="setTab('cases', this)">Cases</button>
-    <button class="tab" onclick="setTab('trace', this)">Trace</button>
-    <button class="tab" onclick="setTab('chat', this)">Agent Chat</button>
+  <nav>
+    <button class="tab active" onclick="setTab('chat', this)">Agent Chat</button>
+    <button class="tab" onclick="setTab('cases', this)">History Evals</button>
+    <button class="tab" onclick="setTab('stats', this)">统计</button>
+    <button class="tab" onclick="setTab('settings', this)">设置</button>
   </nav>
   <main>
-    <section id="dashboard"></section>
-    <section id="cases" class="hidden"></section>
-    <section id="trace" class="hidden"></section>
-    <section id="chat" class="hidden">
+    <section id="chat">
       <div class="chat-layout">
         <div>
           <div id="chatlog" class="chatlog"></div>
           <div class="composer">
-            <input id="chatInput" placeholder="例如：展示当前记忆 / 删除孩子喜欢动物这条记忆">
+            <input id="chatInput" placeholder="输入当前对话，例如：帮我给女朋友选个礼物">
             <button class="primary" onclick="sendChat()">Send</button>
             <button id="chatEvalBtn" onclick="runChatEval()">Run Eval</button>
             <button onclick="resetSession()">Reset Session</button>
             <button onclick="resetMemory()">Reset Memory</button>
           </div>
         </div>
-        <div class="chat-side">
-          <div class="chatbox">
-            <div class="chat-eval-head">
+        <div class="side">
+          <div class="panel">
+            <div class="case-head"><div><h2>当前对话 Eval</h2><div id="chatEvalStatus" class="muted">点击 Run Eval 后显示当前会话评分。</div></div></div>
+            <div id="chatEvalPanel" class="muted">暂无评分。</div>
+          </div>
+          <div class="panel">
+            <div class="case-head"><div><h2>当前礼物对话 A/B</h2><div id="abStatus" class="muted">当当前对话已经满意确认礼物后，回放到 no-memory baseline 做对比。</div></div><button id="abRunBtn" onclick="runGiftAB()">Run A/B</button></div>
+            <div id="abPanel" class="muted">暂无对比结果。</div>
+          </div>
+          <div class="panel"><h2>当前 Memory</h2><pre id="chatMemory">{}</pre></div>
+        </div>
+      </div>
+    </section>
+    <section id="cases" class="hidden">
+      <div class="cases-layout">
+        <aside class="panel">
+          <div class="case-head"><div><h2>History Evals</h2><div id="historyHint" class="muted">保留每次 Run Eval / Run Preset 的历史 eval 结果。</div></div><button class="primary" onclick="runPresetCases()">Run Preset</button></div>
+          <div id="caseList" class="case-list"></div>
+        </aside>
+        <article id="caseDetail" class="panel muted">暂无历史 eval。</article>
+      </div>
+    </section>
+    <section id="stats" class="hidden"></section>
+    <section id="settings" class="hidden">
+      <div class="grid">
+        <div class="panel">
+          <h2>Agent 配置</h2>
+          <div id="settingsAgent" class="muted"></div>
+          <div class="settings-form">
+            <label for="memoryBackend">长期记忆后端</label>
+            <select id="memoryBackend"><option value="local">本地 Markdown / JSON</option><option value="mem0">火山引擎 Mem0</option></select>
+            <label for="mem0ProjectName">Mem0 项目名称</label>
+            <input id="mem0ProjectName" placeholder="test-self-improving-202606">
+            <label for="mem0BaseUrl">公网连接地址</label>
+            <input id="mem0BaseUrl" placeholder="https://...mem0.volces.com:8000">
+            <label for="mem0UserId">User ID</label>
+            <input id="mem0UserId" placeholder="workbench-user">
+            <label for="mem0AppId">App ID</label>
+            <input id="mem0AppId" placeholder="test-self-improving-202606">
+            <label for="mem0ApiKey">API Key</label>
+            <input id="mem0ApiKey" type="password" placeholder="留空则保留已有 key">
+            <div class="wide privacy-actions">
+              <button class="primary" onclick="saveMemoryBackend()">保存长期记忆后端</button>
+              <button onclick="checkMem0Health()">Check Mem0</button>
+              <span id="memoryBackendStatus" class="status-line"></span>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="settings-tabs">
+            <button class="settings-tab active" onclick="setSettingsTab('soul', this)">soul.md</button>
+            <button class="settings-tab" onclick="setSettingsTab('memory', this)">memory.md</button>
+            <button class="settings-tab" onclick="setSettingsTab('workbench', this)">Workbench Memory</button>
+            <button class="settings-tab" onclick="setSettingsTab('privacy', this)">隐私设置</button>
+          </div>
+          <div id="settingsViewSoul" class="settings-view"><textarea id="soulMd" readonly></textarea></div>
+          <div id="settingsViewMemory" class="settings-view hidden"><textarea id="memoryMd" readonly></textarea></div>
+          <div id="settingsViewWorkbench" class="settings-view hidden"><pre id="settingsMemory">{}</pre></div>
+          <div id="settingsViewPrivacy" class="settings-view hidden">
+            <div class="case-head"><div><h2>隐私设置</h2><div class="muted">逐行填写，命中后不会写入长期记忆。</div></div></div>
+            <div class="privacy-editor">
               <div>
-                <b>当前对话 Eval</b>
-                <div id="chatEvalStatus" class="muted chat-eval-status">点击 Run Eval 后在这里显示当前 Agent Chat 的评分结果。</div>
+                <textarea id="privacyItems" placeholder="例如：身份证&#10;银行卡&#10;家庭住址"></textarea>
+                <div class="privacy-actions">
+                  <button class="primary" onclick="savePrivacyItems()">保存隐私设置</button>
+                  <button onclick="resetDefaultPrivacyItems()">恢复默认</button>
+                  <span id="privacyStatus" class="status-line"></span>
+                </div>
+              </div>
+              <div>
+                <div class="muted">当前生效</div>
+                <div id="privacyChips" class="chips"></div>
+                <h3>隐私报告</h3>
+                <pre id="privacyReport">{}</pre>
               </div>
             </div>
-            <div id="chatEvalPanel" class="field-body muted">暂无评分。</div>
-          </div>
-          <div class="chatbox">
-            <b>当前记忆状态</b>
-            <pre id="chatMemory">{}</pre>
-          </div>
-          <div class="chatbox">
-            <div class="ab-head">
-              <div>
-                <b>礼物脚本 A/B 对比</b>
-                <div id="abStatus" class="muted chat-eval-status">运行两轮送礼脚本，对比 Memory Agent 和 No-skill Baseline 的费力度。</div>
-              </div>
-              <button id="abRunBtn" onclick="runGiftAB()">Run A/B</button>
-            </div>
-            <div id="abPanel" class="field-body muted">暂无对比结果。</div>
           </div>
         </div>
       </div>
     </section>
   </main>
   <script src="/static/workbench.js"></script>
+
+</body>
+</html>
