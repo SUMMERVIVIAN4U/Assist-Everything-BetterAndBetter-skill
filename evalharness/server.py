@@ -227,6 +227,7 @@ def _settings_payload() -> dict[str, Any]:
         "memory_md": memory.read_text(encoding="utf-8") if memory.exists() else "",
         "workbench_memory": STATE.chat_agent.toolbox.snapshot(),
         "privacy_items": _privacy_items(),
+        "default_privacy_items": list(PRIVATE_MARKERS),
         "privacy_report": privacy_report,
     }
 
@@ -1006,10 +1007,18 @@ APP_HTML = r"""<!doctype html>
     .event { border-left:3px solid var(--accent); padding-left:8px; margin-top:6px; }
     pre { white-space:pre-wrap; word-break:break-word; margin:0; font-size:12px; }
     textarea { width:100%; min-height:180px; border:1px solid var(--line); border-radius:7px; padding:9px; font:12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .settings-tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin:-2px -2px 12px; overflow:auto; }
+    .settings-tab { border:0; border-bottom:3px solid transparent; border-radius:0; padding:9px 11px; color:var(--muted); white-space:nowrap; }
+    .settings-tab.active { color:var(--ink); border-bottom-color:var(--accent); }
+    .settings-view.hidden { display:none; }
+    .settings-view textarea { min-height:360px; }
+    .privacy-editor { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.55fr); gap:12px; align-items:start; }
+    .privacy-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+    .status-line { min-height:20px; color:var(--muted); font-size:13px; }
     .loading-row { display:flex; align-items:center; gap:8px; color:var(--muted); }
     .spinner { width:14px; height:14px; border:2px solid #d7dee8; border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    @media (max-width: 980px) { .chat-layout, .cases-layout, .dialog, .subgrid, .dims, .metrics { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
+    @media (max-width: 980px) { .chat-layout, .cases-layout, .dialog, .subgrid, .dims, .metrics, .privacy-editor { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
   </style>
 </head>
 <body>
@@ -1070,9 +1079,35 @@ APP_HTML = r"""<!doctype html>
     <section id="settings" class="hidden">
       <div class="grid">
         <div class="panel"><h2>Agent 配置</h2><div id="settingsAgent" class="muted"></div></div>
-        <div class="panel"><h2>soul.md</h2><textarea id="soulMd" readonly></textarea></div>
-        <div class="panel"><h2>memory.md</h2><textarea id="memoryMd" readonly></textarea></div>
-        <div class="panel"><h2>Workbench Memory</h2><pre id="settingsMemory">{}</pre></div>
+        <div class="panel">
+          <div class="settings-tabs">
+            <button class="settings-tab active" onclick="setSettingsTab('soul', this)">soul.md</button>
+            <button class="settings-tab" onclick="setSettingsTab('memory', this)">memory.md</button>
+            <button class="settings-tab" onclick="setSettingsTab('workbench', this)">Workbench Memory</button>
+          </div>
+          <div id="settingsViewSoul" class="settings-view"><textarea id="soulMd" readonly></textarea></div>
+          <div id="settingsViewMemory" class="settings-view hidden"><textarea id="memoryMd" readonly></textarea></div>
+          <div id="settingsViewWorkbench" class="settings-view hidden"><pre id="settingsMemory">{}</pre></div>
+        </div>
+        <div class="panel">
+          <div class="case-head"><div><h2>隐私项</h2><div class="muted">逐行填写，命中后不会写入长期记忆。</div></div></div>
+          <div class="privacy-editor">
+            <div>
+              <textarea id="privacyItems" placeholder="例如：身份证&#10;银行卡&#10;家庭住址"></textarea>
+              <div class="privacy-actions">
+                <button class="primary" onclick="savePrivacyItems()">保存隐私项</button>
+                <button onclick="resetDefaultPrivacyItems()">恢复默认</button>
+                <span id="privacyStatus" class="status-line"></span>
+              </div>
+            </div>
+            <div>
+              <div class="muted">当前生效</div>
+              <div id="privacyChips" class="chips"></div>
+              <h3>隐私报告</h3>
+              <pre id="privacyReport">{}</pre>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -1099,6 +1134,8 @@ APP_HTML = r"""<!doctype html>
       document.getElementById('soulMd').value = settings.soul_md || '';
       document.getElementById('memoryMd').value = settings.memory_md || '未配置 memory.md';
       document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
+      document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
+      renderPrivacySettings();
     }
     function setTab(id, el) {
       document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
@@ -1106,6 +1143,44 @@ APP_HTML = r"""<!doctype html>
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       el.classList.add('active');
       if (id === 'settings') fetchSettings();
+    }
+    function setSettingsTab(id, el) {
+      document.querySelectorAll('.settings-view').forEach(view => view.classList.add('hidden'));
+      document.getElementById('settingsView' + id[0].toUpperCase() + id.slice(1)).classList.remove('hidden');
+      document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
+      el.classList.add('active');
+    }
+    function privacyItemsFromInput() {
+      return document.getElementById('privacyItems').value.split(/\n+/).map(item => item.trim()).filter(Boolean);
+    }
+    async function savePrivacyItems() {
+      const status = document.getElementById('privacyStatus');
+      status.textContent = 'saving...';
+      const data = await (await fetch('/api/settings/privacy', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({privacy_items: privacyItemsFromInput()})
+      })).json();
+      if (!data.ok) {
+        status.textContent = data.error || '保存失败';
+        return;
+      }
+      settings = data.settings;
+      document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
+      renderPrivacySettings();
+      status.textContent = '已保存';
+    }
+    function resetDefaultPrivacyItems() {
+      document.getElementById('privacyItems').value = (settings?.default_privacy_items || []).join('\n');
+      document.getElementById('privacyStatus').textContent = '默认项已填入，保存后生效';
+      renderPrivacySettings({previewItems: privacyItemsFromInput()});
+    }
+    function renderPrivacySettings(opts = {}) {
+      const items = opts.previewItems || settings?.privacy_items || [];
+      document.getElementById('privacyChips').innerHTML = items.length
+        ? items.map(item => `<span class="chip">${escapeHtml(item)}</span>`).join('')
+        : '<span class="muted">暂无隐私项。</span>';
+      document.getElementById('privacyReport').textContent = JSON.stringify(settings?.privacy_report || {}, null, 2);
     }
     async function runPresetCases() {
       const list = document.getElementById('caseList');
