@@ -15,6 +15,7 @@ Use when the user or evaluator asks for:
 - showing, resetting, deleting, downgrading, or archiving memories
 - applying remembered preferences to a similar later task
 - handling preference changes, conflict, or narrowed scope
+- inspecting memory profile, compact snapshot, three-layer memory state, and privacy controls
 - running eval cases for memory extraction, application, update/decay, transparency, and result quality
 
 ## Memory Policy
@@ -34,6 +35,16 @@ Each memory must carry: `id`, `type`, `content`, `scope`, `source`, `confidence`
 
 Only say a memory was saved after a real add/update memory action exists in the trace. If a sentence is only a question such as "你还记得之前送过什么吗？", do not save it as memory.
 
+Use confidence tiers before writing memory:
+
+- `reject`: sensitive or temporary content is not written
+- `ask`: weak signal needs clarification
+- `propose`: medium-confidence long-term memory waits for user approval
+- `add`: high-confidence structured or scoped memory can be saved
+- `dedupe`: duplicate active memory is reported but not saved again
+
+Simple `[q]` or greeting turns use instant mode and skip long-term memory retrieval. Normal tasks use standard mode with active matching memory. Deep/history turns use deep mode and expose snapshot, matching memory, and event-log intent in diagnostics.
+
 By default, runtime memory is persisted as Markdown files. `ASSIST_MEMORY_DIR` controls the storage directory, and `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs. Workbench uses `memories/workbench/`.
 
 Statuses:
@@ -52,6 +63,12 @@ Support either slash-like commands or natural language:
 - `delete <query>`, `删除...这条记忆`
 - `downgrade <query>`, `降权...`
 - `archive <query>`, `归档...`
+- `profile`, `画像`
+- `snapshot`, `快照`
+- `layers`, `三层记忆`
+- `privacy`, `隐私报告`
+
+The profile view aggregates active preferences, workflow rules, scene rules, project/context facts, interaction style, and confidence average. The layers view shows L0 instant interaction, L1 profile snapshot, and L2 long-term audit ledger with retention reasons.
 
 ## Three-Round Eval Flow
 

@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from assist_everything_betterandbetter_skill.cases import DIMENSIONS
+from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
 from .ab import run_current_chat_ab, run_gift_ab_script
@@ -20,15 +21,16 @@ from .llm import MimoConfig
 from .runner import run_all
 
 LATEST = Path("eval/output/latest/eval_report.json")
+PRIVACY_SETTINGS = Path("memories/workbench/_privacy.json")
 
 
 class WorkbenchState:
     def __init__(self, agent_mode: str = "auto") -> None:
         self.agent_mode = agent_mode
-        self.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=agent_mode, memory_dir="memories/workbench")
+        self.chat_agent = _new_workbench_agent(agent_mode)
 
 
-STATE = WorkbenchState()
+STATE: WorkbenchState
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -84,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             mode = str(body.get("agent", STATE.agent_mode))
             if mode != STATE.agent_mode:
                 STATE.agent_mode = mode
-                STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode, memory_dir="memories/workbench")
+                STATE.chat_agent = _new_workbench_agent(mode)
             print(f"[workbench] chat agent={STATE.agent_mode} message={message[:80]}")
             stage = str(body.get("stage", "chat"))
             try:
@@ -102,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/reset-chat":
             mode = str(body.get("agent", STATE.agent_mode))
             STATE.agent_mode = mode
-            STATE.chat_agent = HarnessAgent(name="workbench-chat-agent", llm_mode=mode, memory_dir="memories/workbench")
+            STATE.chat_agent = _new_workbench_agent(mode)
             print(f"[workbench] reset chat session agent={STATE.agent_mode}")
             self._send_json({"ok": True, "session": STATE.chat_agent.session.to_dict()})
         elif path == "/api/reset-memory":
@@ -118,6 +120,15 @@ class Handler(BaseHTTPRequestHandler):
                     "session": STATE.chat_agent.session.to_dict(),
                 }
             )
+        elif path == "/api/settings/privacy":
+            items = body.get("privacy_items", [])
+            if not isinstance(items, list):
+                self._send_json({"ok": False, "error": "privacy_items must be a list"})
+                return
+            _save_privacy_items([str(item) for item in items])
+            _apply_privacy_settings(STATE.chat_agent)
+            print(f"[workbench] saved privacy items count={len(_privacy_items())}")
+            self._send_json({"ok": True, "settings": _settings_payload()})
         else:
             self.send_error(404)
 
@@ -157,6 +168,45 @@ def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = "local") 
     httpd.serve_forever()
 
 
+def _new_workbench_agent(agent_mode: str) -> HarnessAgent:
+    agent = HarnessAgent(name="workbench-chat-agent", llm_mode=agent_mode, memory_dir="memories/workbench")
+    _apply_privacy_settings(agent)
+    return agent
+
+
+def _apply_privacy_settings(agent: HarnessAgent) -> None:
+    agent.toolbox.skill.privacy_markers = tuple(_privacy_items())
+
+
+def _privacy_items() -> list[str]:
+    if PRIVACY_SETTINGS.exists():
+        try:
+            data = json.loads(PRIVACY_SETTINGS.read_text(encoding="utf-8"))
+            items = data.get("privacy_items", [])
+            if isinstance(items, list):
+                return _normalize_privacy_items([str(item) for item in items])
+        except Exception:
+            pass
+    return list(PRIVATE_MARKERS)
+
+
+def _save_privacy_items(items: list[str]) -> None:
+    PRIVACY_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"privacy_items": _normalize_privacy_items(items)}
+    PRIVACY_SETTINGS.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _normalize_privacy_items(items: list[str]) -> list[str]:
+    normalized = []
+    for item in items:
+        text = item.strip()
+        if not text:
+            continue
+        if text not in normalized:
+            normalized.append(text)
+    return normalized[:80]
+
+
 def _chat_report(judge_mode: str) -> dict[str, Any]:
     turns = [turn.to_dict() for turn in STATE.chat_agent.session.turns]
     events = STATE.chat_agent.toolbox.skill.memory.events
@@ -170,11 +220,14 @@ def _chat_report(judge_mode: str) -> dict[str, Any]:
 def _settings_payload() -> dict[str, Any]:
     soul = Path("soul.md")
     memory = Path("memory.md")
+    privacy_report = STATE.chat_agent.toolbox.skill.privacy_report()
     return {
         "agent_mode": STATE.agent_mode,
         "soul_md": soul.read_text(encoding="utf-8") if soul.exists() else "",
         "memory_md": memory.read_text(encoding="utf-8") if memory.exists() else "",
         "workbench_memory": STATE.chat_agent.toolbox.snapshot(),
+        "privacy_items": _privacy_items(),
+        "privacy_report": privacy_report,
     }
 
 

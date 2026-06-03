@@ -29,6 +29,10 @@ Key features:
 
 - Authorized long-term memory schema
 - Memory types and scopes
+- Bio-Memory inspired confidence tiers: reject, ask, propose, auto-record, dedupe
+- Instant/standard/deep memory loading modes
+- Compact snapshot, user profile aggregation, and three-layer memory view
+- Privacy report and sensitive-content redaction before memory write
 - Reset, show/query, delete, downgrade, archive
 - Slash-like and natural language memory commands
 - Three-round eval flow with delete retest
@@ -59,6 +63,27 @@ ASSIST_MEMORY_DIR=memories/default
 ```
 
 `memories/` is git-ignored so local user memory and secrets do not leak into commits.
+
+## Memory Introspection
+
+The runtime exposes the lightweight evidence views migrated from the self-improving prototype:
+
+```bash
+python3 -m assist_everything_betterandbetter_skill.cli chat "我特别喜欢以后先看结论，再看评分标准。"
+python3 -m assist_everything_betterandbetter_skill.cli profile
+python3 -m assist_everything_betterandbetter_skill.cli snapshot
+python3 -m assist_everything_betterandbetter_skill.cli layers
+python3 -m assist_everything_betterandbetter_skill.cli privacy
+```
+
+Equivalent natural-language or slash-like commands also work in Agent Chat:
+
+- `profile` / `画像`
+- `snapshot` / `快照`
+- `layers` / `三层记忆`
+- `privacy` / `隐私报告`
+
+Simple messages such as `[q] 你好` use instant mode and skip long-term memory retrieval. Deep/history requests such as `[d] 回顾之前偏好` expose the deep-mode loading plan in response diagnostics.
 
 ## Run Eval Harness
 

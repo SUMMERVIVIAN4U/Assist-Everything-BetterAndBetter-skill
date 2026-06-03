@@ -16,6 +16,12 @@ DECISION = "decision"
 HISTORY = "history"
 CONTEXT_FACT = "context_fact"
 
+TEMPORARY_MARKERS = ("这次", "本次", "今天", "临时", "暂时", "这一轮", "只要这版", "本轮")
+PRIVATE_MARKERS = ("密码", "token", "密钥", "身份证", "银行卡", "验证码", "隐私不要记")
+HIGH_CONFIDENCE_MARKERS = ("以后", "下次", "一直", "总是", "必须", "绝对", "特别", "非常", "决定", "确定", "定了")
+UNCERTAIN_MARKERS = ("可能", "也许", "考虑", "随便", "算了", "不重要", "？", "?")
+STRUCTURED_MEMORY_TYPES = {CONSTRAINT, WORKFLOW, DECISION, HISTORY, CONTEXT_FACT, CANDIDATE}
+
 
 @dataclass
 class SkillResponse:
@@ -23,14 +29,18 @@ class SkillResponse:
     memory_actions: list[dict[str, Any]]
     applied_memories: list[str]
     asks: list[str]
+    diagnostics: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "text": self.text,
             "memory_actions": self.memory_actions,
             "applied_memories": self.applied_memories,
             "asks": self.asks,
         }
+        if self.diagnostics is not None:
+            payload["diagnostics"] = self.diagnostics
+        return payload
 
 
 class AssistSkill:
@@ -41,24 +51,48 @@ class AssistSkill:
     response plus auditable memory actions.
     """
 
-    def __init__(self, memory_dir: str | Path | None = None, persist: bool | None = None) -> None:
+    def __init__(
+        self,
+        memory_dir: str | Path | None = None,
+        persist: bool | None = None,
+        privacy_markers: list[str] | tuple[str, ...] | None = None,
+    ) -> None:
         if persist is None:
             persist = os.getenv("ASSIST_MEMORY_PERSIST", "1") != "0"
         storage_dir = memory_dir if memory_dir is not None else os.getenv("ASSIST_MEMORY_DIR", "memories/default")
         self.memory = MemoryStore(storage_dir if persist else None)
         self.pending_proposals: list[MemoryItem] = []
+        env_markers = [item.strip() for item in os.getenv("ASSIST_PRIVACY_MARKERS", "").split(",") if item.strip()]
+        self.privacy_markers = tuple(dict.fromkeys([*PRIVATE_MARKERS, *env_markers, *(privacy_markers or [])]))
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
         command = self._try_memory_command(text)
         if command:
             return command
 
+        memory_mode = self.select_memory_mode(text)
+        if memory_mode["mode"] == "instant":
+            response_text = self.compose_response(text, [], [], [], context)
+            return SkillResponse(
+                response_text,
+                [],
+                [],
+                [],
+                diagnostics={"memory_mode": memory_mode, "profile": {"interaction_style": []}},
+            )
+
         actions = self._apply_updates(text, context)
         relevant = self.retrieve_relevant_memories(text, context)
         asks = self._suggest_followups(text, relevant, context)
         response_text = self.compose_response(text, relevant, actions, asks, context)
         actions.extend(self._record_assistant_candidate(response_text, text, context))
-        return SkillResponse(response_text, actions, [item.id for item in relevant], asks)
+        return SkillResponse(
+            response_text,
+            actions,
+            [item.id for item in relevant],
+            asks,
+            diagnostics={"memory_mode": memory_mode, "profile": self.memory_profile()},
+        )
 
     def reset_memory(self) -> SkillResponse:
         event = self.memory.reset()
@@ -75,6 +109,154 @@ class AssistSkill:
                 lines.append(f"- {item['id']} [{item['status']}/{item['type']}/{item['scope']}] {item['content']}")
         active_ids = [item.id for item in self.memory.active()]
         return SkillResponse("\n".join(lines), [], active_ids, [])
+
+    def compact_snapshot(self, limit: int = 8) -> dict[str, Any]:
+        snapshot = self.memory.snapshot()
+        active = snapshot.get("active", [])
+        recent = sorted(active, key=lambda item: item.get("updated_at", ""), reverse=True)[:limit]
+        all_items = active + snapshot.get("superseded", []) + snapshot.get("archived", []) + snapshot.get("deleted", [])
+        full_tokens = max(1, sum(len(item.get("content", "")) for item in all_items) // 2)
+        snapshot_tokens = max(1, sum(len(item.get("content", "")) for item in recent) // 2)
+        savings = max(0, round((1 - min(snapshot_tokens, full_tokens) / full_tokens) * 100))
+        return {
+            "version": snapshot.get("version", "M0"),
+            "active_count": len(active),
+            "compression": {
+                "strategy": "recent_active_memory_only",
+                "estimated_full_tokens": full_tokens,
+                "estimated_snapshot_tokens": snapshot_tokens,
+                "estimated_savings_percent": savings,
+            },
+            "recent_active_memories": [
+                {
+                    "id": item["id"],
+                    "type": item["type"],
+                    "scope": item["scope"],
+                    "content": item["content"],
+                    "confidence": item.get("confidence", 0.0),
+                    "source": item.get("source", ""),
+                }
+                for item in recent
+            ],
+        }
+
+    def memory_profile(self) -> dict[str, Any]:
+        active = self.memory.snapshot().get("active", [])
+        profile: dict[str, Any] = {
+            "preference_memory": [],
+            "workflow_rules": [],
+            "project_context": [],
+            "scene_rules": [],
+            "interaction_style": [],
+            "confidence_avg": 0.0,
+        }
+        if not active:
+            return profile
+        for item in active:
+            compact = {"id": item["id"], "content": item["content"], "confidence": item.get("confidence", 0.0)}
+            if item["type"] == WORKFLOW:
+                profile["workflow_rules"].append(compact)
+            elif item["type"] == CONTEXT_FACT:
+                profile["project_context"].append(compact)
+            elif item["scope"] != "general":
+                profile["scene_rules"].append(compact)
+            else:
+                profile["preference_memory"].append(compact)
+            content = item.get("content", "")
+            if "结论" in content:
+                profile["interaction_style"].append("conclusion_first")
+            if "简短" in content or "短一点" in content or "只保留一个" in content:
+                profile["interaction_style"].append("concise")
+            if "评分标准" in content or "风险" in content:
+                profile["interaction_style"].append("rubric_or_risk_first")
+            if "例题" in content:
+                profile["interaction_style"].append("example_first")
+        profile["interaction_style"] = sorted(set(profile["interaction_style"]))
+        profile["confidence_avg"] = round(sum(item.get("confidence", 0.0) for item in active) / len(active), 2)
+        return profile
+
+    def memory_layers(self) -> dict[str, Any]:
+        snapshot = self.memory.snapshot()
+        compact = self.compact_snapshot(limit=6)
+        active = snapshot.get("active", [])
+        audit = snapshot.get("superseded", []) + snapshot.get("archived", []) + snapshot.get("deleted", [])
+        return {
+            "layers": [
+                {
+                    "id": "L0",
+                    "name": "即时交互层",
+                    "status": "ephemeral",
+                    "loads_when": "instant mode / [q] / simple greetings",
+                    "source": "current user message only",
+                    "retention_reason": "轻量消息不加载长期记忆，降低 token 成本并减少过度记忆。",
+                    "items": [],
+                },
+                {
+                    "id": "L1",
+                    "name": "画像快照层",
+                    "status": "active_snapshot",
+                    "loads_when": "standard mode",
+                    "source": "compressed active memories",
+                    "retention_reason": "只保留高信号 active 记忆和交互风格，用低成本支撑个性化。",
+                    "compression": compact["compression"],
+                    "profile": self.memory_profile(),
+                    "items": compact["recent_active_memories"],
+                },
+                {
+                    "id": "L2",
+                    "name": "长期审计层",
+                    "status": "persistent_local_ledger",
+                    "loads_when": "deep mode / history review / user inspection",
+                    "source": "MemoryStore markdown files plus events",
+                    "retention_reason": "支持来源证据、状态迁移、删除证明和用户控制。",
+                    "items": [
+                        {
+                            "id": item["id"],
+                            "type": item["type"],
+                            "status": item["status"],
+                            "scope": item["scope"],
+                            "content": item["content"],
+                            "source": item.get("source", ""),
+                            "confidence": item.get("confidence", 0.0),
+                            "evidence": item.get("evidence", [])[-2:],
+                            "supersedes": item.get("supersedes", []),
+                            "retention_reason": _retention_reason(item),
+                        }
+                        for item in active + audit
+                    ],
+                },
+            ],
+            "privacy": self.privacy_report(),
+        }
+
+    def privacy_report(self) -> dict[str, Any]:
+        snapshot = self.memory.snapshot()
+        counts = {
+            "active": len(snapshot.get("active", [])),
+            "superseded": len(snapshot.get("superseded", [])),
+            "archived": len(snapshot.get("archived", [])),
+            "deleted": len(snapshot.get("deleted", [])),
+        }
+        return {
+            "memory_counts_by_status": counts,
+            "private_markers_blocked": list(self.privacy_markers),
+            "controls": ["reset", "show", "find", "delete", "downgrade", "archive", "profile", "snapshot", "layers", "privacy"],
+            "retention_policy": "local_only_until_user_deletes_archives_or_resets",
+            "sensitive_storage": "private_or_sensitive observations are redacted and not saved as memory",
+        }
+
+    def select_memory_mode(self, text: str) -> dict[str, Any]:
+        lowered = text.lower()
+        stripped = text.strip()
+        if stripped.startswith("[q]") or stripped.lower().startswith("[quick]") or any(
+            token in stripped for token in ["你好", "在吗", "谢谢", "hi", "hello"]
+        ):
+            return {"mode": "instant", "loads": [], "reason": "simple_or_quick_message"}
+        if stripped.startswith("[d]") or "[deep]" in lowered or any(
+            token in stripped for token in ["历史", "之前", "上次", "所有", "复盘", "深度"]
+        ):
+            return {"mode": "deep", "loads": ["snapshot", "matching_memories", "event_log"], "reason": "history_or_deep_lookup"}
+        return {"mode": "standard", "loads": ["snapshot", "matching_memories"], "reason": "default_task"}
 
     def manage_memory(self, text: str) -> SkillResponse:
         command = self._try_memory_command(text)
@@ -123,11 +305,17 @@ class AssistSkill:
     ) -> str:
         lines = [self._task_answer(text, memories, context)]
         created = [a for a in actions if a["action"] == "add"]
+        proposed = [a for a in actions if a["action"] == "propose"]
+        rejected = [a for a in actions if a["action"] == "reject"]
         changed = [a for a in actions if a["action"] in {"downgrade", "archive", "delete", "update"}]
         if created:
             detail = "；".join(a["detail"] for a in created[:2])
             suffix = "等" if len(created) > 2 else ""
             lines.append(f"\n行，这个我记住了：{detail}{suffix}。")
+        if proposed:
+            lines.append("\n我捕捉到这可能是长期偏好，需要你确认后再保存：同意保存 / 拒绝保存。")
+        if rejected:
+            lines.append("\n这类内容我不会写入长期记忆。")
         if changed:
             lines.append("\n已更新记忆。")
         if asks:
@@ -139,6 +327,42 @@ class AssistSkill:
         normalized = _normalize_command(original)
         lowered = normalized.lower()
 
+        if "profile" in lowered or "画像" in normalized:
+            profile = self.memory_profile()
+            lines = [
+                "当前记忆画像：",
+                f"- 交互风格：{', '.join(profile['interaction_style']) if profile['interaction_style'] else '暂无'}",
+                f"- 工作流规则：{len(profile['workflow_rules'])} 条",
+                f"- 场景规则：{len(profile['scene_rules'])} 条",
+                f"- 偏好记忆：{len(profile['preference_memory'])} 条",
+                f"- 平均置信度：{profile['confidence_avg']}",
+            ]
+            return SkillResponse("\n".join(lines), [], [item.id for item in self.memory.active()], [], diagnostics={"profile": profile})
+        if "snapshot" in lowered or "快照" in normalized:
+            compact = self.compact_snapshot()
+            lines = [
+                f"当前快照：{compact['version']}，active={compact['active_count']}",
+                f"估算 token 节省：{compact['compression']['estimated_savings_percent']}%",
+            ]
+            for item in compact["recent_active_memories"]:
+                lines.append(f"- {item['id']} [{item['type']}/{item['scope']}] {item['content']}")
+            return SkillResponse("\n".join(lines), [], [item.id for item in self.memory.active()], [], diagnostics={"snapshot": compact})
+        if "layers" in lowered or "三层" in normalized or "层级" in normalized:
+            layers = self.memory_layers()
+            lines = ["三层记忆视图："]
+            for layer in layers["layers"]:
+                lines.append(f"- {layer['id']} {layer['name']}：{layer['status']}；{layer['loads_when']}")
+            return SkillResponse("\n".join(lines), [], [item.id for item in self.memory.active()], [], diagnostics={"layers": layers})
+        if "privacy" in lowered or "隐私" in normalized:
+            privacy = self.privacy_report()
+            counts = privacy["memory_counts_by_status"]
+            text = (
+                "隐私与控制报告："
+                f"\n- active={counts['active']} superseded={counts['superseded']} archived={counts['archived']} deleted={counts['deleted']}"
+                f"\n- 可用控制：{', '.join(privacy['controls'])}"
+                "\n- 敏感信息不会写入长期记忆。"
+            )
+            return SkillResponse(text, [], [], [], diagnostics={"privacy": privacy})
         if "approve" in lowered or "同意保存" in normalized or "确认保存" in normalized:
             return self._approve_pending()
         if "reject" in lowered or "拒绝保存" in normalized or "不要保存" in normalized:
@@ -191,13 +415,63 @@ class AssistSkill:
 
     def _apply_updates(self, text: str, context: str = "") -> list[dict[str, Any]]:
         actions: list[dict[str, Any]] = []
+        blocked, block_reason = _memory_block_reason(text, self.privacy_markers)
+        if blocked:
+            return [
+                {
+                    "action": "reject",
+                    "memory_id": None,
+                    "detail": "[redacted]" if block_reason == "private_or_sensitive" else text,
+                    "reason": block_reason,
+                }
+            ]
         for match in self._conflicting_memories(text, context):
             self.memory.downgrade(match.id, f"新反馈缩小或推翻旧规则：{text}")
             actions.append(self.memory.events[-1])
         for item in self.extract_memory_candidates(text, context):
-            if not self._is_duplicate(item):
-                self.memory.add(item)
-                actions.append(self.memory.events[-1])
+            confidence, confidence_reason = _confidence_for_memory(text, item)
+            item.confidence = confidence
+            if confidence < 0.5:
+                actions.append(
+                    {
+                        "action": "ask",
+                        "memory_id": None,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": confidence_reason,
+                    }
+                )
+                continue
+            if confidence < 0.8 and item.validity.get("time_scope") == "long_term":
+                item.user_approved = False
+                self.pending_proposals.append(item)
+                actions.append(
+                    {
+                        "action": "propose",
+                        "memory_id": None,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": confidence_reason,
+                    }
+                )
+                continue
+            if self._is_duplicate(item):
+                actions.append(
+                    {
+                        "action": "dedupe",
+                        "memory_id": None,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": "duplicate_active_memory",
+                    }
+                )
+                continue
+            self.memory.add(item)
+            event = dict(self.memory.events[-1])
+            event["confidence"] = confidence
+            event["reason"] = confidence_reason
+            event["approval"] = "auto_high_confidence" if not item.user_approved else "explicit_or_contextual"
+            actions.append(event)
         return actions
 
     def _record_assistant_candidate(self, response_text: str, user_text: str, context: str = "") -> list[dict[str, Any]]:
@@ -391,8 +665,81 @@ def _normalize_command(text: str) -> str:
         "archive_memory": "archive " + rest,
         "find-memory": "find " + rest,
         "find_memory": "find " + rest,
+        "profile": "profile " + rest,
+        "memory-profile": "profile " + rest,
+        "memory_profile": "profile " + rest,
+        "snapshot": "snapshot " + rest,
+        "memory-snapshot": "snapshot " + rest,
+        "memory_snapshot": "snapshot " + rest,
+        "layers": "layers " + rest,
+        "memory-layers": "layers " + rest,
+        "memory_layers": "layers " + rest,
+        "privacy": "privacy " + rest,
+        "memory-privacy": "privacy " + rest,
+        "memory_privacy": "privacy " + rest,
     }
     return aliases.get(command, text)
+
+
+def _memory_block_reason(text: str, private_markers: list[str] | tuple[str, ...] = PRIVATE_MARKERS) -> tuple[bool, str]:
+    if any(marker in text for marker in private_markers):
+        return True, "private_or_sensitive"
+    has_durable_marker = any(marker in text for marker in HIGH_CONFIDENCE_MARKERS) or any(
+        marker in text for marker in ["保留", "不适用", "改成", "长期", "请记住", "记住"]
+    )
+    if any(marker in text for marker in TEMPORARY_MARKERS) and not has_durable_marker:
+        return True, "temporary_instruction"
+    return False, ""
+
+
+def _confidence_for_memory(text: str, item: MemoryItem) -> tuple[float, str]:
+    score = 0.35
+    reasons: list[str] = []
+    if _explicit_memory_request(text):
+        score += 0.25
+        reasons.append("explicit_memory_signal")
+    if any(marker in text for marker in HIGH_CONFIDENCE_MARKERS):
+        score += 0.2
+        reasons.append("durable_or_decisive_marker")
+    if any(marker in text for marker in ["我喜欢", "我不喜欢", "我习惯", "我偏好"]) or "喜欢" in item.content:
+        score += 0.25
+        reasons.append("personal_preference_signal")
+    if item.scope != "general":
+        score += 0.25
+        reasons.append("scoped_memory")
+    if item.scope == "relationship_gift" and any(marker in text for marker in ["喜欢", "预算", "送过", "收到", "玫瑰金", "紫色"]):
+        score += 0.2
+        reasons.append("relationship_gift_fact")
+    if item.type in STRUCTURED_MEMORY_TYPES:
+        score += 0.2
+        reasons.append("structured_memory")
+    if item.validity.get("time_scope") in {"current_task", "past"}:
+        score += 0.15
+        reasons.append("state_transition_memory")
+    if len(text) >= 20:
+        score += 0.08
+        reasons.append("detailed_context")
+    if any(marker in text for marker in UNCERTAIN_MARKERS):
+        score -= 0.25
+        reasons.append("uncertain_language")
+    if any(marker in text for marker in TEMPORARY_MARKERS) and item.validity.get("time_scope") == "long_term":
+        score -= 0.18
+        reasons.append("temporary_marker")
+    score = max(0.0, min(1.0, score))
+    return round(score, 2), ", ".join(reasons) if reasons else "weak_signal"
+
+
+def _retention_reason(item: dict[str, Any]) -> str:
+    status = item.get("status", ACTIVE)
+    if status == DELETED:
+        return "deleted_by_user_control; excluded_from_future_application"
+    if status == SUPERSEDED:
+        return "superseded_or_downgraded_by_newer_feedback; kept_for_audit"
+    if status == "archived":
+        return "archived_for_low_relevance_or_user_request; excluded_from_active_retrieval"
+    if item.get("source") == "assistant_output":
+        return "assistant_candidate_recorded_for_current_task_trace"
+    return "active_user_signal_available_for_matching_tasks"
 
 
 def _strip_command_words(text: str, words: list[str]) -> str:

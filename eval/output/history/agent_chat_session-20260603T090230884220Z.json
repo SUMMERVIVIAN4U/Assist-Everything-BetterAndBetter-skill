@@ -1,0 +1,1408 @@
+{
+  "run_id": "agent_chat_session-20260603T090230884220Z",
+  "created_at": "2026-06-03T09:02:30.884336+00:00",
+  "harness": {
+    "name": "assist-everything-betterandbetter-evalharness",
+    "agent_mode": "local_tool_agent",
+    "judge_mode": "offline",
+    "supports_external_llm_judge": true,
+    "supports_agent_chat": true,
+    "eval_source": "agent_chat_session"
+  },
+  "summary": {
+    "case_count": 1,
+    "config_average": 100.0,
+    "all_cases_above_90": true,
+    "effort_average": 68.0,
+    "effort_reduction": 52.0,
+    "saved_effort_average": 52.0
+  },
+  "dimensions": {
+    "reproducibility": 10,
+    "memory_extraction": 20,
+    "memory_application": 25,
+    "update_and_decay": 20,
+    "transparency": 10,
+    "result_quality": 15
+  },
+  "cases": [
+    {
+      "id": "CHAT-SESSION",
+      "title": "当前 Agent Chat",
+      "domain": "relationship_gift",
+      "module": "自由对话记忆评估",
+      "script": {
+        "source": "agent_chat",
+        "turn_count": 4,
+        "messages": [
+          "帮我给女朋友选个礼物",
+          "她喜欢 护肤品，不喜欢 美妆",
+          "Lamo",
+          "我想给她推荐 彩妆画笔怎么样"
+        ]
+      },
+      "turns": [
+        {
+          "id": "turn_001",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "帮我给女朋友选个礼物",
+            "timestamp": "2026-06-03T09:00:57.905980+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "timestamp": "2026-06-03T09:00:57.905986+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "帮我给女朋友选个礼物",
+                "context": ""
+              },
+              "output": {
+                "text": "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+                "memory_actions": [
+                  {
+                    "action": "add",
+                    "memory_id": "mem_10fb7e59",
+                    "detail": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                    "version": "M1",
+                    "timestamp": "2026-06-03T09:00:57.902821+00:00"
+                  }
+                ],
+                "applied_memories": [],
+                "asks": [
+                  "她闺蜜最近晒过或收到过什么品牌吗？",
+                  "有没有前女友有过、绝对不能送的东西？"
+                ]
+              },
+              "timestamp": "2026-06-03T09:00:57.905805+00:00"
+            }
+          ],
+          "applied_memories": [],
+          "memory_snapshot": {
+            "version": "M1",
+            "active": [
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "小众香氛礼盒",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "小众香氛礼盒"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_10fb7e59",
+                "created_at": "2026-06-03T09:00:57.902784+00:00",
+                "updated_at": "2026-06-03T09:00:57.902800+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": [
+            "本轮从自然语言中提取并保存了通用记忆。"
+          ]
+        },
+        {
+          "id": "turn_002",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "她喜欢 护肤品，不喜欢 美妆",
+            "timestamp": "2026-06-03T09:01:49.310491+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n行，这个我记住了：她喜欢 护肤品，不喜欢 美妆。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "timestamp": "2026-06-03T09:01:49.310496+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "她喜欢 护肤品，不喜欢 美妆",
+                "context": "user: 帮我给女朋友选个礼物\nassistant: 推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              },
+              "output": {
+                "text": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n行，这个我记住了：她喜欢 护肤品，不喜欢 美妆。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+                "memory_actions": [
+                  {
+                    "action": "add",
+                    "memory_id": "mem_3550d3a7",
+                    "detail": "她喜欢 护肤品，不喜欢 美妆",
+                    "version": "M2",
+                    "timestamp": "2026-06-03T09:01:49.308454+00:00"
+                  }
+                ],
+                "applied_memories": [
+                  "mem_10fb7e59",
+                  "mem_3550d3a7"
+                ],
+                "asks": [
+                  "她闺蜜最近晒过或收到过什么品牌吗？",
+                  "有没有前女友有过、绝对不能送的东西？"
+                ]
+              },
+              "timestamp": "2026-06-03T09:01:49.310455+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_10fb7e59",
+            "mem_3550d3a7"
+          ],
+          "memory_snapshot": {
+            "version": "M2",
+            "active": [
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "小众香氛礼盒",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "小众香氛礼盒"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_10fb7e59",
+                "created_at": "2026-06-03T09:00:57.902784+00:00",
+                "updated_at": "2026-06-03T09:00:57.902800+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "她喜欢 护肤品，不喜欢 美妆",
+                "scope": "relationship_gift",
+                "subject": "girlfriend",
+                "target": "girlfriend",
+                "object": "",
+                "predicate": "must_avoid",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "她喜欢 护肤品，不喜欢 美妆"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_3550d3a7",
+                "created_at": "2026-06-03T09:01:49.308420+00:00",
+                "updated_at": "2026-06-03T09:01:49.308437+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": [
+            "本轮从自然语言中提取并保存了通用记忆。",
+            "本轮检索并应用了 active 记忆。"
+          ]
+        },
+        {
+          "id": "turn_003",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "Lamo",
+            "timestamp": "2026-06-03T09:02:03.648491+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "timestamp": "2026-06-03T09:02:03.648494+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "Lamo",
+                "context": "user: 帮我给女朋友选个礼物\nassistant: 推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？\nuser: 她喜欢 护肤品，不喜欢 美妆\nassistant: 推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n行，这个我记住了：她喜欢 护肤品，不喜欢 美妆。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              },
+              "output": {
+                "text": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+                "memory_actions": [],
+                "applied_memories": [
+                  "mem_10fb7e59",
+                  "mem_3550d3a7"
+                ],
+                "asks": [
+                  "她闺蜜最近晒过或收到过什么品牌吗？",
+                  "有没有前女友有过、绝对不能送的东西？"
+                ]
+              },
+              "timestamp": "2026-06-03T09:02:03.648470+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_10fb7e59",
+            "mem_3550d3a7"
+          ],
+          "memory_snapshot": {
+            "version": "M2",
+            "active": [
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "小众香氛礼盒",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "小众香氛礼盒"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_10fb7e59",
+                "created_at": "2026-06-03T09:00:57.902784+00:00",
+                "updated_at": "2026-06-03T09:00:57.902800+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "她喜欢 护肤品，不喜欢 美妆",
+                "scope": "relationship_gift",
+                "subject": "girlfriend",
+                "target": "girlfriend",
+                "object": "",
+                "predicate": "must_avoid",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "她喜欢 护肤品，不喜欢 美妆"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_3550d3a7",
+                "created_at": "2026-06-03T09:01:49.308420+00:00",
+                "updated_at": "2026-06-03T09:01:49.308437+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": [
+            "本轮检索并应用了 active 记忆。"
+          ]
+        },
+        {
+          "id": "turn_004",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "我想给她推荐 彩妆画笔怎么样",
+            "timestamp": "2026-06-03T09:02:25.095401+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "timestamp": "2026-06-03T09:02:25.095404+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "我想给她推荐 彩妆画笔怎么样",
+                "context": "user: 帮我给女朋友选个礼物\nassistant: 推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？\nuser: 她喜欢 护肤品，不喜欢 美妆\nassistant: 推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n行，这个我记住了：她喜欢 护肤品，不喜欢 美妆。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？\nuser: Lamo\nassistant: 推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              },
+              "output": {
+                "text": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+                "memory_actions": [],
+                "applied_memories": [
+                  "mem_10fb7e59",
+                  "mem_3550d3a7"
+                ],
+                "asks": [
+                  "她闺蜜最近晒过或收到过什么品牌吗？",
+                  "有没有前女友有过、绝对不能送的东西？"
+                ]
+              },
+              "timestamp": "2026-06-03T09:02:25.095372+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_10fb7e59",
+            "mem_3550d3a7"
+          ],
+          "memory_snapshot": {
+            "version": "M2",
+            "active": [
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "小众香氛礼盒",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "小众香氛礼盒"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_10fb7e59",
+                "created_at": "2026-06-03T09:00:57.902784+00:00",
+                "updated_at": "2026-06-03T09:00:57.902800+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "她喜欢 护肤品，不喜欢 美妆",
+                "scope": "relationship_gift",
+                "subject": "girlfriend",
+                "target": "girlfriend",
+                "object": "",
+                "predicate": "must_avoid",
+                "source": "chat_feedback",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "她喜欢 护肤品，不喜欢 美妆"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_3550d3a7",
+                "created_at": "2026-06-03T09:01:49.308420+00:00",
+                "updated_at": "2026-06-03T09:01:49.308437+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": [
+            "本轮检索并应用了 active 记忆。"
+          ]
+        }
+      ],
+      "rounds": [
+        {
+          "name": "Chat",
+          "title": "当前聊天评估",
+          "turn_ids": [
+            "turn_001",
+            "turn_004"
+          ],
+          "highlight": "共 4 轮自由对话。",
+          "actions": [
+            "process_message",
+            "trace_session"
+          ],
+          "gain": "把当前 Agent Chat 作为本次 eval 输入。"
+        },
+        {
+          "name": "Memory",
+          "title": "记忆行为",
+          "turn_ids": [
+            "turn_001",
+            "turn_002"
+          ],
+          "highlight": "2 轮产生记忆新增、更新、删除或降权。",
+          "actions": [
+            "extract_memory",
+            "update_memory"
+          ],
+          "gain": "检查聊天过程中是否形成可复用记忆。"
+        },
+        {
+          "name": "Apply",
+          "title": "记忆应用",
+          "turn_ids": [
+            "turn_002",
+            "turn_003",
+            "turn_004"
+          ],
+          "highlight": "3 轮应用了 active memory。",
+          "actions": [
+            "retrieve_memory",
+            "compose_response"
+          ],
+          "gain": "检查后续回复是否利用已保存记忆。"
+        }
+      ],
+      "snapshots": [
+        {
+          "version": "M1",
+          "active": [
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "小众香氛礼盒",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "小众香氛礼盒"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_10fb7e59",
+              "created_at": "2026-06-03T09:00:57.902784+00:00",
+              "updated_at": "2026-06-03T09:00:57.902800+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M2",
+          "active": [
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "小众香氛礼盒",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "小众香氛礼盒"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_10fb7e59",
+              "created_at": "2026-06-03T09:00:57.902784+00:00",
+              "updated_at": "2026-06-03T09:00:57.902800+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "她喜欢 护肤品，不喜欢 美妆",
+              "scope": "relationship_gift",
+              "subject": "girlfriend",
+              "target": "girlfriend",
+              "object": "",
+              "predicate": "must_avoid",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "她喜欢 护肤品，不喜欢 美妆"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_3550d3a7",
+              "created_at": "2026-06-03T09:01:49.308420+00:00",
+              "updated_at": "2026-06-03T09:01:49.308437+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M2",
+          "active": [
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "小众香氛礼盒",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "小众香氛礼盒"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_10fb7e59",
+              "created_at": "2026-06-03T09:00:57.902784+00:00",
+              "updated_at": "2026-06-03T09:00:57.902800+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "她喜欢 护肤品，不喜欢 美妆",
+              "scope": "relationship_gift",
+              "subject": "girlfriend",
+              "target": "girlfriend",
+              "object": "",
+              "predicate": "must_avoid",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "她喜欢 护肤品，不喜欢 美妆"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_3550d3a7",
+              "created_at": "2026-06-03T09:01:49.308420+00:00",
+              "updated_at": "2026-06-03T09:01:49.308437+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        },
+        {
+          "version": "M2",
+          "active": [
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "小众香氛礼盒",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "小众香氛礼盒"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_10fb7e59",
+              "created_at": "2026-06-03T09:00:57.902784+00:00",
+              "updated_at": "2026-06-03T09:00:57.902800+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "她喜欢 护肤品，不喜欢 美妆",
+              "scope": "relationship_gift",
+              "subject": "girlfriend",
+              "target": "girlfriend",
+              "object": "",
+              "predicate": "must_avoid",
+              "source": "chat_feedback",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "她喜欢 护肤品，不喜欢 美妆"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_3550d3a7",
+              "created_at": "2026-06-03T09:01:49.308420+00:00",
+              "updated_at": "2026-06-03T09:01:49.308437+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        }
+      ],
+      "memory_events": [
+        {
+          "action": "add",
+          "memory_id": "mem_10fb7e59",
+          "detail": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+          "version": "M1",
+          "timestamp": "2026-06-03T09:00:57.902821+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_3550d3a7",
+          "detail": "她喜欢 护肤品，不喜欢 美妆",
+          "version": "M2",
+          "timestamp": "2026-06-03T09:01:49.308454+00:00"
+        }
+      ],
+      "checks": {
+        "reset": true,
+        "snapshot_count": 4,
+        "created": 2,
+        "show_memory": true,
+        "round2_applied": true,
+        "round3_applied": true,
+        "updated": true,
+        "deleted_filtered": true,
+        "delete_reported": true,
+        "deliverable_turns": 4,
+        "task_turns": 2,
+        "delivered_task_turns": 2,
+        "compound_followup_delivered": true,
+        "polluted_memories": 0,
+        "polluted_memory_details": [],
+        "semantic_violations": 0,
+        "semantic_violation_details": [],
+        "unresolved_dissatisfaction": false,
+        "correction_turns": 0,
+        "repeated_memory_turns": 0,
+        "satisfaction_signal": false,
+        "effort_final": 68,
+        "effort_reduction": 52
+      },
+      "ablation": {
+        "module": "自由对话记忆评估",
+        "off": [
+          "只能依赖当前消息",
+          "偏好无法跨轮复用",
+          "用户需要重复解释上下文"
+        ],
+        "on": [
+          "跨轮提取与应用记忆",
+          "保留主体归属",
+          "可在 Trace 中审计每轮状态"
+        ]
+      },
+      "user_effort": {
+        "scale": "lower is less user effort; raw additive effort points",
+        "initial_score": 0,
+        "final_score": 68,
+        "saved_score": 52,
+        "reduction": 52,
+        "estimated_without_memory": 120,
+        "turns": [
+          {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "帮我给女朋友选个礼物",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 0,
+            "delta": 17,
+            "after": 17,
+            "saved_before": 0,
+            "saved_delta": 8,
+            "saved_after": 8,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "有效记忆变化 saved +8"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_extraction",
+              "transparency",
+              "result_quality"
+            ]
+          },
+          {
+            "turn_id": "turn_002",
+            "stage": "chat",
+            "user": "她喜欢 护肤品，不喜欢 美妆",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n行，这个我记住了：她喜欢 护肤品，不喜欢 美妆。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 17,
+            "delta": 17,
+            "after": 34,
+            "saved_before": 8,
+            "saved_delta": 20,
+            "saved_after": 28,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12",
+              "有效记忆变化 saved +8"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_extraction",
+              "transparency",
+              "memory_application"
+            ]
+          },
+          {
+            "turn_id": "turn_003",
+            "stage": "chat",
+            "user": "Lamo",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 34,
+            "delta": 17,
+            "after": 51,
+            "saved_before": 28,
+            "saved_delta": 12,
+            "saved_after": 40,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          },
+          {
+            "turn_id": "turn_004",
+            "stage": "chat",
+            "user": "我想给她推荐 彩妆画笔怎么样",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 51,
+            "delta": 17,
+            "after": 68,
+            "saved_before": 40,
+            "saved_delta": 12,
+            "saved_after": 52,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application",
+              "result_quality"
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "quality": {
+        "delivered_task_turn_ids": [
+          "turn_001",
+          "turn_004"
+        ],
+        "polluted_memory_events": [],
+        "semantic_violations": [],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "eval_timeline": [
+        {
+          "turn_id": "turn_001",
+          "stage": "chat",
+          "user": "帮我给女朋友选个礼物",
+          "assistant": "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+          "memory": {
+            "applied_ids": [],
+            "applied": [],
+            "actions": [
+              {
+                "action": "add",
+                "memory_id": "mem_10fb7e59",
+                "detail": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "version": "M1",
+                "timestamp": "2026-06-03T09:00:57.902821+00:00"
+              }
+            ],
+            "snapshot_version": "M1",
+            "explanation": "新增 1 条记忆"
+          },
+          "effort": {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "帮我给女朋友选个礼物",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 0,
+            "delta": 17,
+            "after": 17,
+            "saved_before": 0,
+            "saved_delta": 8,
+            "saved_after": 8,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "有效记忆变化 saved +8"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_extraction",
+              "transparency",
+              "result_quality"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "memory_extraction",
+              "transparency",
+              "result_quality"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1；需要补充信息 +8。节省项：有效记忆变化 saved +8。记忆行为：新增 1 条记忆"
+          }
+        },
+        {
+          "turn_id": "turn_002",
+          "stage": "chat",
+          "user": "她喜欢 护肤品，不喜欢 美妆",
+          "assistant": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n行，这个我记住了：她喜欢 护肤品，不喜欢 美妆。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+          "memory": {
+            "applied_ids": [
+              "mem_10fb7e59",
+              "mem_3550d3a7"
+            ],
+            "applied": [
+              {
+                "id": "mem_10fb7e59",
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒"
+              },
+              {
+                "id": "mem_3550d3a7",
+                "type": "constraint",
+                "content": "她喜欢 护肤品，不喜欢 美妆"
+              }
+            ],
+            "actions": [
+              {
+                "action": "add",
+                "memory_id": "mem_3550d3a7",
+                "detail": "她喜欢 护肤品，不喜欢 美妆",
+                "version": "M2",
+                "timestamp": "2026-06-03T09:01:49.308454+00:00"
+              }
+            ],
+            "snapshot_version": "M2",
+            "explanation": "应用 2 条 active 记忆；新增 1 条记忆"
+          },
+          "effort": {
+            "turn_id": "turn_002",
+            "stage": "chat",
+            "user": "她喜欢 护肤品，不喜欢 美妆",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n行，这个我记住了：她喜欢 护肤品，不喜欢 美妆。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 17,
+            "delta": 17,
+            "after": 34,
+            "saved_before": 8,
+            "saved_delta": 20,
+            "saved_after": 28,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12",
+              "有效记忆变化 saved +8"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_extraction",
+              "transparency",
+              "memory_application"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "memory_extraction",
+              "transparency",
+              "memory_application"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1；需要补充信息 +8。节省项：正确应用记忆 saved +12；有效记忆变化 saved +8。记忆行为：应用 2 条 active 记忆；新增 1 条记忆"
+          }
+        },
+        {
+          "turn_id": "turn_003",
+          "stage": "chat",
+          "user": "Lamo",
+          "assistant": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+          "memory": {
+            "applied_ids": [
+              "mem_10fb7e59",
+              "mem_3550d3a7"
+            ],
+            "applied": [
+              {
+                "id": "mem_10fb7e59",
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒"
+              },
+              {
+                "id": "mem_3550d3a7",
+                "type": "constraint",
+                "content": "她喜欢 护肤品，不喜欢 美妆"
+              }
+            ],
+            "actions": [],
+            "snapshot_version": "M2",
+            "explanation": "应用 2 条 active 记忆"
+          },
+          "effort": {
+            "turn_id": "turn_003",
+            "stage": "chat",
+            "user": "Lamo",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 34,
+            "delta": 17,
+            "after": 51,
+            "saved_before": 28,
+            "saved_delta": 12,
+            "saved_after": 40,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "memory_application"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1；需要补充信息 +8。节省项：正确应用记忆 saved +12。记忆行为：应用 2 条 active 记忆"
+          }
+        },
+        {
+          "turn_id": "turn_004",
+          "stage": "chat",
+          "user": "我想给她推荐 彩妆画笔怎么样",
+          "assistant": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+          "memory": {
+            "applied_ids": [
+              "mem_10fb7e59",
+              "mem_3550d3a7"
+            ],
+            "applied": [
+              {
+                "id": "mem_10fb7e59",
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒"
+              },
+              {
+                "id": "mem_3550d3a7",
+                "type": "constraint",
+                "content": "她喜欢 护肤品，不喜欢 美妆"
+              }
+            ],
+            "actions": [],
+            "snapshot_version": "M2",
+            "explanation": "应用 2 条 active 记忆"
+          },
+          "effort": {
+            "turn_id": "turn_004",
+            "stage": "chat",
+            "user": "我想给她推荐 彩妆画笔怎么样",
+            "assistant_brief": "推荐：小众香氛礼盒。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？",
+            "before": 51,
+            "delta": 17,
+            "after": 68,
+            "saved_before": 40,
+            "saved_delta": 12,
+            "saved_after": 52,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "需要补充信息 +8"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "memory_application",
+              "result_quality"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "memory_application",
+              "result_quality"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1；需要补充信息 +8。节省项：正确应用记忆 saved +12。记忆行为：应用 2 条 active 记忆"
+          }
+        }
+      ],
+      "judge": {
+        "judge": "heuristic-trace-judge",
+        "mode": "offline",
+        "dimensions": {
+          "reproducibility": 10,
+          "memory_extraction": 20,
+          "memory_application": 25,
+          "update_and_decay": 20,
+          "transparency": 10,
+          "result_quality": 15
+        },
+        "scores": {
+          "reproducibility": 10,
+          "memory_extraction": 20,
+          "memory_application": 25,
+          "update_and_decay": 20,
+          "transparency": 10,
+          "result_quality": 15,
+          "total": 100
+        },
+        "reasons": {
+          "reproducibility": "trace 必须包含 reset、脚本回放、snapshot 和用户费力度轨迹。",
+          "memory_extraction": "明确反馈应结构化保存；问题句、情绪反问、敷衍确认不能污染长期记忆。",
+          "memory_application": "不仅要检索记忆，还要正确组合偏好、历史、约束和当前决策。",
+          "update_and_decay": "更新/删除必须影响后续输出；复合请求中的删除后任务也要完成。",
+          "transparency": "用户可 show/delete，回复中的保存承诺必须和真实 memory_actions 对齐。",
+          "result_quality": "任务轮必须给可直接使用的结果；用户费力度应下降，不能只复述机制。"
+        }
+      },
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 20,
+        "memory_application": 25,
+        "update_and_decay": 20,
+        "transparency": 10,
+        "result_quality": 15,
+        "total": 100
+      },
+      "score": 100
+    }
+  ]
+}
