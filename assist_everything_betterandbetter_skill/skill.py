@@ -736,6 +736,7 @@ def _mem0_config_from_env() -> Mem0Config:
         api_key=os.getenv("MEM0_API_KEY", "").strip(),
         user_id=os.getenv("MEM0_USER_ID", "workbench-user").strip(),
         app_id=os.getenv("MEM0_APP_ID", "assist-everything-betterandbetter-skill").strip(),
+        project_id=os.getenv("MEM0_PROJECT_ID", "").strip(),
         project_name=os.getenv("MEM0_PROJECT_NAME", "").strip(),
         timeout=float(os.getenv("MEM0_TIMEOUT", "15") or 15),
     )

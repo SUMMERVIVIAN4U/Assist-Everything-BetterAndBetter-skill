@@ -35,6 +35,7 @@ class Mem0BackendTest(unittest.TestCase):
                 api_key="test-key",
                 user_id="u1",
                 app_id="app1",
+                project_id="project1",
                 timeout=3,
             )
         )
@@ -47,6 +48,7 @@ class Mem0BackendTest(unittest.TestCase):
         self.assertFalse(captured["payload"]["infer"])
         self.assertFalse(captured["payload"]["async_mode"])
         self.assertEqual(captured["payload"]["user_id"], "u1")
+        self.assertEqual(captured["payload"]["metadata"]["project_id"], "project1")
 
 
 if __name__ == "__main__":

@@ -232,6 +232,7 @@ def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
             "api_key": str(data.get("mem0", {}).get("api_key") or ""),
             "user_id": str(data.get("mem0", {}).get("user_id") or "workbench-user"),
             "app_id": str(data.get("mem0", {}).get("app_id") or "test-self-improving-202606"),
+            "project_id": str(data.get("mem0", {}).get("project_id") or "mp-cnlfltlna17tilpkaf7rx17e29h1"),
             "project_name": str(data.get("mem0", {}).get("project_name") or "test-self-improving-202606"),
             "timeout": float(data.get("mem0", {}).get("timeout") or 15.0),
         },
@@ -255,6 +256,7 @@ def _public_backend_config() -> dict[str, Any]:
             "api_key_configured": bool(mem0["api_key"]),
             "user_id": mem0["user_id"],
             "app_id": mem0["app_id"],
+            "project_id": mem0["project_id"],
             "project_name": mem0["project_name"],
             "timeout": mem0["timeout"],
         },
@@ -267,7 +269,7 @@ def _config_from_backend_body(body: dict[str, Any], current: dict[str, Any]) -> 
     config["backend"] = backend if backend in {"local", "mem0"} else "local"
     mem0_body = body.get("mem0") if isinstance(body.get("mem0"), dict) else {}
     mem0 = dict(config["mem0"])
-    for key in ["base_url", "user_id", "app_id", "project_name"]:
+    for key in ["base_url", "user_id", "app_id", "project_id", "project_name"]:
         if key in mem0_body:
             mem0[key] = str(mem0_body.get(key) or "").strip()
     if "timeout" in mem0_body:

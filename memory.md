@@ -43,6 +43,7 @@
 
 - **Mem0 项目信息**：
   - 项目名称：`test-self-improving-202606`
+  - 项目 ID：`mp-cnlfltlna17tilpkaf7rx17e29h1`
   - 公网连接地址：`https://mem0-cnlfjzigaku8gczkzo.mem0.volces.com:8000`
   - Workbench 默认 `user_id`：`workbench-user`
   - Workbench 默认 `app_id`：`test-self-improving-202606`
@@ -110,6 +111,7 @@
   - 不要硬编码只用 `/v3/memories/search/`，当前火山实例会返回 404。
   - 搜索应优先尝试 `/v2/memories/search/`，再回退 `/v1/memories/search/`。
   - search payload 需要顶层 `user_id`；只放在 `filters` 中会触发 `At least one of 'user_id', 'agent_id', or 'run_id' must be specified.`。
+  - 不要在 search payload 里用 `app_id` / `filters.app_id` 过滤；火山返回记录里的 `agent_id` 为空，额外过滤会导致已写入记忆搜不到。
   - 新增记忆优先使用 `POST /v1/memories/`。
   - 新增记忆如果使用 `infer: false`，必须同时传 `async_mode: false`；否则火山实例会返回 `Async mode is disabled if infer is False.`
 

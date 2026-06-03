@@ -80,6 +80,7 @@ let report = null;
           base_url: mem0.base_url || '',
           user_id: mem0.user_id || '',
           app_id: mem0.app_id || '',
+          project_id: mem0.project_id || '',
           api_key_configured: !!mem0.api_key_configured,
           timeout: mem0.timeout
         }

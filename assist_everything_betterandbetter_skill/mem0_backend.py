@@ -17,6 +17,7 @@ class Mem0Config:
     api_key: str = ""
     user_id: str = "workbench-user"
     app_id: str = "assist-everything-betterandbetter-skill"
+    project_id: str = ""
     project_name: str = ""
     timeout: float = 15.0
 
@@ -31,6 +32,7 @@ class Mem0Config:
             "api_key_configured": bool(self.api_key),
             "user_id": self.user_id,
             "app_id": self.app_id,
+            "project_id": self.project_id,
             "project_name": self.project_name,
             "timeout": self.timeout,
         }
@@ -55,6 +57,7 @@ class Mem0Client:
                 "source": item.source,
                 "confidence": item.confidence,
                 "applies_when": item.applies_when,
+                "project_id": self.config.project_id,
                 "assist_memory": item.to_dict(),
             },
             "infer": False,
@@ -68,8 +71,6 @@ class Mem0Client:
         payload = {
             "query": query,
             "user_id": self.config.user_id,
-            "app_id": self.config.app_id,
-            "filters": {"app_id": self.config.app_id},
             "top_k": max(1, min(top_k, 50)),
             "threshold": 0.0,
         }
@@ -78,8 +79,11 @@ class Mem0Client:
 
     def get_all(self, *, page_size: int = 50) -> dict[str, Any]:
         query = urlencode({"page": 1, "page_size": max(1, min(page_size, 200))})
-        payload = {"filters": {"user_id": self.config.user_id, "app_id": self.config.app_id}}
-        return self._request_first("POST", [f"/v2/memories/?{query}", f"/v1/memories/?{query}", f"/v3/memories/?{query}"], payload)
+        return self._request_first(
+            "GET",
+            [f"/v1/memories/?user_id={self.config.user_id}&{query}", f"/v2/memories/?user_id={self.config.user_id}&{query}", f"/v3/memories/?user_id={self.config.user_id}&{query}"],
+            None,
+        )
 
     def delete(self, memory_id: str) -> dict[str, Any]:
         return self._request("DELETE", f"/v1/memories/{memory_id}/", None)
@@ -174,6 +178,7 @@ def config_from_dict(data: dict[str, Any]) -> Mem0Config:
         api_key=str(data.get("api_key") or ""),
         user_id=str(data.get("user_id") or "workbench-user"),
         app_id=str(data.get("app_id") or "assist-everything-betterandbetter-skill"),
+        project_id=str(data.get("project_id") or ""),
         project_name=str(data.get("project_name") or ""),
         timeout=float(data.get("timeout") or 15.0),
     )
