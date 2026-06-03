@@ -61,6 +61,7 @@
 - 2026-06-03：增加长期记忆后端开关，支持本地存储与火山引擎 Mem0 切换；Mem0 配置在设置页可编辑。
 - 2026-06-03：将 Workbench 演示界面从 `evalharness/server.py` 内嵌字符串拆分为 `evalharness/static/workbench.html`、`workbench.css`、`workbench.js`，`server.py` 只负责 API 和静态文件返回。
 - 2026-06-03：设置页把 `Agent 配置` 也并入同一组 tab；Agent 配置只保留长期记忆后端开关，其余 Mem0 参数以 `.env` 或本地配置为准。
+- 2026-06-03：修复火山 Mem0 连接检查：该实例不支持 `/v3/memories/search/`，改为优先使用 `POST /v2/memories/search/`、回退 `POST /v1/memories/search/`，且 search payload 必须包含顶层 `user_id`。
 
 ## 记忆
 
@@ -104,6 +105,13 @@
 - **远程记忆后端不能替代本地 trace**：
   - Eval Harness 需要本地 snapshots、events、memory status 来评分和解释。
   - 即使使用 Mem0，也要保留本地审计层，否则删除复测、状态迁移、用户费力度分析会失去证据。
+
+- **火山 Mem0 API 路径兼容**：
+  - 不要硬编码只用 `/v3/memories/search/`，当前火山实例会返回 404。
+  - 搜索应优先尝试 `/v2/memories/search/`，再回退 `/v1/memories/search/`。
+  - search payload 需要顶层 `user_id`；只放在 `filters` 中会触发 `At least one of 'user_id', 'agent_id', or 'run_id' must be specified.`。
+  - 新增记忆优先使用 `POST /v1/memories/`。
+  - 新增记忆如果使用 `infer: false`，必须同时传 `async_mode: false`；否则火山实例会返回 `Async mode is disabled if infer is False.`
 
 - **API key 不能进入源码和前端明文**：
   - `.env.example` 只放变量名，不放真实 key。

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
 
@@ -58,25 +58,28 @@ class Mem0Client:
                 "assist_memory": item.to_dict(),
             },
             "infer": False,
+            "async_mode": False,
         }
-        return self._request("POST", "/v3/memories/add/", payload)
+        return self._request_first("POST", ["/v1/memories/", "/v3/memories/add/"], payload)
 
     def search(self, query: str, *, top_k: int = 10) -> list[MemoryItem]:
         if not query.strip():
             return []
         payload = {
             "query": query,
-            "filters": {"user_id": self.config.user_id, "app_id": self.config.app_id},
+            "user_id": self.config.user_id,
+            "app_id": self.config.app_id,
+            "filters": {"app_id": self.config.app_id},
             "top_k": max(1, min(top_k, 50)),
             "threshold": 0.0,
         }
-        data = self._request("POST", "/v3/memories/search/", payload)
-        return [_item_from_mem0_result(result) for result in data.get("results", [])]
+        data = self._request_first("POST", ["/v2/memories/search/", "/v1/memories/search/", "/v3/memories/search/"], payload)
+        return [_item_from_mem0_result(result) for result in _mem0_results(data)]
 
     def get_all(self, *, page_size: int = 50) -> dict[str, Any]:
         query = urlencode({"page": 1, "page_size": max(1, min(page_size, 200))})
         payload = {"filters": {"user_id": self.config.user_id, "app_id": self.config.app_id}}
-        return self._request("POST", f"/v3/memories/?{query}", payload)
+        return self._request_first("POST", [f"/v2/memories/?{query}", f"/v1/memories/?{query}", f"/v3/memories/?{query}"], payload)
 
     def delete(self, memory_id: str) -> dict[str, Any]:
         return self._request("DELETE", f"/v1/memories/{memory_id}/", None)
@@ -109,6 +112,29 @@ class Mem0Client:
             raise RuntimeError(f"Mem0 {method} {path} failed: HTTP {exc.code} {raw[:500]}") from exc
         except Exception as exc:
             raise RuntimeError(f"Mem0 {method} {path} failed: {exc}") from exc
+
+    def _request_first(self, method: str, paths: list[str], payload: dict[str, Any] | None) -> dict[str, Any] | list[Any]:
+        errors = []
+        for path in paths:
+            try:
+                return self._request(method, path, payload)
+            except RuntimeError as exc:
+                errors.append(str(exc))
+                if "HTTP 404" not in str(exc):
+                    break
+        raise RuntimeError(errors[-1] if errors else f"Mem0 {method} failed")
+
+
+def _mem0_results(data: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    for key in ["results", "memories", "data"]:
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
 
 
 def _item_from_mem0_result(result: dict[str, Any]) -> MemoryItem:
