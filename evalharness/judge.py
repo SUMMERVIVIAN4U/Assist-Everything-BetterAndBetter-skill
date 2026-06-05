@@ -7,7 +7,7 @@ from typing import Any
 
 from assist_everything_betterandbetter_skill.cases import DIMENSIONS
 
-from .llm import MimoClient, MimoConfig, mimo_configured
+from .llm import OpenAICompatibleClient, build_llm_client, llm_configured, provider_env_key
 
 
 class HeuristicJudge:
@@ -126,13 +126,15 @@ class ExternalCommandJudge:
         return data
 
 
-class MimoJudge:
-    """LLM judge backed by the configured Mimo chat endpoint."""
+class OpenAICompatibleJudge:
+    """LLM judge backed by a configured OpenAI-compatible chat endpoint."""
 
-    name = "mimo-llm-judge"
-
-    def __init__(self, client: MimoClient | None = None) -> None:
-        self.client = client or _judge_mimo_client()
+    def __init__(self, mode: str, client: OpenAICompatibleClient | None = None) -> None:
+        self.mode = mode
+        self.client = client or _judge_llm_client(mode)
+        provider = self.client.config.provider.lower()
+        model_slug = self.client.config.model.lower().replace("/", "-")
+        self.name = f"{provider}-{model_slug}-llm-judge"
 
     def score(self, case_run: dict[str, Any]) -> dict[str, Any]:
         compact = {
@@ -178,16 +180,34 @@ class MimoJudge:
         scores["total"] = sum(scores[key] for key in DIMENSIONS)
         return {
             "judge": self.name,
-            "mode": "mimo_llm",
+            "mode": f"{self.client.config.provider.lower()}_llm",
             "dimensions": DIMENSIONS,
             "scores": scores,
             "reasons": data.get("reasons", {}),
         }
 
 
-def build_judge(mode: str = "auto") -> HeuristicJudge | ExternalCommandJudge | MimoJudge:
-    if mode == "mimo" or (mode == "auto" and mimo_configured()):
+class MimoJudge(OpenAICompatibleJudge):
+    """Compatibility wrapper for the configured Mimo chat endpoint."""
+
+    def __init__(self, client: OpenAICompatibleClient | None = None) -> None:
+        super().__init__("mimo", client)
+
+
+class DeepSeekJudge(OpenAICompatibleJudge):
+    """Compatibility wrapper for configured DeepSeek chat endpoints."""
+
+    def __init__(self, mode: str = "deepseek-flash", client: OpenAICompatibleClient | None = None) -> None:
+        super().__init__(mode, client)
+
+
+def build_judge(mode: str = "auto") -> HeuristicJudge | ExternalCommandJudge | OpenAICompatibleJudge:
+    if mode == "mimo":
         return MimoJudge()
+    if mode in {"deepseek", "deepseek-flash", "deepseek-pro"}:
+        return DeepSeekJudge(mode)
+    if mode == "auto" and llm_configured():
+        return OpenAICompatibleJudge("auto")
     if mode == "external" or (mode == "auto" and os.getenv("EVALHARNESS_JUDGE_CMD")):
         return ExternalCommandJudge()
     return HeuristicJudge()
@@ -204,7 +224,12 @@ def score_with_fallback(case_run: dict[str, Any], mode: str = "heuristic") -> di
         return judgement
 
 
-def _judge_mimo_client() -> MimoClient:
-    config = MimoConfig.from_env()
-    timeout = float(os.getenv("EVALHARNESS_JUDGE_TIMEOUT", os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120")))
-    return MimoClient(MimoConfig(config.api_key, config.base_url, config.model, timeout))
+def _judge_llm_client(mode: str) -> OpenAICompatibleClient:
+    provider = provider_env_key(mode)
+    timeout = float(
+        os.getenv(
+            f"EVALHARNESS_JUDGE_{provider}_TIMEOUT",
+            os.getenv("EVALHARNESS_JUDGE_TIMEOUT", os.getenv(f"EVALHARNESS_{provider}_TIMEOUT", "120")),
+        )
+    )
+    return build_llm_client(mode, timeout=timeout)

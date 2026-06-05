@@ -39,7 +39,7 @@ def build_report(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "harness": {
             "name": "assist-everything-betterandbetter-evalharness",
-            "agent_mode": "mimo_tool_agent" if agent_mode == "mimo" else "local_tool_agent",
+            "agent_mode": "local_tool_agent" if agent_mode == "local" else f"{agent_mode}_tool_agent",
             "judge_mode": cases[0]["judge"]["mode"] if cases else judge_mode,
             "supports_external_llm_judge": True,
             "supports_agent_chat": True,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -85,6 +86,10 @@ class AssistSkill:
     def retrieve_relevant_memories(self, text: str, context: str = "") -> list[MemoryItem]:
         scope = _infer_scope(text, context)
         terms = [term for term in _keywords(text) if term not in {"礼物"}]
+        gift_recipient_label = ""
+        gift_recipient_key = ""
+        if scope == "relationship_gift":
+            gift_recipient_label, gift_recipient_key = _gift_recipient(text, context)
         if "不适用" in text:
             if "步行不适用" in text or "少步行不适用" in text:
                 terms = ["步行"]
@@ -94,6 +99,12 @@ class AssistSkill:
         relevant: list[MemoryItem] = []
         for item in self.memory.active():
             if _is_polluted_memory_item(item):
+                continue
+            if (
+                scope == "relationship_gift"
+                and item.scope == "relationship_gift"
+                and not _memory_matches_gift_recipient(item, gift_recipient_label, gift_recipient_key)
+            ):
                 continue
             haystack = " ".join(
                 [
@@ -143,7 +154,7 @@ class AssistSkill:
             return self._approve_pending()
         if "reject" in lowered or "拒绝保存" in normalized or "不要保存" in normalized:
             return self._reject_pending()
-        if "reset" in lowered or "清空" in normalized or "重置" in normalized:
+        if _is_reset_memory_command(normalized, lowered):
             return self.reset_memory()
         if "show" in lowered or "展示" in normalized or "查看" in normalized:
             return self.show_memory()
@@ -201,11 +212,32 @@ class AssistSkill:
         return actions
 
     def _record_assistant_candidate(self, response_text: str, user_text: str, context: str = "") -> list[dict[str, Any]]:
-        if _infer_scope(user_text, context) != "relationship_gift":
+        scope = _infer_scope(user_text, context)
+        if scope != "relationship_gift":
             return []
         gift_object = _extract_recommended_gift(response_text)
         if not gift_object:
             return []
+        recipient_label, recipient_key = _gift_recipient(user_text, context)
+        if recipient_key != "girlfriend":
+            item = MemoryItem(
+                CANDIDATE,
+                f"给{recipient_label}选礼物时，曾推荐候选方案：{gift_object}",
+                scope="relationship_gift",
+                subject="assistant",
+                target=recipient_key,
+                object=gift_object,
+                predicate="proposed",
+                source="assistant_output",
+                evidence=[response_text],
+                applies_when=["relationship_gift"],
+                tags=["礼物", "候选", recipient_label, gift_object],
+                validity={"time_scope": "task_thread", "status": "proposed"},
+            )
+            if self._is_duplicate(item):
+                return []
+            self.memory.add(item)
+            return [self.memory.events[-1]]
         item = MemoryItem(
             CANDIDATE,
             f"给女朋友选礼物时，曾推荐候选方案：{gift_object}",
@@ -229,21 +261,31 @@ class AssistSkill:
         normalized = text.strip()
         if _is_memory_question(normalized) or _is_acknowledgement_only(normalized) or _is_plain_task_request(normalized):
             return []
-        if not normalized or not _has_memory_signal(normalized, context):
+        payload = _explicit_memory_payload(normalized) or normalized
+        if not normalized or (not _has_memory_signal(normalized, context) and not _has_memory_signal(payload, context)):
             return []
-        scope = _infer_scope(normalized, context)
+        effective_context = context
+        scope = _infer_scope(payload, context)
+        if scope == "general" and _looks_like_purchase_history(payload):
+            recipient = _dominant_gift_recipient(self.memory.active())
+            if recipient:
+                recipient_label, _ = recipient
+                effective_context = f"{context}\n当前送礼对象：{recipient_label}".strip()
+                scope = "relationship_gift"
+        if scope == "relationship_gift" and not _is_girlfriend_gift_context(normalized, context):
+            return _generic_gift_candidates(payload, effective_context, evidence_text=normalized)
         if scope == "relationship_gift" and _looks_like_final_gift_choice(normalized):
             return []
-        relationship = _relationship_candidates(normalized, context, scope)
+        relationship = _relationship_candidates(payload, effective_context, scope)
         if relationship:
             return relationship
         candidates: list[MemoryItem] = []
         explicit_request = _explicit_memory_request(normalized)
-        for clause in _split_clauses(normalized):
-            if not _has_memory_signal(clause, context) and not explicit_request:
+        for clause in _split_clauses(payload):
+            if not _has_memory_signal(clause, effective_context) and not explicit_request:
                 continue
             memory_type = _infer_memory_type(clause, scope)
-            content = _clean_memory_content(clause, scope, context)
+            content = _clean_memory_content(clause, scope, effective_context)
             if not content:
                 continue
             candidates.append(
@@ -335,6 +377,12 @@ class AssistSkill:
 
     def _suggest_followups(self, text: str, memories: list[MemoryItem], context: str = "") -> list[str]:
         scope = _infer_scope(text, context)
+        if scope == "relationship_gift" and not _is_girlfriend_gift_context(text, context):
+            profile = _gift_profile_text(text, memories, context)
+            enough = "预算" in profile and bool(_extract_gift_interests(profile))
+            if enough:
+                return []
+            return ["收礼人更偏实用设备、日常用品，还是体验型礼物？"]
         if scope == "relationship_gift":
             enough = (
                 any("预算" in m.content for m in memories)
@@ -343,8 +391,8 @@ class AssistSkill:
             )
             if enough or any(token in text for token in ["给我一个", "非首饰推荐", "礼物推荐"]):
                 return []
-        if scope == "relationship_gift" and not any("闺蜜" in m.content for m in memories):
-            return ["她闺蜜最近晒过或收到过什么品牌吗？", "有没有前女友有过、绝对不能送的东西？"]
+        if scope == "relationship_gift" and not memories:
+            return ["收礼人有没有明确喜欢、讨厌或已经收到过的东西？"]
         if scope == "life_family_travel" and not memories:
             return ["同行人有没有老人、孩子或步行限制？", "偏自然、动物还是城市景点？"]
         if scope == "work_report" and "老板" not in text and not memories:
@@ -357,6 +405,8 @@ class AssistSkill:
 
     def _task_answer(self, text: str, memories: list[MemoryItem], context: str = "") -> str:
         scope = _infer_scope(text, context)
+        if scope == "relationship_gift" and not _is_girlfriend_gift_context(text, context):
+            return _generic_gift_answer(text, memories, context)
         if scope == "relationship_gift":
             return _gift_answer(text, memories, context)
         if scope == "life_family_travel":
@@ -395,6 +445,17 @@ def _normalize_command(text: str) -> str:
     return aliases.get(command, text)
 
 
+def _is_reset_memory_command(normalized: str, lowered: str) -> bool:
+    if "reset" in lowered or "清空" in normalized or "重置" in normalized:
+        return True
+    clear_terms = ["清除", "清理", "清掉", "删掉", "删除", "忘掉"]
+    broad_targets = ["当前记忆", "所有记忆", "全部记忆", "全部的记忆", "记忆库"]
+    if any(term in normalized for term in clear_terms) and any(target in normalized for target in broad_targets):
+        return True
+    stripped = normalized.strip(" 。！？!?")
+    return stripped in {"清除记忆", "清理记忆", "清掉记忆", "删掉记忆", "删除记忆", "忘掉记忆"}
+
+
 def _strip_command_words(text: str, words: list[str]) -> str:
     result = text
     for word in words:
@@ -414,7 +475,20 @@ def _split_clauses(text: str) -> list[str]:
 
 
 def _explicit_memory_request(text: str) -> bool:
-    return any(token in text for token in ["以后", "请记住", "记住", "同意保存", "确认保存"])
+    return any(token in text for token in ["以后", "请记住", "记住", "加入这条记忆", "这条记忆", "同意保存", "确认保存"])
+
+
+def _explicit_memory_payload(text: str) -> str:
+    patterns = [
+        r"(?:加入|新增|添加|保存|记住)(?:这条)?记忆[：:，,]?[“\"](.+?)[”\"]\s*$",
+        r"(?:加入|新增|添加|保存|记住)(?:这条)?记忆[：:，,]\s*(.+)$",
+        r"(?:把|将)[“\"](.+?)[”\"](?:加入|新增|添加|保存|记住)(?:为)?记忆\s*$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip(" ：:，,。；;“”\"")
+    return ""
 
 
 def _is_memory_question(text: str) -> bool:
@@ -456,6 +530,8 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
         "以后",
         "请记住",
         "记住",
+        "加入这条记忆",
+        "这条记忆",
         "喜欢",
         "不喜欢",
         "讨厌",
@@ -498,10 +574,18 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
         "满意",
         "买过",
         "买了",
+        "已买",
+        "已经买",
         "下单",
         "确认送",
         "非首饰",
         "不送首饰",
+        "爱好",
+        "职业",
+        "程序员",
+        "养花",
+        "养金鱼",
+        "以前送过",
     ]
     if any(signal in text for signal in signals):
         return True
@@ -513,7 +597,7 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
 
 
 def _infer_scope(text: str, context: str = "") -> str:
-    if any(token in text for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友", "项链", "玫瑰金", "首饰", "手链", "银色", "耳钉"]) or _is_relationship_context(context):
+    if _is_gift_context(text, context):
         return "relationship_gift"
     if any(token in text for token in ["家庭", "亲子", "旅行", "行程", "路线", "半日游", "动物", "网红", "父亲"]):
         return "life_family_travel"
@@ -527,6 +611,8 @@ def _infer_scope(text: str, context: str = "") -> str:
 
 
 def _infer_memory_type(text: str, scope: str) -> str:
+    if _looks_like_purchase_history(text) or any(token in text for token in ["已经送", "已送", "送过", "送了"]):
+        return HISTORY
     if scope == "work_report" and any(token in text for token in ["只用于", "仅用于", "不要", "不用", "不能"]):
         return CONSTRAINT
     if scope == "work_report" and any(token in text for token in ["表格", "风险", "负责人", "下一步", "3 条结论", "3条结论"]):
@@ -616,7 +702,56 @@ def _infer_validity(text: str, memory_type: str) -> dict[str, str]:
     return {"time_scope": "long_term"}
 
 
+def _looks_like_purchase_history(text: str) -> bool:
+    return any(token in text for token in ["已经买过", "已买过", "买过", "已经买了", "已买了", "买了", "已入", "下单"])
+
+
+def _dominant_gift_recipient(memories: list[MemoryItem]) -> tuple[str, str] | None:
+    counts: dict[str, int] = {}
+    labels: dict[str, str] = {}
+    for memory in memories:
+        if memory.scope != "relationship_gift":
+            continue
+        key = memory.target if memory.target and memory.target not in {"assistant"} else memory.subject
+        if key not in {"girlfriend", "husband", "wife", "mother", "father", "child", "friend", "colleague"}:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+        labels[key] = _gift_recipient_label_for_key(key)
+    if not counts:
+        return None
+    ordered = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+    if len(ordered) > 1 and ordered[0][1] == ordered[1][1]:
+        return None
+    key = ordered[0][0]
+    return labels[key], key
+
+
+def _gift_recipient_label_for_key(key: str) -> str:
+    return {
+        "girlfriend": "女朋友",
+        "husband": "老公",
+        "wife": "老婆",
+        "mother": "妈妈",
+        "father": "爸爸",
+        "child": "孩子",
+        "friend": "朋友",
+        "colleague": "同事",
+    }.get(key, "收礼人")
+
+
 def _relationship_memory_content(content: str, context: str) -> str:
+    if not _is_girlfriend_gift_context(content, context):
+        recipient_label, _ = _gift_recipient(content, context)
+        budget = _extract_budget(content)
+        if budget:
+            return f"给{recipient_label}选礼物预算在 {budget}"
+        interests = _extract_gift_interests(content)
+        if interests:
+            return f"{recipient_label}的礼物偏好/背景：{interests}"
+        previous = _extract_previous_gifts(content)
+        if previous:
+            return f"以前送过{recipient_label}{previous}"
+        return content
     if "预算" in content:
         budget = _extract_budget(content)
         if "喜欢紫色" in content or "紫色" in content:
@@ -636,6 +771,86 @@ def _relationship_memory_content(content: str, context: str) -> str:
     if "前女友" in content:
         return f"给女朋友选礼物需避开前女友相关物品：{content}"
     return content
+
+
+def _generic_gift_candidates(text: str, context: str = "", evidence_text: str | None = None) -> list[MemoryItem]:
+    recipient_label, recipient_key = _gift_recipient(text, context)
+    evidence = evidence_text or text
+    candidates: list[MemoryItem] = []
+    budget = _extract_budget(text)
+    if budget:
+        candidates.append(
+            MemoryItem(
+                CONSTRAINT,
+                f"给{recipient_label}选礼物预算在 {budget}",
+                scope="relationship_gift",
+                subject="user",
+                target=recipient_key,
+                object=budget,
+                predicate="budget_limit",
+                source="chat_feedback",
+                evidence=[evidence],
+                applies_when=["relationship_gift"],
+                tags=["礼物", "预算", recipient_label],
+                validity={"time_scope": "current_task"},
+            )
+        )
+    interests = _extract_gift_interests(text)
+    if interests:
+        candidates.append(
+            MemoryItem(
+                PREFERENCE,
+                f"{recipient_label}的礼物偏好/背景：{interests}",
+                scope="relationship_gift",
+                subject=recipient_key,
+                target="",
+                object=interests,
+                predicate="likes",
+                source="chat_feedback",
+                evidence=[evidence],
+                applies_when=["relationship_gift"],
+                tags=["礼物", recipient_label, *_keywords(text)],
+                validity={"time_scope": "long_term"},
+            )
+        )
+    previous = _extract_previous_gifts(text)
+    if previous:
+        candidates.append(
+            MemoryItem(
+                HISTORY,
+                f"以前送过{recipient_label}{previous}",
+                scope="relationship_gift",
+                subject="user",
+                target=recipient_key,
+                object=previous,
+                predicate="gave",
+                source="chat_feedback",
+                evidence=[evidence],
+                applies_when=["relationship_gift"],
+                tags=["礼物", "送过", recipient_label],
+                validity={"time_scope": "past"},
+            )
+        )
+    selected = _extract_selected_gift_items(text)
+    if selected and selected not in previous:
+        bought = _looks_like_purchase_history(text) or any(token in text for token in ["付款", "已买"])
+        candidates.append(
+            MemoryItem(
+                HISTORY if bought else DECISION,
+                f"{'已经给' if bought else '本次给'}{recipient_label}{'买过' if '买过' in text else ('买了' if bought else '选定')}{selected}",
+                scope="relationship_gift",
+                subject="user",
+                target=recipient_key,
+                object=selected,
+                predicate="gave" if bought else "selected",
+                source="chat_feedback",
+                evidence=[evidence],
+                applies_when=["relationship_gift"],
+                tags=["礼物", "买了" if bought else "选定", recipient_label],
+                validity={"time_scope": "past" if bought else "current_task"},
+            )
+        )
+    return candidates
 
 
 def _relationship_candidates(text: str, context: str, scope: str) -> list[MemoryItem]:
@@ -888,14 +1103,46 @@ def _relationship_candidates(text: str, context: str, scope: str) -> list[Memory
 
 
 def _extract_budget(text: str) -> str:
-    for marker in ["1000", "一千"]:
-        if marker in text:
-            return "1000 元以内"
+    if not _has_budget_marker(text):
+        return ""
+    if "千元" in text or "千元左右" in text or "1000 元左右" in text or "1000元左右" in text:
+        return "1000 元左右"
+    if "剩下的预算" in text and len(re.findall(r"\d{2,5}", text)) >= 2:
+        return ""
+    if len(re.findall(r"\d{2,5}", text)) >= 2 and any(token in text for token in ["来一只", "再来", "已经买", "买了", "下单", "付款"]):
+        return ""
+    match = _standalone_budget_match(text)
+    if match:
+        suffix = match.group(2) or "左右"
+        return f"{match.group(1)} 元{suffix}"
+    match = _embedded_budget_match(text)
+    if match:
+        return f"{match.group(1)} 元{match.group(2)}"
+    match = re.search(r"预算(?:在|是)?\s*(\d{2,5})\s*(?:元|块)?\s*(左右|以内)?", text)
+    if match:
+        suffix = match.group(2) or "左右"
+        return f"{match.group(1)} 元{suffix}"
+    match = re.search(r"(?:控制在|不超过|以内|上限)\s*(\d{2,5})\s*(?:元|块)?\s*(左右|以内)?", text)
+    if match:
+        suffix = match.group(2) or "以内"
+        return f"{match.group(1)} 元{suffix}"
+    if "一千" in text:
+        return "1000 元左右" if "左右" in text else "1000 元以内"
     return ""
 
 
 def _extract_gift_object(text: str) -> str:
     candidates = [
+        "智能阳台养护套装",
+        "全光谱植物补光灯",
+        "温湿度光照记录仪",
+        "鱼缸水质监测仪",
+        "始祖鸟的双肩背包",
+        "始祖鸟双肩背包",
+        "始祖鸟的防晒服",
+        "始祖鸟防晒服",
+        "双肩背包",
+        "防晒服",
         "银色手链",
         "玫瑰金耳钉",
         "紫色真丝小方巾",
@@ -929,6 +1176,16 @@ def _extract_recommended_gift(text: str) -> str:
 
 
 def _normalize_gift_object(text: str) -> str:
+    if "阳台" in text and "养护" in text:
+        return "智能阳台养护套装"
+    if "补光灯" in text:
+        return "全光谱植物补光灯"
+    if "水质" in text and "监测" in text:
+        return "鱼缸水质监测仪"
+    if "始祖鸟" in text and "背包" in text:
+        return "始祖鸟双肩背包"
+    if "始祖鸟" in text and "防晒服" in text:
+        return "始祖鸟防晒服"
     if "银色" in text and "手链" in text:
         return "银色手链"
     if "玫瑰金" in text and "耳钉" in text:
@@ -1000,6 +1257,222 @@ def _is_gift_rejection(text: str) -> bool:
 
 def _is_relationship_context(context: str) -> bool:
     return any(token in context for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"])
+
+
+def _has_budget_marker(text: str) -> bool:
+    return (
+        any(token in text for token in ["预算", "控制在", "不超过", "上限", "千元"])
+        or bool(re.search(r"\d{2,5}\s*(?:元|块)?\s*以内", text))
+        or _standalone_budget_match(text) is not None
+        or _embedded_budget_match(text) is not None
+    )
+
+
+def _standalone_budget_match(text: str) -> re.Match[str] | None:
+    return re.fullmatch(r"\s*(\d{2,5})\s*(?:元|块)?\s*(左右|以内)?的?[。.]?\s*", text)
+
+
+def _embedded_budget_match(text: str) -> re.Match[str] | None:
+    return re.search(r"(?<!\d)(\d{3,5})\s*(?:元|块)?\s*(左右|以内)(?!\d)", text)
+
+
+def _has_explicit_recipient(text: str) -> bool:
+    return _gift_recipient_from_text(text) is not None
+
+
+def _looks_like_non_gift_domain(text: str) -> bool:
+    domain_terms = [
+        "家庭",
+        "亲子",
+        "旅行",
+        "行程",
+        "路线",
+        "半日游",
+        "老板",
+        "周报",
+        "项目",
+        "学习",
+        "复习",
+        "文献",
+        "综述",
+        "研究",
+    ]
+    return any(term in text for term in domain_terms) and not any(term in text for term in ["礼物", "送礼", "送什么", "生日礼物"])
+
+
+def _is_gift_context(text: str, context: str = "") -> bool:
+    explicit_gift_signal = any(token in text for token in ["礼物", "送礼", "送什么", "生日礼物"])
+    gift_action_signal = any(token in text for token in ["以前送过", "之前送过", "已经送", "送过", "下单", "确认送"])
+    gift_item_signal = any(token in text for token in ["项链", "手链", "耳钉", "首饰", "香氛", "香水", "方巾", "背包", "防晒服"])
+    relation_signal = _has_explicit_recipient(text)
+    interest_signal = any(token in text for token in ["程序员", "阳台", "养花", "蝴蝶兰", "鹿角蕨", "金鱼", "摄影", "咖啡", "露营", "跑步", "游戏"])
+    if _looks_like_non_gift_domain(text) and not (explicit_gift_signal or gift_action_signal):
+        return False
+    if explicit_gift_signal or gift_action_signal:
+        return True
+    if relation_signal and (gift_item_signal or interest_signal) and not _looks_like_non_gift_domain(text):
+        return True
+    if _is_relationship_context(context) and not _has_explicit_recipient(text):
+        continuation_signal = _has_budget_marker(text) or gift_item_signal or interest_signal or any(
+            token in text for token in ["喜欢", "满意", "就这个", "换一个", "不要这个", "选过", "送过", "已经买", "买了"]
+        )
+        return continuation_signal
+    return False
+
+
+def _is_girlfriend_gift_context(text: str, context: str = "") -> bool:
+    explicit = _gift_recipient_from_text(text)
+    if explicit:
+        return explicit[1] == "girlfriend"
+    if any(token in text for token in ["闺蜜", "前女友"]):
+        return True
+    return any(token in context for token in ["女朋友", "闺蜜", "前女友"])
+
+
+def _gift_recipient(text: str, context: str = "") -> tuple[str, str]:
+    explicit = _gift_recipient_from_text(text)
+    if explicit:
+        return explicit
+    contextual = _gift_recipient_from_text(context)
+    if contextual:
+        return contextual
+    return "收礼人", "recipient"
+
+
+def _gift_recipient_from_text(text: str) -> tuple[str, str] | None:
+    recipients = [
+        ("女朋友", "girlfriend"),
+        ("老公", "husband"),
+        ("丈夫", "husband"),
+        ("先生", "husband"),
+        ("老婆", "wife"),
+        ("妻子", "wife"),
+        ("妈妈", "mother"),
+        ("母亲", "mother"),
+        ("爸爸", "father"),
+        ("父亲", "father"),
+        ("孩子", "child"),
+        ("朋友", "friend"),
+        ("同事", "colleague"),
+    ]
+    for label, key in recipients:
+        if label in text:
+            normalized = "老公" if key == "husband" else ("老婆" if key == "wife" else label)
+            return normalized, key
+    return None
+
+
+def _gift_profile_text(text: str, memories: list[MemoryItem], context: str = "") -> str:
+    recipient_label, recipient_key = _gift_recipient(text, context)
+    relevant = [
+        memory.content
+        for memory in memories
+        if memory.scope != "relationship_gift" or _memory_matches_gift_recipient(memory, recipient_label, recipient_key)
+    ]
+    context_part = context if not _has_explicit_recipient(text) else ""
+    return text + "\n" + context_part + "\n" + "\n".join(relevant)
+
+
+def _memory_matches_gift_recipient(memory: MemoryItem, recipient_label: str, recipient_key: str) -> bool:
+    if recipient_key == "recipient":
+        return True
+    haystack = " ".join([memory.content, memory.subject, memory.target, memory.object, *memory.tags])
+    if memory.target == recipient_key or memory.subject == recipient_key:
+        return True
+    if recipient_key in haystack or recipient_label in haystack:
+        return True
+    recipient_labels = {
+        "girlfriend": ["女朋友"],
+        "husband": ["老公", "丈夫", "先生"],
+        "wife": ["老婆", "妻子"],
+        "mother": ["妈妈", "母亲"],
+        "father": ["爸爸", "父亲"],
+        "child": ["孩子"],
+        "friend": ["朋友"],
+        "colleague": ["同事"],
+    }
+    other_labels = [label for key, labels in recipient_labels.items() if key != recipient_key for label in labels]
+    return not any(label in haystack for label in other_labels)
+
+
+def _extract_previous_gifts(text: str) -> str:
+    if not any(token in text for token in ["以前送过", "之前送过", "送过", "已经送", "送了", "买过", "以前买过", "之前买过"]):
+        return ""
+    gifts = []
+    known = [
+        "始祖鸟双肩背包",
+        "始祖鸟的双肩背包",
+        "始祖鸟防晒服",
+        "始祖鸟的防晒服",
+        "双肩背包",
+        "防晒服",
+        "杯子",
+        "玫瑰金项链",
+        "银色手链",
+        "小众香氛礼盒",
+    ]
+    for gift in known:
+        if gift in text:
+            normalized = gift.replace("的", "")
+            if normalized == "双肩背包" and "始祖鸟双肩背包" in gifts:
+                continue
+            if normalized == "防晒服" and "始祖鸟防晒服" in gifts:
+                continue
+            if normalized not in gifts:
+                gifts.append(normalized)
+    return "、".join(gifts)
+
+
+def _extract_selected_gift_items(text: str) -> str:
+    if not any(token in text for token in ["已经买", "买过", "买了", "已买", "已入", "下单", "付款", "来一只", "再来一个", "再来一"]):
+        return ""
+    cleaned = text.replace("你记一下", "").replace("再想想剩下的预算", "")
+    patterns = [
+        r"(?:已经买过|已买过|买过|已经买了|已买了|买了|已入|下单了?)([^，。,；;]+)",
+        r"来一只([^，。,；;]+?)(?:\s+\d{2,5}|，|,|。|$)",
+        r"再来一个([^，。,；;]+?)(?:\s+\d{2,5}|，|,|。|$)",
+        r"再来一(?:个|只)([^，。,；;]+?)(?:\s+\d{2,5}|，|,|。|$)",
+    ]
+    items = []
+    for pattern in patterns:
+        for match in re.finditer(pattern, cleaned):
+            item = _clean_gift_item_name(match.group(1))
+            if item and item not in items:
+                items.append(item)
+    return "、".join(items)
+
+
+def _clean_gift_item_name(text: str) -> str:
+    item = re.sub(r"\s*\d{2,5}\s*(?:元|块)?\s*", "", text)
+    item = item.strip(" ：:，,。；; 了“”\"")
+    item = item.replace("日本", "").strip()
+    item = re.sub(r"\s*(?:和|以及|、)\s*", "、", item).strip("、")
+    if len(item) < 2 or any(token in item for token in ["预算", "剩下", "想想"]):
+        return ""
+    return item
+
+
+def _extract_gift_interests(text: str) -> str:
+    interests = []
+    checks = [
+        ("程序员", "程序员"),
+        ("阳台", "阳台养花"),
+        ("养花", "阳台养花"),
+        ("蝴蝶兰", "蝴蝶兰"),
+        ("鹿角蕨", "鹿角蕨"),
+        ("金鱼", "养金鱼"),
+        ("摄影", "摄影"),
+        ("咖啡", "咖啡"),
+        ("露营", "露营"),
+        ("跑步", "跑步"),
+        ("游戏", "游戏"),
+        ("玫瑰金", "玫瑰金"),
+        ("紫色", "紫色"),
+    ]
+    for token, label in checks:
+        if token in text and label not in interests:
+            interests.append(label)
+    return "、".join(interests)
 
 
 def _keywords(text: str) -> list[str]:
@@ -1114,9 +1587,57 @@ def _gift_answer(text: str, memories: list[MemoryItem], context: str = "") -> st
     if likes_purple:
         return "推荐：紫色真丝小方巾。\n理由：它直接匹配她的颜色偏好，且作为日常配饰比较实用。"
     if memories:
-        item = "真丝小方巾" if avoid_scent else "小众香氛礼盒"
+        item = "体验型礼物" if avoid_scent else "高频使用、低尺码风险的实用礼物"
         return f"推荐：{item}。\n理由：当前记忆不足以支持更细的颜色或材质偏好，这个默认方向更稳，也方便后续按禁忌过滤。"
-    return "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。"
+    return "推荐：高频使用、低尺码风险的实用礼物方向。\n理由：在还没有预算、偏好和已送清单前，先避开强气味、尺码、材质偏好很重的品类；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。"
+
+
+def _generic_gift_answer(text: str, memories: list[MemoryItem], context: str = "") -> str:
+    answer_text = _explicit_memory_payload(text) or text
+    recipient_label, _ = _gift_recipient(answer_text, context)
+    selected = _extract_selected_gift_items(answer_text)
+    if selected and any(token in answer_text for token in ["已经买", "买过", "买了", "已买", "已入", "下单", "付款"]):
+        return f"已记录：这次已经给{recipient_label}买了{selected}。后续继续凑预算或做补充礼物时，我会避开重复购买。"
+    if selected:
+        return f"当前已选：{selected}。我会按这些已选项继续帮你核算剩余预算和补充搭配。"
+    profile = _gift_profile_text(answer_text, memories, context)
+    budget = _extract_budget(profile) or "预算内"
+    interests = _extract_gift_interests(profile)
+    previous = _extract_previous_gifts(profile)
+
+    if any(token in profile for token in ["阳台", "养花", "蝴蝶兰", "鹿角蕨"]):
+        reasons = []
+        if "程序员" in profile:
+            reasons.append("有可调参数和可观察数据，贴合程序员喜欢优化系统的特点")
+        reasons.append("能直接服务阳台植物，尤其适合蝴蝶兰、鹿角蕨这类对光照和湿度敏感的植物")
+        if "金鱼" in profile:
+            reasons.append("比鱼缸设备更少依赖现有鱼缸尺寸、过滤和水体条件，踩坑概率更低")
+        if previous:
+            reasons.append(f"和以前送过的{previous}拉开品类，不重复")
+        reasons.append(f"{budget}可以买到质感不错的一套")
+        return "推荐：智能阳台养护套装（全光谱植物补光灯 + 温湿度/光照记录仪）。\n理由：" + "；".join(reasons) + "。"
+
+    if "金鱼" in profile:
+        return (
+            "推荐：鱼缸水质监测仪。\n"
+            f"理由：它直接服务养金鱼这个爱好，偏实用也有数据感；{budget}可选到稳定款。下单前最好确认鱼缸大小和是否已有类似设备。"
+        )
+
+    if "程序员" in profile:
+        suffix = f"；也和以前送过的{previous}不重复" if previous else ""
+        return (
+            "推荐：高质量桌面人体工学小件，例如可编程旋钮控制器或显示器挂灯。\n"
+            f"理由：它贴合程序员日常使用场景，实用、低炫技，{budget}好控制{suffix}。"
+        )
+
+    if interests:
+        suffix = f"；避开以前送过的{previous}" if previous else ""
+        return f"推荐：围绕{interests}选一个能直接投入使用的升级配件。\n理由：它贴合{recipient_label}已有兴趣，{budget}好控制{suffix}。"
+
+    return (
+        f"推荐：先选一件高频使用、低尺码风险的实用礼物。\n"
+        f"理由：当前只知道要给{recipient_label}选礼物，缺少稳定爱好和禁忌；这种方向比香氛、饰品这类强偏好品类更稳。"
+    )
 
 
 def _avoided_gift_objects(memories: list[MemoryItem]) -> str:

@@ -98,7 +98,7 @@ python3 scripts/verify_eval.py
 
 ## Optional External LLM Judge
 
-Both the workbench Agent Chat and eval judge can use Mimo through an OpenAI-compatible chat endpoint.
+Both the workbench Agent Chat and eval judge can use Mimo or DeepSeek through OpenAI-compatible chat endpoints.
 
 ```bash
 cp .env.example .env
@@ -111,6 +111,12 @@ MIMO_API_KEY=...
 MIMO_BASE_URL=https://api.mimo.chat/v1
 MIMO_MODEL=mimo-v1
 MIMO_TIMEOUT=60
+
+DEEPSEEK_API_KEY=...
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_FLASH_MODEL=deepseek-v4-flash
+DEEPSEEK_PRO_MODEL=deepseek-v4-pro
+DEEPSEEK_TIMEOUT=60
 ```
 
 Run with the default `.env`:
@@ -118,6 +124,8 @@ Run with the default `.env`:
 ```bash
 python3 -m evalharness.cli serve --port 8787 --agent mimo
 python3 -m evalharness.cli run --agent mimo --judge mimo
+python3 -m evalharness.cli serve --port 8787 --agent deepseek-flash
+python3 -m evalharness.cli run --agent deepseek-pro --judge deepseek-pro
 ```
 
 Or pass a custom env file:
@@ -128,9 +136,11 @@ python3 -m evalharness.cli --env-file .env.local run --agent mimo --judge mimo
 
 Defaults:
 
-- no Mimo env: local deterministic agent plus offline trace judge
+- no LLM env: local deterministic agent plus offline trace judge
 - `--agent mimo`: run memory tools first, then ask Mimo to produce the final assistant wording from the tool trace
 - `--judge mimo`: ask Mimo to score the case trace against the six competition dimensions
+- `--agent deepseek-flash` / `--agent deepseek-pro`: run memory tools first, then ask the selected DeepSeek model to produce the final assistant wording
+- `--judge deepseek-flash` / `--judge deepseek-pro`: ask the selected DeepSeek model to score the case trace
 
 Set `EVALHARNESS_JUDGE_CMD` to a command that reads case-run JSON from stdin and returns score JSON:
 

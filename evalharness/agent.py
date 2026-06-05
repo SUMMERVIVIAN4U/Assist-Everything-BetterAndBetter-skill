@@ -5,7 +5,7 @@ import os
 import subprocess
 from typing import Any
 
-from .llm import MimoClient, MimoConfig, mimo_configured
+from .llm import OpenAICompatibleClient, build_llm_client, llm_configured, provider_configured, provider_env_key
 from .intent import classify_confirmation_intent, should_classify_confirmation
 from .schemas import HarnessSession, Message, TurnTrace
 from .soul import load_soul_prompt
@@ -22,7 +22,7 @@ class HarnessAgent:
         name: str = "assist-agent",
         toolbox: MemoryToolbox | None = None,
         llm_mode: str = "auto",
-        llm_client: MimoClient | None = None,
+        llm_client: OpenAICompatibleClient | None = None,
         memory_dir: str | None = None,
         persist_memory: bool | None = None,
     ) -> None:
@@ -41,7 +41,14 @@ class HarnessAgent:
         if semantic_actions:
             response.memory_actions.extend(semantic_actions)
         if not _authoritative_memory_operation(call):
-            response.text = self._maybe_llm_rewrite(user_text, stage, response.text, response.applied_memories, rewrite_context)
+            response.text = self._maybe_llm_rewrite(
+                user_text,
+                stage,
+                response.text,
+                response.applied_memories,
+                response.memory_actions,
+                rewrite_context,
+            )
 
         user = Message(role="user", content=user_text)
         assistant = Message(role="assistant", content=response.text)
@@ -70,11 +77,12 @@ class HarnessAgent:
         stage: str,
         draft: str,
         applied_memories: list[str],
+        memory_actions: list[dict[str, Any]],
         context: str,
     ) -> str:
-        if not self._use_mimo():
+        if not self._use_remote_llm():
             return draft
-        client = self.llm_client or _workbench_mimo_client()
+        client = self.llm_client or _workbench_llm_client(self.llm_mode)
         snapshot = self.toolbox.snapshot()
         soul = load_soul_prompt()
         messages = [
@@ -90,6 +98,8 @@ class HarnessAgent:
                         "user_message": user_text,
                         "conversation_context": context,
                         "tool_draft": draft,
+                        "memory_actions": memory_actions,
+                        "can_claim_memory_saved": bool(memory_actions),
                         "applied_memory_ids": applied_memories,
                         "memory_snapshot": snapshot,
                     },
@@ -98,7 +108,10 @@ class HarnessAgent:
             },
         ]
         try:
-            return client.chat(messages, temperature=0.3).strip()
+            rewritten = client.chat(messages, temperature=0.3).strip()
+            if not memory_actions and _claims_memory_saved(rewritten):
+                return draft
+            return rewritten
         except Exception as exc:
             return f"{draft}\n\n远端 LLM 改写超时或失败，已回退到本地工具草稿：{exc}"
 
@@ -106,20 +119,22 @@ class HarnessAgent:
         messages = self.session.messages if include_pre_reset else self.session.messages[self._context_start_index :]
         return "\n".join(f"{message.role}: {message.content}" for message in messages[-8:])
 
-    def _use_mimo(self) -> bool:
-        if self.llm_mode == "mimo":
-            return True
+    def _use_remote_llm(self) -> bool:
         if self.llm_mode == "local":
             return False
-        return mimo_configured()
+        if self.llm_mode == "auto":
+            return llm_configured()
+        return provider_configured(self.llm_mode)
 
     def _maybe_classify_confirmation(self, user_text: str, context: str, response: dict[str, Any]) -> list[dict[str, Any]]:
+        if "女朋友" not in f"{user_text}\n{context}":
+            return []
         actions = response.get("memory_actions", [])
         if any(action.get("detail", "").startswith("本次给女朋友的礼物已选定为") for action in actions):
             return []
         if not should_classify_confirmation(user_text, context):
             return []
-        client = self.llm_client or (_workbench_mimo_client() if self._use_mimo() else None)
+        client = self.llm_client or (_workbench_llm_client(self.llm_mode) if self._use_remote_llm() else None)
         intent = classify_confirmation_intent(user_text, context, client=client)
         if not intent.is_confirmation:
             return []
@@ -162,10 +177,15 @@ class HarnessAgent:
         return created
 
 
-def _workbench_mimo_client() -> MimoClient:
-    config = MimoConfig.from_env()
-    timeout = float(os.getenv("EVALHARNESS_AGENT_MIMO_TIMEOUT", os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120")))
-    return MimoClient(MimoConfig(config.api_key, config.base_url, config.model, timeout))
+def _workbench_llm_client(mode: str) -> OpenAICompatibleClient:
+    provider = provider_env_key(mode)
+    timeout = float(
+        os.getenv(
+            f"EVALHARNESS_AGENT_{provider}_TIMEOUT",
+            os.getenv(f"EVALHARNESS_{provider}_TIMEOUT", os.getenv("EVALHARNESS_AGENT_TIMEOUT", "120")),
+        )
+    )
+    return build_llm_client(mode, timeout=timeout)
 
 
 def _system_prompt(soul: str) -> str:
@@ -173,6 +193,8 @@ def _system_prompt(soul: str) -> str:
         "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
         "记忆工具已经完成提取、更新、删除和检索。"
         "必须尊重 tool_draft 和 memory_snapshot，不要虚构或使用 deleted/superseded 记忆。"
+        "只有 memory_actions 非空时，才允许说“记住了”“记下了”“已保存”等保存承诺；"
+        "如果 memory_actions 为空，绝不能声称本轮写入了记忆。"
         "注意主体归属：如果上下文是在给女朋友选礼物，预算通常是用户的送礼预算，"
         "颜色/喜好通常归属女朋友，不要误写成用户本人喜欢。"
         "默认用中文短答，像正常人说话；不要主动解释记忆工具和推理链路。"
@@ -195,6 +217,10 @@ def _authoritative_memory_operation(call: Any) -> bool:
     if getattr(call, "name", "") in {"reset_memory", "show_memory", "manage_memory"}:
         return True
     return any(action.get("action") in {"reset", "delete", "downgrade", "archive"} for action in _memory_actions_from_call(call))
+
+
+def _claims_memory_saved(text: str) -> bool:
+    return any(token in text for token in ["记住了", "记下了", "记好了", "已保存", "我记住", "我记下"])
 
 
 class ExternalCommandAgent:

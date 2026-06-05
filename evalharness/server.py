@@ -8,7 +8,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from assist_everything_betterandbetter_skill.cases import DIMENSIONS
 
@@ -16,7 +16,7 @@ from .agent import HarnessAgent
 from .ab import run_current_chat_ab, run_gift_ab_script
 from .evaluation import build_report, evaluate_case_run, save_report, with_history
 from .judge import score_with_fallback
-from .llm import MimoConfig
+from .llm import build_llm_config
 from .runner import run_all
 
 LATEST = Path("eval/output/latest/eval_report.json")
@@ -35,7 +35,8 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "EvalHarnessWorkbench/1.0"
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if path == "/":
             self._send_html(APP_HTML)
         elif path == "/api/config":
@@ -49,7 +50,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/health":
             self._send_json({"ok": True})
         elif path == "/api/llm-health":
-            self._send_json(_llm_health())
+            query = parse_qs(parsed.query)
+            self._send_json(_llm_health(query.get("provider", [STATE.agent_mode])[0]))
         else:
             self.send_error(404)
 
@@ -178,10 +180,10 @@ def _settings_payload() -> dict[str, Any]:
     }
 
 
-def _llm_health() -> dict[str, Any]:
+def _llm_health(provider_mode: str = "auto") -> dict[str, Any]:
     started = time.perf_counter()
     try:
-        config = MimoConfig.from_env()
+        config = build_llm_config(provider_mode)
     except Exception as exc:
         return {"ok": False, "stage": "config", "error": str(exc)}
     parsed = urlparse(config.base_url)
@@ -189,6 +191,7 @@ def _llm_health() -> dict[str, Any]:
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     result: dict[str, Any] = {
         "ok": False,
+        "provider": config.provider,
         "base_url": config.base_url,
         "model": config.model,
         "host": host,
@@ -437,10 +440,10 @@ LEGACY_APP_HTML = r"""<!doctype html>
       <div class="muted">真实工作台：跑 case、看 trace、看 judge 分、直接和 agent harness 对话</div>
     </div>
     <div>
-      <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option><option value="auto">auto agent</option></select>
-    <select id="judge"><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option><option value="auto">auto judge</option></select>
+      <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option><option value="deepseek-flash">DeepSeek V4 Flash</option><option value="deepseek-pro">DeepSeek V4 Pro</option><option value="auto">auto agent</option></select>
+    <select id="judge"><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="deepseek-flash">DeepSeek V4 Flash judge</option><option value="deepseek-pro">DeepSeek V4 Pro judge</option><option value="external">external LLM judge</option><option value="auto">auto judge</option></select>
       <button class="primary" onclick="runPresetCases()">Run Preset Cases</button>
-      <button onclick="checkMimoHealth()">Check Mimo</button>
+      <button onclick="checkMimoHealth()">Check LLM</button>
       <span id="llmHealth" class="muted"></span>
     </div>
   </header>
@@ -523,10 +526,12 @@ LEGACY_APP_HTML = r"""<!doctype html>
       const el = document.getElementById('llmHealth');
       el.textContent = 'checking...';
       try {
-        const data = await (await fetch('/api/llm-health')).json();
-        el.textContent = data.ok ? `Mimo OK · ${data.stage} · ${data.elapsed_ms}ms` : `Mimo FAIL · ${data.stage} · ${data.error}`;
+        const provider = encodeURIComponent(document.getElementById('agentMode').value);
+        const data = await (await fetch(`/api/llm-health?provider=${provider}`)).json();
+        const label = data.provider || document.getElementById('agentMode').value;
+        el.textContent = data.ok ? `${label} OK · ${data.model} · ${data.stage} · ${data.elapsed_ms}ms` : `${label} FAIL · ${data.stage} · ${data.error}`;
       } catch (err) {
-        el.textContent = `Mimo FAIL · ${err.message}`;
+        el.textContent = `LLM FAIL · ${err.message}`;
       }
     }
     async function runChatEval() {
@@ -966,9 +971,9 @@ APP_HTML = r"""<!doctype html>
       <div class="muted">当前对话、历史 eval 结果、统计和配置分开管理；Agent Chat 与 History Evals 使用同一套 eval 输出。</div>
     </div>
     <div>
-      <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option><option value="auto">auto agent</option></select>
-      <select id="judge"><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="external">external LLM judge</option><option value="auto">auto judge</option></select>
-      <button onclick="checkMimoHealth()">Check Mimo</button>
+      <select id="agentMode"><option value="local">local agent</option><option value="mimo">Mimo agent</option><option value="deepseek-flash">DeepSeek V4 Flash</option><option value="deepseek-pro">DeepSeek V4 Pro</option><option value="auto">auto agent</option></select>
+      <select id="judge"><option value="heuristic">offline judge</option><option value="mimo">Mimo judge</option><option value="deepseek-flash">DeepSeek V4 Flash judge</option><option value="deepseek-pro">DeepSeek V4 Pro judge</option><option value="external">external LLM judge</option><option value="auto">auto judge</option></select>
+      <button onclick="checkMimoHealth()">Check LLM</button>
       <span id="llmHealth" class="muted"></span>
     </div>
   </header>
@@ -1066,10 +1071,12 @@ APP_HTML = r"""<!doctype html>
       const el = document.getElementById('llmHealth');
       el.textContent = 'checking...';
       try {
-        const data = await (await fetch('/api/llm-health')).json();
-        el.textContent = data.ok ? `Mimo OK · ${data.stage} · ${data.elapsed_ms}ms` : `Mimo FAIL · ${data.stage} · ${data.error}`;
+        const provider = encodeURIComponent(document.getElementById('agentMode').value);
+        const data = await (await fetch(`/api/llm-health?provider=${provider}`)).json();
+        const label = data.provider || document.getElementById('agentMode').value;
+        el.textContent = data.ok ? `${label} OK · ${data.model} · ${data.stage} · ${data.elapsed_ms}ms` : `${label} FAIL · ${data.stage} · ${data.error}`;
       } catch (err) {
-        el.textContent = `Mimo FAIL · ${err.message}`;
+        el.textContent = `LLM FAIL · ${err.message}`;
       }
     }
     async function sendChat() {

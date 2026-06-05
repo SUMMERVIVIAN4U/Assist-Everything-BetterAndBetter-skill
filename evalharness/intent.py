@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 
-from .llm import MimoClient, mimo_configured
+from .llm import OpenAICompatibleClient, build_llm_client, llm_configured
 
 
 @dataclass(frozen=True)
@@ -27,13 +27,13 @@ def classify_confirmation_intent(
     text: str,
     context: str,
     *,
-    client: MimoClient | None = None,
+    client: OpenAICompatibleClient | None = None,
 ) -> ConfirmationIntent:
     if not should_classify_confirmation(text, context):
         return ConfirmationIntent(False, reason="no_confirmation_candidate")
-    if client is not None or mimo_configured():
+    if client is not None or llm_configured():
         try:
-            return _classify_with_llm(text, context, client or MimoClient())
+            return _classify_with_llm(text, context, client or build_llm_client("auto"))
         except Exception as exc:
             fallback = _fallback_confirmation(text, context)
             return ConfirmationIntent(
@@ -46,7 +46,7 @@ def classify_confirmation_intent(
     return _fallback_confirmation(text, context)
 
 
-def _classify_with_llm(text: str, context: str, client: MimoClient) -> ConfirmationIntent:
+def _classify_with_llm(text: str, context: str, client: OpenAICompatibleClient) -> ConfirmationIntent:
     data = client.json_chat(
         [
             {
