@@ -24,6 +24,7 @@ class SkillResponse:
     memory_actions: list[dict[str, Any]]
     applied_memories: list[str]
     asks: list[str]
+    relevant_memory_pack: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -31,7 +32,15 @@ class SkillResponse:
             "memory_actions": self.memory_actions,
             "applied_memories": self.applied_memories,
             "asks": self.asks,
+            "relevant_memory_pack": self.relevant_memory_pack or {},
         }
+
+
+@dataclass
+class ScoredMemory:
+    item: MemoryItem
+    score: float
+    reasons: list[str]
 
 
 class AssistSkill:
@@ -55,11 +64,13 @@ class AssistSkill:
             return command
 
         actions = self._apply_updates(text, context)
-        relevant = self.retrieve_relevant_memories(text, context)
+        scored = self.score_relevant_memories(text, context)
+        relevant = [entry.item for entry in scored]
+        memory_pack = _relevant_memory_pack(text, context, scored)
         asks = self._suggest_followups(text, relevant, context)
         response_text = self.compose_response(text, relevant, actions, asks, context)
         actions.extend(self._record_assistant_candidate(response_text, text, context))
-        return SkillResponse(response_text, actions, [item.id for item in relevant], asks)
+        return SkillResponse(response_text, actions, [item.id for item in relevant], asks, memory_pack)
 
     def reset_memory(self) -> SkillResponse:
         event = self.memory.reset()
@@ -84,8 +95,13 @@ class AssistSkill:
         return SkillResponse("未识别到记忆管理命令。支持 reset/show/find/delete/downgrade/archive。", [], [], [])
 
     def retrieve_relevant_memories(self, text: str, context: str = "") -> list[MemoryItem]:
+        return [entry.item for entry in self.score_relevant_memories(text, context)]
+
+    def score_relevant_memories(self, text: str, context: str = "", top_k: int | None = None) -> list[ScoredMemory]:
         scope = _infer_scope(text, context)
         terms = [term for term in _keywords(text) if term not in {"礼物"}]
+        if top_k is None:
+            top_k = _memory_top_k()
         gift_recipient_label = ""
         gift_recipient_key = ""
         if scope == "relationship_gift":
@@ -96,8 +112,10 @@ class AssistSkill:
             else:
                 scoped_terms = [term for term in terms if f"{term}不适用" in text or f"{term} 不适用" in text]
                 terms = scoped_terms or terms
-        relevant: list[MemoryItem] = []
-        for item in self.memory.active():
+        scored: list[ScoredMemory] = []
+        active = self.memory.active()
+        total = max(len(active), 1)
+        for index, item in enumerate(active):
             if _is_polluted_memory_item(item):
                 continue
             if (
@@ -106,23 +124,11 @@ class AssistSkill:
                 and not _memory_matches_gift_recipient(item, gift_recipient_label, gift_recipient_key)
             ):
                 continue
-            haystack = " ".join(
-                [
-                    item.content,
-                    item.scope,
-                    item.subject,
-                    item.target,
-                    item.object,
-                    item.predicate,
-                    *item.applies_when,
-                    *item.tags,
-                ]
-            )
-            scope_hit = scope and (scope == item.scope or scope in item.applies_when)
-            term_hit = any(term and term in haystack for term in terms)
-            if scope_hit or term_hit:
-                relevant.append(item)
-        return relevant
+            score, reasons = _score_memory_item(item, scope, terms, index, total, gift_recipient_key)
+            if score > 0:
+                scored.append(ScoredMemory(item, score, reasons))
+        scored.sort(key=lambda entry: (entry.score, entry.item.updated_at, entry.item.id), reverse=True)
+        return scored[:top_k]
 
     def compose_response(
         self,
@@ -518,11 +524,149 @@ def _is_polluted_memory_item(item: MemoryItem) -> bool:
     return False
 
 
+def _memory_top_k() -> int:
+    raw = os.getenv("ASSIST_MEMORY_TOP_K", "8")
+    try:
+        value = int(raw)
+    except ValueError:
+        return 8
+    return min(max(value, 1), 20)
+
+
+def _score_memory_item(
+    item: MemoryItem,
+    scope: str,
+    terms: list[str],
+    index: int,
+    total: int,
+    gift_recipient_key: str = "",
+) -> tuple[float, list[str]]:
+    haystack = _memory_haystack(item)
+    scope_exact = bool(scope and scope == item.scope)
+    scope_applies = bool(scope and scope in item.applies_when)
+    term_hits = sorted({term for term in terms if term and term in haystack})
+    if not scope_exact and not scope_applies and not term_hits:
+        return 0.0, []
+
+    score = 0.0
+    reasons: list[str] = []
+    if scope_exact:
+        score += 0.35
+        reasons.append("scope_exact")
+    elif scope_applies:
+        score += 0.28
+        reasons.append("scope_applies")
+
+    if term_hits:
+        score += min(0.3, 0.06 * len(term_hits))
+        reasons.append("keyword:" + "、".join(term_hits[:5]))
+
+    confidence = min(max(item.confidence, 0.0), 1.0)
+    score += 0.15 * confidence
+    reasons.append(f"confidence:{confidence:.2f}")
+
+    type_weight = {
+        CONSTRAINT: 0.12,
+        DECISION: 0.11,
+        HISTORY: 0.11,
+        WORKFLOW: 0.09,
+        PREFERENCE: 0.08,
+        CONTEXT_FACT: 0.08,
+        CANDIDATE: 0.02,
+    }.get(item.type, 0.04)
+    score += type_weight
+    reasons.append(f"type:{item.type}")
+
+    if gift_recipient_key and item.scope == "relationship_gift":
+        score += 0.14
+        reasons.append(f"recipient:{gift_recipient_key}")
+
+    time_scope = str(item.validity.get("time_scope", ""))
+    validity_weight = {
+        "current_task": 0.08,
+        "task_thread": 0.06,
+        "past": 0.05,
+        "long_term": 0.03,
+    }.get(time_scope, 0.02)
+    score += validity_weight
+    if time_scope:
+        reasons.append(f"time_scope:{time_scope}")
+
+    recency = (index + 1) / max(total, 1)
+    score += 0.1 * recency
+    reasons.append(f"recency:{recency:.2f}")
+
+    if item.type == CANDIDATE:
+        score -= 0.05
+        reasons.append("candidate_downrank")
+
+    return round(max(0.0, min(score, 1.0)), 3), reasons
+
+
+def _memory_haystack(item: MemoryItem) -> str:
+    return " ".join(
+        [
+            item.content,
+            item.scope,
+            item.subject,
+            item.target,
+            item.object,
+            item.predicate,
+            *item.applies_when,
+            *item.tags,
+        ]
+    )
+
+
+def _relevant_memory_pack(text: str, context: str, scored: list[ScoredMemory]) -> dict[str, Any]:
+    scope = _infer_scope(text, context)
+    top_k = _memory_top_k()
+    entries = []
+    for rank, entry in enumerate(scored, start=1):
+        item = entry.item
+        entries.append(
+            {
+                "rank": rank,
+                "id": item.id,
+                "score": entry.score,
+                "reasons": entry.reasons,
+                "type": item.type,
+                "scope": item.scope,
+                "subject": item.subject,
+                "target": item.target,
+                "object": item.object,
+                "predicate": item.predicate,
+                "content": item.content,
+                "confidence": item.confidence,
+                "validity": item.validity,
+                "updated_at": item.updated_at,
+            }
+        )
+    return {
+        "query": {
+            "scope": scope,
+            "keywords": [term for term in _keywords(text) if term not in {"礼物"}][:12],
+            "top_k": top_k,
+            "returned": len(entries),
+        },
+        "ranking_policy": {
+            "hard_filters": ["status=active", "pollution_guard", "scope_or_keyword_hit", "gift_recipient_match"],
+            "weights": ["scope", "keyword", "recipient", "type_priority", "confidence", "validity", "recency"],
+            "downrank": ["candidate"],
+        },
+        "entries": entries,
+    }
+
+
 def _is_plain_task_request(text: str) -> bool:
     stripped = text.strip(" 。！？!?")
     if any(token in stripped for token in ["以后", "记住", "喜欢", "不喜欢", "不要", "不能", "预算", "送过", "选定"]):
         return False
-    return stripped in {"给我一个礼物推荐", "给我一个推荐", "再给一个礼物方向", "帮我给女朋友选个礼物"}
+    if stripped in {"给我一个礼物推荐", "给我一个推荐", "再给一个礼物方向", "帮我给女朋友选个礼物"}:
+        return True
+    if "推荐" in stripped and any(token in stripped for token in ["女朋友", "老公", "老婆", "妈妈", "爸爸", "朋友", "同事", "收礼人"]):
+        return True
+    return False
 
 
 def _has_memory_signal(text: str, context: str = "") -> bool:
@@ -829,6 +973,23 @@ def _generic_gift_candidates(text: str, context: str = "", evidence_text: str | 
                 applies_when=["relationship_gift"],
                 tags=["礼物", "送过", recipient_label],
                 validity={"time_scope": "past"},
+            )
+        )
+    if not previous and any(token in text for token in ["不要重复", "不要再选", "别重复", "避开已经买过", "避开送过"]):
+        candidates.append(
+            MemoryItem(
+                CONSTRAINT,
+                f"给{recipient_label}选礼物时，已经买过或送过的不要重复",
+                scope="relationship_gift",
+                subject="user",
+                target=recipient_key,
+                object="",
+                predicate="must_avoid",
+                source="chat_feedback",
+                evidence=[evidence],
+                applies_when=["relationship_gift"],
+                tags=["礼物", "不要重复", recipient_label],
+                validity={"time_scope": "long_term"},
             )
         )
     selected = _extract_selected_gift_items(text)
@@ -1256,7 +1417,10 @@ def _is_gift_rejection(text: str) -> bool:
 
 
 def _is_relationship_context(context: str) -> bool:
-    return any(token in context for token in ["女朋友", "礼物", "送礼", "闺蜜", "前女友"])
+    return any(
+        token in context
+        for token in ["女朋友", "老公", "老婆", "妈妈", "爸爸", "朋友", "同事", "礼物", "送礼", "闺蜜", "前女友"]
+    )
 
 
 def _has_budget_marker(text: str) -> bool:
@@ -1304,17 +1468,21 @@ def _is_gift_context(text: str, context: str = "") -> bool:
     explicit_gift_signal = any(token in text for token in ["礼物", "送礼", "送什么", "生日礼物"])
     gift_action_signal = any(token in text for token in ["以前送过", "之前送过", "已经送", "送过", "下单", "确认送"])
     gift_item_signal = any(token in text for token in ["项链", "手链", "耳钉", "首饰", "香氛", "香水", "方巾", "背包", "防晒服"])
+    gift_request_signal = any(token in text for token in ["推荐", "再给", "给我一个", "选礼物", "生日"])
     relation_signal = _has_explicit_recipient(text)
     interest_signal = any(token in text for token in ["程序员", "阳台", "养花", "蝴蝶兰", "鹿角蕨", "金鱼", "摄影", "咖啡", "露营", "跑步", "游戏"])
     if _looks_like_non_gift_domain(text) and not (explicit_gift_signal or gift_action_signal):
         return False
     if explicit_gift_signal or gift_action_signal:
         return True
+    if relation_signal and gift_request_signal and _is_relationship_context(context):
+        return True
     if relation_signal and (gift_item_signal or interest_signal) and not _looks_like_non_gift_domain(text):
         return True
     if _is_relationship_context(context) and not _has_explicit_recipient(text):
         continuation_signal = _has_budget_marker(text) or gift_item_signal or interest_signal or any(
-            token in text for token in ["喜欢", "满意", "就这个", "换一个", "不要这个", "选过", "送过", "已经买", "买了"]
+            token in text
+            for token in ["喜欢", "满意", "就这个", "换一个", "不要这个", "选过", "送过", "已经买", "买了", "推荐", "再给"]
         )
         return continuation_signal
     return False
@@ -1426,6 +1594,8 @@ def _extract_previous_gifts(text: str) -> str:
 def _extract_selected_gift_items(text: str) -> str:
     if not any(token in text for token in ["已经买", "买过", "买了", "已买", "已入", "下单", "付款", "来一只", "再来一个", "再来一"]):
         return ""
+    if any(token in text for token in ["买过的不要", "买过的别", "送过的不要", "送过的别", "已经买过的不要"]):
+        return ""
     cleaned = text.replace("你记一下", "").replace("再想想剩下的预算", "")
     patterns = [
         r"(?:已经买过|已买过|买过|已经买了|已买了|买了|已入|下单了?)([^，。,；;]+)",
@@ -1437,6 +1607,8 @@ def _extract_selected_gift_items(text: str) -> str:
     for pattern in patterns:
         for match in re.finditer(pattern, cleaned):
             item = _clean_gift_item_name(match.group(1))
+            if any(token in item for token in ["不要重复", "不要再选", "别重复", "不要再推荐"]):
+                continue
             if item and item not in items:
                 items.append(item)
     return "、".join(items)

@@ -37,9 +37,11 @@ class HarnessAgent:
         context = self._recent_context(include_pre_reset=True)
         rewrite_context = self._recent_context(include_pre_reset=False)
         response, call = self.toolbox.process_message(user_text, context=context)
+        response_data = response.to_dict()
         semantic_actions = self._maybe_classify_confirmation(user_text, context, response.to_dict())
         if semantic_actions:
             response.memory_actions.extend(semantic_actions)
+            response_data = response.to_dict()
         if not _authoritative_memory_operation(call):
             response.text = self._maybe_llm_rewrite(
                 user_text,
@@ -47,6 +49,7 @@ class HarnessAgent:
                 response.text,
                 response.applied_memories,
                 response.memory_actions,
+                response_data.get("relevant_memory_pack", {}),
                 rewrite_context,
             )
 
@@ -60,8 +63,9 @@ class HarnessAgent:
             assistant=assistant,
             tool_calls=[call],
             applied_memories=response.applied_memories,
+            relevant_memory_pack=response_data.get("relevant_memory_pack", {}),
             memory_snapshot=self.toolbox.snapshot(),
-            notes=_notes_from_response(response.to_dict()),
+            notes=_notes_from_response(response_data),
         )
         self.session.turns.append(turn)
         if _has_reset_action(call):
@@ -78,6 +82,7 @@ class HarnessAgent:
         draft: str,
         applied_memories: list[str],
         memory_actions: list[dict[str, Any]],
+        relevant_memory_pack: dict[str, Any],
         context: str,
     ) -> str:
         if not self._use_remote_llm():
@@ -101,7 +106,8 @@ class HarnessAgent:
                         "memory_actions": memory_actions,
                         "can_claim_memory_saved": bool(memory_actions),
                         "applied_memory_ids": applied_memories,
-                        "memory_snapshot": snapshot,
+                        "memory_state": _memory_state_for_llm(snapshot),
+                        "relevant_memory_pack": relevant_memory_pack,
                     },
                     ensure_ascii=False,
                 ),
@@ -192,7 +198,8 @@ def _system_prompt(soul: str) -> str:
     base = (
         "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
         "记忆工具已经完成提取、更新、删除和检索。"
-        "必须尊重 tool_draft 和 memory_snapshot，不要虚构或使用 deleted/superseded 记忆。"
+        "必须尊重 tool_draft、memory_state 和 relevant_memory_pack；"
+        "只使用 relevant_memory_pack.entries 中的召回记忆，不要虚构或使用未召回/已删除/已降级记忆。"
         "只有 memory_actions 非空时，才允许说“记住了”“记下了”“已保存”等保存承诺；"
         "如果 memory_actions 为空，绝不能声称本轮写入了记忆。"
         "注意主体归属：如果上下文是在给女朋友选礼物，预算通常是用户的送礼预算，"
@@ -202,6 +209,17 @@ def _system_prompt(soul: str) -> str:
     if not soul:
         return base
     return f"{base}\n\n{soul}"
+
+
+def _memory_state_for_llm(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "version": snapshot.get("version", ""),
+        "active_count": len(snapshot.get("active", [])),
+        "superseded_count": len(snapshot.get("superseded", [])),
+        "archived_count": len(snapshot.get("archived", [])),
+        "deleted_count": len(snapshot.get("deleted", [])),
+        "policy": "Use only relevant_memory_pack.entries for answer personalization; this state is for audit and version awareness.",
+    }
 
 
 def _memory_actions_from_call(call: Any) -> list[dict[str, Any]]:

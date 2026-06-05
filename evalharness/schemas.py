@@ -39,6 +39,7 @@ class TurnTrace:
     assistant: Message
     tool_calls: list[ToolCall] = field(default_factory=list)
     applied_memories: list[str] = field(default_factory=list)
+    relevant_memory_pack: dict[str, Any] = field(default_factory=dict)
     memory_snapshot: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
