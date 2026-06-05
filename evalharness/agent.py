@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from typing import Any
 
@@ -117,7 +118,7 @@ class HarnessAgent:
             rewritten = client.chat(messages, temperature=0.3).strip()
             if not memory_actions and _claims_memory_saved(rewritten):
                 return draft
-            return rewritten
+            return _sanitize_unrequested_user_address(rewritten, user_text, context)
         except Exception as exc:
             return f"{draft}\n\n远端 LLM 改写超时或失败，已回退到本地工具草稿：{exc}"
 
@@ -204,11 +205,46 @@ def _system_prompt(soul: str) -> str:
         "如果 memory_actions 为空，绝不能声称本轮写入了记忆。"
         "注意主体归属：如果上下文是在给女朋友选礼物，预算通常是用户的送礼预算，"
         "颜色/喜好通常归属女朋友，不要误写成用户本人喜欢。"
+        "人设只描述 agent 自己的表达风格，不是用户画像；"
+        "不得根据“兄弟感/僚机”等人设词推断用户性别、亲密关系或称呼。"
+        "除非用户明确要求你这样称呼，否则不要称用户为“兄弟”“哥们”“哥”“姐妹”“姐”“老铁”。"
+        "如果用户说“我老公”，只说明收礼人是 husband，不代表可以用男性称呼称用户。"
         "默认用中文短答，像正常人说话；不要主动解释记忆工具和推理链路。"
     )
     if not soul:
         return base
-    return f"{base}\n\n{soul}"
+    guard = (
+        "最终称呼约束：以上 soul/persona 仅控制 agent 气质；"
+        "不要把 persona 里的“兄弟感”等词变成对用户的直接称呼。"
+    )
+    return f"{base}\n\n{soul}\n\n{guard}"
+
+
+def _sanitize_unrequested_user_address(text: str, user_text: str, context: str) -> str:
+    if _user_requested_casual_address(user_text, context):
+        return text
+    sanitized = re.sub(r"^\s*(兄弟|哥们儿?|哥|姐妹|姐|老铁)[，,。!！\s]+", "", text)
+    sanitized = re.sub(r"([，,。；;]\s*)(兄弟|哥们儿?|哥|姐妹|姐|老铁)[，,。!！\s]+", r"\1", sanitized)
+    sanitized = re.sub(r"(行|好|可以|收到|懂了)[，,]\s*(兄弟|哥们儿?|哥|姐妹|姐|老铁)[，,]", r"\1，", sanitized)
+    return sanitized.strip()
+
+
+def _user_requested_casual_address(user_text: str, context: str) -> bool:
+    haystack = f"{context}\n{user_text}"
+    return any(
+        token in haystack
+        for token in [
+            "叫我兄弟",
+            "叫我哥",
+            "叫我哥们",
+            "叫我姐妹",
+            "叫我姐",
+            "叫我老铁",
+            "可以喊我兄弟",
+            "可以喊我哥",
+            "可以喊我姐妹",
+        ]
+    )
 
 
 def _memory_state_for_llm(snapshot: dict[str, Any]) -> dict[str, Any]:
