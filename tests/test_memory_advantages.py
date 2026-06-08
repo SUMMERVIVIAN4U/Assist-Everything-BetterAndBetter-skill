@@ -81,6 +81,38 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertEqual(add_action["remote"]["backend"], "mem0")
         self.assertTrue(add_action["remote"]["ok"])
 
+    def test_mem0_backend_syncs_context_fact_from_ongoing_chat(self):
+        skill = AssistSkill(
+            memory_dir=self.tmp.name,
+            persist=True,
+            mem0_config=Mem0Config(enabled=True, base_url="https://mem0.example", api_key="test-key", user_id="u1"),
+        )
+
+        class FakeMem0:
+            def __init__(self):
+                self.added = []
+
+            def add(self, item):
+                self.added.append(item.content)
+                return {"event_id": "evt_travel", "status": "queued"}
+
+            def search(self, query, top_k=8):
+                return []
+
+        fake = FakeMem0()
+        skill.mem0_client = fake
+        context = "user: 我想要带小孩去上海玩，帮我推荐一些景点"
+
+        response = skill.process_message("动物园，小孩3-4岁", context=context)
+
+        add_actions = [action for action in response.memory_actions if action["action"] == "add"]
+        self.assertEqual(1, len(add_actions))
+        add_action = add_actions[0]
+        self.assertIn("小孩3-4岁", add_action["detail"])
+        self.assertEqual(fake.added, [add_action["detail"]])
+        self.assertEqual(add_action["remote"]["backend"], "mem0")
+        self.assertTrue(add_action["remote"]["ok"])
+
     def test_memory_disabled_skips_local_and_remote_memory(self):
         skill = AssistSkill(
             memory_dir=self.tmp.name,

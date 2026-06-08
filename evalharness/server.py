@@ -399,11 +399,9 @@ def _chat_report(judge_mode: str) -> dict[str, Any]:
 
 
 def _settings_payload() -> dict[str, Any]:
-    soul = Path("soul.md")
     privacy_report = STATE.chat_agent.toolbox.skill.privacy_report()
     return {
         "agent_mode": STATE.agent_mode,
-        "soul_md": soul.read_text(encoding="utf-8") if soul.exists() else "",
         "workbench_memory": STATE.chat_agent.toolbox.snapshot(),
         "privacy_items": _privacy_items(),
         "default_privacy_items": list(PRIVATE_MARKERS),

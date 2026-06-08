@@ -7,7 +7,6 @@ from typing import Any
 
 from .llm import MimoClient, MimoConfig, mimo_configured
 from .schemas import HarnessSession, Message, TurnTrace
-from .soul import load_soul_prompt
 from .tools import MemoryToolbox
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
@@ -78,11 +77,10 @@ class HarnessAgent:
             return draft
         client = self.llm_client or _workbench_mimo_client()
         snapshot = self.toolbox.snapshot()
-        soul = load_soul_prompt()
         messages = [
             {
                 "role": "system",
-                "content": _system_prompt(soul),
+                "content": _system_prompt(),
             },
             {
                 "role": "user",
@@ -121,16 +119,13 @@ def _workbench_mimo_client() -> MimoClient:
     return MimoClient(MimoConfig(config.api_key, config.base_url, config.model, timeout))
 
 
-def _system_prompt(soul: str) -> str:
-    base = (
+def _system_prompt() -> str:
+    return (
         "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
         "记忆工具已经完成提取、更新、删除和检索。"
         "必须尊重 tool_draft 和 memory_snapshot，不要虚构或使用 deleted/superseded 记忆。"
         "默认用中文短答，像正常人说话；不要主动解释记忆工具和推理链路。"
     )
-    if not soul:
-        return base
-    return f"{base}\n\n{soul}"
 
 
 def _memory_actions_from_call(call: Any) -> list[dict[str, Any]]:

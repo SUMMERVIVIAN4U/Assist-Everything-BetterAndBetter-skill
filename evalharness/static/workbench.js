@@ -17,7 +17,6 @@ let report = null;
     async function fetchSettings() {
       settings = await (await fetch('/api/settings')).json();
       document.getElementById('settingsAgent').textContent = `agent_mode=${settings.agent_mode || ''}`;
-      document.getElementById('soulMd').value = settings.soul_md || '';
       document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
       renderMemoryBackendSettings();
