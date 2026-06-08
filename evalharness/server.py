@@ -60,6 +60,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(_mem0_health())
         elif path == "/api/mem0-memory":
             self._send_json(_mem0_memory())
+        elif path == "/api/current-memory":
+            self._send_json(_current_memory_payload(STATE.chat_agent.toolbox.snapshot()))
         else:
             self.send_error(404)
 
@@ -92,12 +94,14 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "turn": turn.to_dict(),
                         "memory": STATE.chat_agent.toolbox.snapshot(),
+                        "current_memory": _current_memory_payload(STATE.chat_agent.toolbox.snapshot()),
                         "session": STATE.chat_agent.session.to_dict(),
                     }
                 )
             except Exception as exc:
                 print(f"[workbench] chat error: {exc}")
-                self._send_json({"error": str(exc), "memory": STATE.chat_agent.toolbox.snapshot()})
+                snapshot = STATE.chat_agent.toolbox.snapshot()
+                self._send_json({"error": str(exc), "memory": snapshot, "current_memory": _current_memory_payload(snapshot)})
         elif path == "/api/reset-chat":
             mode = str(body.get("agent", STATE.agent_mode))
             STATE.agent_mode = mode
@@ -116,6 +120,7 @@ class Handler(BaseHTTPRequestHandler):
                     "tool_call": call.to_dict(),
                     "mem0_reset": mem0_reset,
                     "memory": STATE.chat_agent.toolbox.snapshot(),
+                    "current_memory": _current_memory_payload(STATE.chat_agent.toolbox.snapshot()),
                     "session": STATE.chat_agent.session.to_dict(),
                 }
             )
@@ -399,14 +404,29 @@ def _chat_report(judge_mode: str) -> dict[str, Any]:
 
 
 def _settings_payload() -> dict[str, Any]:
+    snapshot = STATE.chat_agent.toolbox.snapshot()
     privacy_report = STATE.chat_agent.toolbox.skill.privacy_report()
     return {
         "agent_mode": STATE.agent_mode,
-        "workbench_memory": STATE.chat_agent.toolbox.snapshot(),
+        "workbench_memory": snapshot,
         "privacy_items": _privacy_items(),
         "default_privacy_items": list(PRIVATE_MARKERS),
         "privacy_report": privacy_report,
         "memory_backend": _public_backend_config(),
+        "current_memory": _current_memory_payload(snapshot),
+    }
+
+
+def _current_memory_payload(local_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = _memory_backend_config()
+    selected = config["backend"]
+    labels = {"local": "本地 Markdown / JSON", "mem0": "Mem0"}
+    content = _mem0_memory() if selected == "mem0" else (local_snapshot or {})
+    return {
+        "memory_enabled": bool(config.get("memory_enabled", True)),
+        "selected_engine": selected,
+        "engine_label": labels.get(selected, selected),
+        "content": content,
     }
 
 

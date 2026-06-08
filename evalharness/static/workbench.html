@@ -44,7 +44,16 @@
             <div class="case-head"><div><h2>当前对话 Eval</h2><div id="chatEvalStatus" class="muted">点击 Run Eval 后显示当前会话评分。</div></div></div>
             <div id="chatEvalPanel" class="muted">暂无评分。</div>
           </div>
-          <div class="panel"><h2>当前 Memory</h2><pre id="chatMemory">{}</pre></div>
+          <div class="panel">
+            <div class="case-head">
+              <div>
+                <h2>当前 Memory</h2>
+                <div id="chatMemoryStatus" class="muted">loading...</div>
+              </div>
+              <button onclick="refreshChatMemory()">刷新</button>
+            </div>
+            <pre id="chatMemory">{}</pre>
+          </div>
         </div>
       </div>
     </section>

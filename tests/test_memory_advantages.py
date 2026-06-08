@@ -113,6 +113,33 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertEqual(add_action["remote"]["backend"], "mem0")
         self.assertTrue(add_action["remote"]["ok"])
 
+    def test_proactively_extracts_implicit_travel_preference_from_feedback(self):
+        context = "user: 我想带小孩在上海玩两天\nassistant: 可以安排动物园和户外公园。"
+
+        response = self.skill.process_message("优先室内，少走路，孩子怕热", context=context)
+
+        add_actions = [action for action in response.memory_actions if action["action"] == "add"]
+        self.assertEqual(1, len(add_actions))
+        self.assertIn("优先室内，少走路，孩子怕热", add_actions[0]["detail"])
+        active = self.skill.memory.active()
+        self.assertEqual(1, len(active))
+        self.assertEqual("life_family_travel", active[0].scope)
+
+    def test_proactively_corrects_prior_memory_from_negative_feedback(self):
+        self.skill.process_message(
+            "动物园，小孩3-4岁",
+            context="user: 我想要带小孩去上海玩，帮我推荐一些景点",
+        )
+
+        response = self.skill.process_message("不是动物园，改成室内科技馆，孩子怕热")
+
+        self.assertTrue(any(action["action"] == "downgrade" for action in response.memory_actions))
+        add_actions = [action for action in response.memory_actions if action["action"] == "add"]
+        self.assertEqual(1, len(add_actions))
+        self.assertIn("室内科技馆", add_actions[0]["detail"])
+        active_contents = [item.content for item in self.skill.memory.active()]
+        self.assertEqual(["不是动物园，改成室内科技馆，孩子怕热"], active_contents)
+
     def test_memory_disabled_skips_local_and_remote_memory(self):
         skill = AssistSkill(
             memory_dir=self.tmp.name,

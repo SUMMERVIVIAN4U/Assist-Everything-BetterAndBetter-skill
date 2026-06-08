@@ -20,6 +20,7 @@ let report = null;
       document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
       renderMemoryBackendSettings();
+      renderChatMemory(settings.current_memory);
       renderPrivacySettings();
     }
     function setTab(id, el) {
@@ -83,6 +84,31 @@ let report = null;
       }, null, 2);
       document.getElementById('memoryBackendStatus').textContent = mem0.api_key_configured ? 'Mem0 API key 已配置' : 'Mem0 API key 未配置';
     }
+    function renderChatMemory(currentMemory) {
+      const payload = currentMemory || {};
+      const enabled = payload.memory_enabled !== false;
+      const engine = payload.engine_label || payload.selected_engine || '本地 Markdown / JSON';
+      const selected = payload.selected_engine || 'local';
+      const content = payload.content || {};
+      const count = selected === 'mem0'
+        ? (content.count ?? (Array.isArray(content.memories) ? content.memories.length : 0))
+        : ((content.active || []).length || 0);
+      const suffix = selected === 'mem0'
+        ? (content.ok === false ? ` · ${content.stage || 'unavailable'}` : ` · ${count} 条`)
+        : ` · active ${count} 条`;
+      document.getElementById('chatMemoryStatus').textContent = `记忆功能：${enabled ? '开启' : '关闭'} · 当前引擎：${engine}${suffix}`;
+      document.getElementById('chatMemory').textContent = JSON.stringify(content, null, 2);
+    }
+    async function refreshChatMemory() {
+      const status = document.getElementById('chatMemoryStatus');
+      status.textContent = 'loading...';
+      try {
+        const data = await (await fetch('/api/current-memory')).json();
+        renderChatMemory(data);
+      } catch (err) {
+        status.textContent = `当前 Memory 加载失败：${err.message}`;
+      }
+    }
     async function fetchMem0Memory() {
       const status = document.getElementById('mem0MemoryStatus');
       const target = document.getElementById('settingsMem0Memory');
@@ -120,6 +146,7 @@ let report = null;
       settings = data.settings;
       renderMemoryBackendSettings();
       document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
+      renderChatMemory(settings.current_memory);
       status.textContent = `已保存 · 记忆${settings.memory_backend?.memory_enabled === false ? '关闭' : '开启'} · ${settings.memory_backend?.backend || 'local'}`;
     }
     async function checkMem0Health() {
@@ -156,7 +183,7 @@ let report = null;
       try {
         const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, agent:document.getElementById('agentMode').value})})).json();
         updateMsg(thinking, data.error ? ('ERROR: ' + data.error) : data.turn.assistant.content, 'assistant');
-        document.getElementById('chatMemory').textContent = JSON.stringify(data.memory || {}, null, 2);
+        renderChatMemory(data.current_memory || {content:data.memory || {}});
         document.getElementById('chatEvalStatus').textContent = '对话已更新，当前评分需重新 Run Eval。';
       } catch (err) {
         updateMsg(thinking, 'ERROR: ' + err.message, 'assistant');
@@ -191,11 +218,12 @@ let report = null;
       document.getElementById('chatlog').innerHTML = '';
       document.getElementById('chatEvalStatus').textContent = 'Session 已重置；memory 保持不变。';
       document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
+      refreshChatMemory();
     }
     async function resetMemory() {
       const data = await (await fetch('/api/reset-memory', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({agent:document.getElementById('agentMode').value})})).json();
       appendMsg('assistant', data.response?.text || '已重置 memory。');
-      document.getElementById('chatMemory').textContent = JSON.stringify(data.memory || {}, null, 2);
+      renderChatMemory(data.current_memory || {content:data.memory || {}});
       const remote = data.mem0_reset;
       const remoteText = remote?.stage === 'delete_all'
         ? `Mem0 已删除 ${remote.deleted_count || 0}/${remote.found_count || 0} 条。`

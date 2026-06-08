@@ -1,22 +1,23 @@
 ---
 name: assist-everything-betterandbetter-skill
-description: Use this skill when a task requires authorized collaboration memory: remembering user preferences, learning feedback, adapting workflows, managing memory through natural language or slash-like commands, and running reproducible three-round eval cases with reset, query, update, downgrade, delete, and workbench reporting.
+description: 当任务需要授权协作记忆、Workbench 记忆检查、隐私友好的本地或 Mem0 记忆后端、可复现记忆评测，或需要记录纠正、错误、能力缺口和可复用经验以形成自我改进闭环时使用。
 ---
 
 # Assist Everything BetterAndBetter Skill
 
-This skill provides an authorized collaboration-memory workflow.
+This skill provides an authorized collaboration-memory workflow that can also 从错误中学习、在经验中成长. It treats memory as an auditable user-controlled capability, not a silent transcript dump.
 
 ## Trigger
 
 Use when the user or evaluator asks for:
 
-- remembering preferences or workflow rules with consent
-- showing, resetting, deleting, downgrading, or archiving memories
+- remembering preferences, constraints, context facts, decisions, or workflow rules with consent
 - applying remembered preferences to a similar later task
-- handling preference changes, conflict, or narrowed scope
-- inspecting memory profile, compact snapshot, three-layer memory state, and privacy controls
-- running eval cases for memory extraction, application, update/decay, transparency, and result quality
+- handling preference changes, conflict, narrowed scope, downgrade, archive, delete, or reset
+- inspecting memory profile, compact snapshot, three-layer memory state, privacy controls, or backend state
+- running reproducible evals for memory extraction, application, update/decay, transparency, and result quality
+- operating the Workbench Agent Chat, History Evals, Stats, Settings, Workbench Memory, Mem0 Memory, 当前 Memory, or `/api/current-memory` views
+- logging corrections, command failures, integration errors, feature requests, and recurring patterns into `.learnings/`
 
 ## Memory Policy
 
@@ -29,11 +30,11 @@ Never silently turn every statement into long-term memory. Extract only reusable
 - `history`: past action or event that should inform future avoidance or continuity
 - `context_fact`: stable background fact or external signal that informs judgment
 
-Use generic `type` values. Put the task domain in `scope` such as `life_family_travel`, `work_report`, `study_plan`, `research_review`, or another user-provided task domain. Do not create domain-specific types; use `type=history` for past actions and put the domain in `scope`.
+Use generic `type` values. Put the task domain in `scope` such as `life_family_travel`, `work_report`, `study_plan`, `research_review`, or another user-provided domain. Do not create scenario-specific memory types or hardcoded case logic.
 
-Each memory must carry: `id`, `type`, `content`, `scope`, `source`, `confidence`, `status`, `evidence`, `applies_when`, and `user_approved`. Runtime memory may also carry structured fields: `subject`, `target`, `object`, `predicate`, and `validity`.
+Each memory must carry: `id`, `type`, `content`, `scope`, `source`, `confidence`, `status`, `evidence`, `applies_when`, and `user_approved`. Runtime memory may also carry `subject`, `target`, `object`, `predicate`, and `validity`.
 
-Only say a memory was saved after a real add/update memory action exists in the trace. If a sentence is only a question such as "你还记得之前送过什么吗？", do not save it as memory.
+Only say a memory was saved after a real add/update action exists in the trace. If a sentence is only a question such as "你还记得之前做过什么吗？", do not save it as memory.
 
 Use confidence tiers before writing memory:
 
@@ -43,17 +44,7 @@ Use confidence tiers before writing memory:
 - `add`: high-confidence structured or scoped memory can be saved
 - `dedupe`: duplicate active memory is reported but not saved again
 
-Simple `[q]` or greeting turns use instant mode and skip long-term memory retrieval. Normal tasks use standard mode with active matching memory. Deep/history turns use deep mode and expose snapshot, matching memory, and event-log intent in diagnostics.
-
-By default, runtime memory is persisted as Markdown files. `ASSIST_MEMORY_DIR` controls the storage directory, and `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs. Workbench uses `memories/workbench/`.
-
-The workbench can switch long-term memory to a Mem0-compatible backend. Keep local storage as the trace/audit layer, but mirror added long-term memories to Mem0 and merge Mem0 search results during retrieval. Configure it through Settings or environment variables:
-
-- `ASSIST_MEMORY_BACKEND=local|mem0`
-- `MEM0_BASE_URL`
-- `MEM0_API_KEY`
-- `MEM0_USER_ID`
-- `MEM0_APP_ID`
+Simple `[q]` or greeting turns use instant mode and skip long-term retrieval. Normal tasks use standard mode with active matching memory. Deep/history turns expose snapshot, matching memory, and event-log intent in diagnostics.
 
 Statuses:
 
@@ -62,9 +53,60 @@ Statuses:
 - `archived`: retained for history, not applied by default
 - `deleted`: must not be retrieved or applied
 
+## Storage And Backends
+
+Default runtime storage is local Markdown/JSON under `ASSIST_MEMORY_DIR`; Workbench uses `memories/workbench/`. `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs.
+
+The Workbench can switch the long-term memory engine between:
+
+- `local`: 本地 Markdown / JSON, used as the primary visible Workbench Memory
+- `mem0`: Mem0-compatible backend, used as Mem0 Memory while local storage remains the trace/audit layer
+
+When Mem0 is selected, added long-term memories are mirrored to Mem0 and Mem0 search results are merged during retrieval. Do not expose endpoint URLs, project IDs, or API keys in the UI. The public UI only shows whether endpoint, API key, and user are configured.
+
+Configuration:
+
+- `ASSIST_MEMORY_BACKEND=local|mem0`
+- `ASSIST_MEMORY_ENABLED=0|1`
+- `MEM0_BASE_URL`
+- `MEM0_API_KEY`
+- `MEM0_USER_ID`
+- `MEM0_APP_ID`
+
+## Workbench Features
+
+Run the interactive Workbench:
+
+```bash
+python3 -m evalharness.cli serve --port 8787
+```
+
+Workbench tabs:
+
+- `Agent Chat`: live conversation through the same `process_message(...)` path as evals.
+- `History Evals`: saved preset and chat eval runs.
+- `统计`: summary metrics across historical runs.
+- `设置`: Agent 配置, Workbench Memory, Mem0 Memory, 隐私设置.
+
+Agent Chat must keep the right-side `当前 Memory` panel intuitive:
+
+- show `记忆功能：开启/关闭`
+- show the user-selected engine: 本地 Markdown / JSON or Mem0
+- show only the selected engine's corresponding content
+- use `/api/current-memory` for refreshable current-memory state
+
+Settings rules:
+
+- Agent 配置 exposes only the memory feature switch and long-term memory backend choice.
+- Workbench Memory shows local trace/audit memory.
+- Mem0 Memory shows remote memory for comparison when configured.
+- 隐私设置 lets the user maintain private marker lines; matching content is rejected/redacted and not saved.
+
+Reset Memory must reset local memory and, when Mem0 is active and configured, clear matching Mem0 memories for the configured user.
+
 ## Commands
 
-Support either slash-like commands or natural language:
+Support slash-like commands or natural language:
 
 - `reset memory`, `清空记忆`, `重置记忆`
 - `show memory`, `展示当前记忆`, `查看记忆`
@@ -78,23 +120,65 @@ Support either slash-like commands or natural language:
 
 The profile view aggregates active preferences, workflow rules, scene rules, project/context facts, interaction style, and confidence average. The layers view shows L0 instant interaction, L1 profile snapshot, and L2 long-term audit ledger with retention reasons.
 
-## Three-Round Eval Flow
+## Self-Improvement Loop
 
-Each eval case starts from `reset memory`.
+Use `.learnings/` as the growth ledger for the skill and project. Initialize it before logging:
 
-Eval cases are test scripts only. Do not put case-specific extraction, update, or response logic inside the skill. The agent must send each case step as ordinary user text through the same `process_message(...)` path used by normal chat.
+```bash
+mkdir -p .learnings
+```
 
-1. Round 1: perform an initial no-preference task, receive explicit feedback, extract authorized memory.
-2. Show memory: prove memory is inspectable and explainable.
-3. Round 2: run a similar but different task; apply relevant active memory without asking the user to repeat it.
-4. Round 3: receive changed or narrowed preference; downgrade, condition, archive, or replace old memory; run a task proving the new rule applies.
-5. Delete retest: delete a selected memory and prove it is no longer retrieved or applied.
+Create missing files without overwriting existing content:
 
-Round cards do not receive full scores. Full six-dimensional score exists only at the case level.
+- `.learnings/LEARNINGS.md`: corrections, insights, knowledge gaps, best practices
+- `.learnings/ERRORS.md`: command failures, exceptions, integration errors
+- `.learnings/FEATURE_REQUESTS.md`: user-requested missing capabilities
 
-## Eval
+Do not log secrets, tokens, API keys, private identifiers, or full config files. Prefer short redacted summaries and related file paths.
 
-Run the agent harness eval:
+Log immediately when:
+
+- a command or operation fails unexpectedly
+- the user corrects the agent
+- an external API, memory backend, or tool call fails
+- the agent discovers outdated knowledge or a better recurring approach
+- the user asks for a capability the skill does not yet provide
+
+Entry IDs use `LRN-YYYYMMDD-XXX`, `ERR-YYYYMMDD-XXX`, and `FEAT-YYYYMMDD-XXX`.
+
+Minimum entry fields:
+
+- logged timestamp
+- priority: `low | medium | high | critical`
+- status: `pending | in_progress | resolved | promoted | wont_fix`
+- area: `frontend | backend | infra | tests | docs | config`
+- summary, context, suggested action, related files
+
+## Recurring Pattern And Promotion
+
+Before logging a new learning, search for similar entries:
+
+```bash
+grep -r "keyword" .learnings/
+```
+
+If similar, link it with `See Also`, bump priority when recurring, and add a stable `Pattern-Key` when it reflects a recurring pattern.
+
+Recurring Pattern handling:
+
+- same `Pattern-Key` increments `Recurrence-Count`
+- keep `First-Seen` and `Last-Seen`
+- recurring issues should lead to systemic fixes, tests, docs, or skill changes
+
+Promotion rules:
+
+- promote broadly applicable, resolved, or recurring learnings into this `SKILL.md`, `AGENTS.md`, or other project guidance
+- write promoted rules as short prevention rules, not incident transcripts
+- update the original entry status to `promoted` and record the target
+
+## Eval Flow
+
+Run the harness eval:
 
 ```bash
 python3 -m evalharness.cli run
@@ -105,32 +189,22 @@ Output:
 - `eval/output/latest/eval_report.json`
 - `eval/output/latest/eval_report.md`
 
-Run the interactive workbench:
+Each eval case starts from `reset memory`. Eval cases are scripts only; do not put case-specific extraction, update, or response logic inside the skill. Send each case step as ordinary user text through the same runtime path used by Agent Chat.
 
-```bash
-python3 -m evalharness.cli serve --port 8787
-```
+Recommended flow:
 
-The workbench exposes Dashboard, Cases, Trace, and Agent Chat tabs. Trace is the source of truth: every case turn records user input, assistant output, tool calls, applied memories, and memory snapshots.
+1. Round 1: perform an initial no-preference task, receive explicit feedback, extract authorized memory.
+2. Show memory: prove memory is inspectable and explainable.
+3. Round 2: run a similar but different task; apply active memory without asking the user to repeat it.
+4. Round 3: receive changed or narrowed preference; downgrade, condition, archive, or replace old memory.
+5. Delete retest: delete a selected memory and prove it is no longer retrieved or applied.
 
-For Mimo LLM agent/judge mode, configure:
+Round cards do not receive full scores. Full six-dimensional score exists only at the case level.
+
+For Mimo LLM agent/judge mode:
 
 ```bash
 cp .env.example .env
-```
-
-Then edit `.env`:
-
-```dotenv
-MIMO_API_KEY=...
-MIMO_BASE_URL=https://api.mimo.chat/v1
-MIMO_MODEL=mimo-v1
-MIMO_TIMEOUT=60
-```
-
-Run:
-
-```bash
 python3 -m evalharness.cli serve --port 8787 --agent mimo
 python3 -m evalharness.cli run --agent mimo --judge mimo
 ```
