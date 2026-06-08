@@ -12,6 +12,5 @@ The runner executes the documented workbench cases:
 - C02 project report and decision material
 - C03 exam study planning
 - C04 literature review and research design
-- C05 relationship gift memory reasoning
 
 Each case covers reset, first task, feedback, memory view, second task, preference change, third task, delete retest, six-dimension scoring, and user-effort trajectory scoring.

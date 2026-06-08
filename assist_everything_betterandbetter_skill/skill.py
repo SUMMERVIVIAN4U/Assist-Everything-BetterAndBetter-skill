@@ -283,7 +283,7 @@ class AssistSkill:
 
     def retrieve_relevant_memories(self, text: str, context: str = "") -> list[MemoryItem]:
         scope = _infer_scope(text, context)
-        terms = [term for term in _keywords(text) if term not in {"礼物"}]
+        terms = _keywords(text)
         if "不适用" in text:
             if "步行不适用" in text or "少步行不适用" in text:
                 terms = ["步行"]
@@ -559,7 +559,7 @@ class AssistSkill:
         if not any(term in lowered for term in conflict_terms):
             return []
         scope = _infer_scope(text, context)
-        terms = [term for term in _keywords(text) if term not in {"礼物"}]
+        terms = _keywords(text)
         if "不适用" in text:
             if "步行不适用" in text or "少步行不适用" in text:
                 terms = ["步行"]
@@ -729,9 +729,6 @@ def _confidence_for_memory(text: str, item: MemoryItem) -> tuple[float, str]:
     if item.scope != "general":
         score += 0.25
         reasons.append("scoped_memory")
-    if item.scope == "relationship_gift" and any(marker in text for marker in ["喜欢", "预算", "送过", "收到", "玫瑰金", "紫色"]):
-        score += 0.2
-        reasons.append("relationship_gift_fact")
     if item.type in STRUCTURED_MEMORY_TYPES:
         score += 0.2
         reasons.append("structured_memory")
@@ -808,16 +805,14 @@ def _is_polluted_memory_item(item: MemoryItem) -> bool:
     evidence = " ".join(item.evidence)
     if any(token in text for token in ["愚蠢", "你还记得", "好的，给我", "我的意思是"]):
         return True
-    if item.type == PREFERENCE and "女朋友喜欢紫色" in text and any(token in evidence for token in ["不要硬拗紫色", "别用紫色", "不能用紫色"]):
-        return True
     return False
 
 
 def _is_plain_task_request(text: str) -> bool:
     stripped = text.strip(" 。！？!?")
-    if any(token in stripped for token in ["以后", "记住", "喜欢", "不喜欢", "不要", "不能", "预算", "送过", "选定"]):
+    if any(token in stripped for token in ["以后", "记住", "喜欢", "不喜欢", "不要", "不能", "预算", "选定"]):
         return False
-    return stripped in {"给我一个礼物推荐", "给我一个推荐", "再给一个礼物方向", "帮我给女朋友选个礼物"}
+    return stripped in {"给我一个推荐"}
 
 
 def _has_memory_signal(text: str, context: str = "") -> bool:
@@ -890,9 +885,9 @@ def _infer_memory_type(text: str, scope: str) -> str:
         if any(token in text for token in ["不要", "不用", "不能", "只保留"]):
             return CONSTRAINT
         return WORKFLOW if any(token in text for token in ["文献", "方法", "数据集", "局限", "可复现", "类别"]) else PREFERENCE
-    if any(token in text for token in ["不能", "不要", "不喜欢", "前女友"]):
+    if any(token in text for token in ["不能", "不要", "不喜欢"]):
         return CONSTRAINT
-    if any(token in text for token in ["只用于", "仅用于", "不适用", "同行", "闺蜜"]):
+    if any(token in text for token in ["只用于", "仅用于", "不适用", "同行"]):
         return CONSTRAINT
     if any(token in text for token in ["膝盖不好", "负责人"]):
         return CONTEXT_FACT
@@ -937,8 +932,6 @@ def _infer_predicate(text: str, memory_type: str) -> str:
         return "must_avoid" if any(token in text for token in ["不要", "不能", "不喜欢", "避开"]) else "constrains"
     if memory_type == WORKFLOW:
         return "uses_workflow"
-    if memory_type == CANDIDATE:
-        return "proposed"
     if memory_type == DECISION:
         return "selected"
     if memory_type == HISTORY:

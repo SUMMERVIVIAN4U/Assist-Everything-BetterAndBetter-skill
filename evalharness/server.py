@@ -15,7 +15,6 @@ from assist_everything_betterandbetter_skill.mem0_backend import Mem0Client, Mem
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
-from .ab import run_gift_ab_script
 from .evaluation import build_report, evaluate_case_run, save_report, with_history
 from .judge import score_with_fallback
 from .llm import MimoConfig
@@ -78,10 +77,6 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/run-chat":
             print(f"[workbench] run chat eval judge={body.get('judge', 'heuristic')}")
             report = _chat_report(body.get("judge", "heuristic"))
-            self._send_json(report)
-        elif path == "/api/run-ab-script":
-            print(f"[workbench] run gift A/B script agent={body.get('agent', 'local')}")
-            report = run_gift_ab_script(agent_mode=body.get("agent", "local"))
             self._send_json(report)
         elif path == "/api/chat":
             message = str(body.get("message", "")).strip()

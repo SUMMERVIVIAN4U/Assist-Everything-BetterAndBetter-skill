@@ -277,7 +277,7 @@ def _is_task_turn(turn: dict[str, Any]) -> bool:
         return False
     if any(token in user for token in ["reset memory", "展示当前记忆", "show memory"]):
         return False
-    return any(token in user for token in ["帮我", "安排", "写", "做", "综述", "brainstorm", "推荐", "礼物", "然后", "能不能", "给我"])
+    return any(token in user for token in ["帮我", "安排", "写", "做", "综述", "brainstorm", "推荐", "然后", "能不能", "给我"])
 
 
 def _is_deliverable(case_run: dict[str, Any], turn: dict[str, Any]) -> bool:
@@ -298,8 +298,6 @@ def _is_deliverable(case_run: dict[str, Any], turn: dict[str, Any]) -> bool:
         return _contains(assistant, ["第 1 天", "第 2 天", "自测", "例题", "考点"])
     if domain == "research_review":
         return _contains(assistant, ["方法", "数据集", "局限", "问题", "RAG"])
-    if domain == "relationship_gift":
-        return _contains(assistant, ["推荐", "理由", "非首饰", "香氛", "丝巾", "包", "体验"])
     return len(assistant.strip()) >= 80 and not _meta_only(assistant)
 
 
@@ -339,43 +337,7 @@ def _semantic_violations(case_run: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def _turn_semantic_violations(case_run: dict[str, Any], turn: dict[str, Any]) -> list[dict[str, str]]:
-    if case_run.get("domain") != "relationship_gift":
-        return []
-    if turn.get("stage") in {"reset", "show_memory"}:
-        return []
-    user = turn.get("user", {}).get("content", "")
-    assistant = turn.get("assistant", {}).get("content", "")
-    turns = case_run.get("turns", [])
-    idx = next((i for i, candidate in enumerate(turns) if candidate.get("id") == turn.get("id")), len(turns) - 1)
-    reset_idx = _last_reset_index(turns, idx)
-    context = " ".join(t.get("user", {}).get("content", "") for t in turns[reset_idx + 1 : idx + 1])
-    active_memory_text = " ".join(
-        item.get("content", "") for item in turn.get("memory_snapshot", {}).get("active", [])
-    )
-    supported_text = context + " " + active_memory_text
-    violations = []
-    jewelry_terms = ["项链", "手链", "耳饰", "戒指", "首饰"]
-    recommends_jewelry = _contains(assistant, jewelry_terms) and not _contains(
-        assistant, ["不再推", "避开", "不送", "不能再送", "已送过", "非首饰", "不要再送"]
-    )
-    repeats_given = "玫瑰金项链" in assistant and not _contains(assistant, ["避开", "不能再送", "已送过", "不要再送"])
-    if _contains(user + context, ["不送首饰", "不能不送首饰", "换个非首饰", "别送首饰"]) and recommends_jewelry:
-        violations.append({"turn_id": turn.get("id", ""), "reason": "user asked to leave jewelry category, assistant still recommended jewelry"})
-    if _contains(context, ["首饰", "玫瑰金"]) and _contains(assistant, ["紫色手链", "紫色项链", "紫水晶手链", "紫水晶项链"]):
-        violations.append({"turn_id": turn.get("id", ""), "reason": "jewelry recommendation ignored rose-gold jewelry preference"})
-    if _contains(context, ["送过玫瑰金项链", "收到过玫瑰金项链"]) and repeats_given:
-        violations.append({"turn_id": turn.get("id", ""), "reason": "assistant repeated a gift already marked as given"})
-    if "玫瑰金" in assistant and "玫瑰金" not in supported_text:
-        violations.append({"turn_id": turn.get("id", ""), "reason": "assistant mentioned rose-gold preference without current user input or active memory support"})
-    return violations
-
-
-def _last_reset_index(turns: list[dict[str, Any]], idx: int) -> int:
-    reset_idx = -1
-    for pos, turn in enumerate(turns[: idx + 1]):
-        if any(action.get("action") == "reset" for action in _memory_actions(turn)):
-            reset_idx = pos
-    return reset_idx
+    return []
 
 
 def _unresolved_dissatisfaction(case_run: dict[str, Any]) -> bool:

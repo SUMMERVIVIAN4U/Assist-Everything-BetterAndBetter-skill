@@ -154,8 +154,8 @@ class MemoryStore:
                     ]
                 )
             )
-            if any(term in q for term in ["紫色", "玫瑰金", "动物", "可复现性"]) and not any(
-                term in haystack for term in ["紫色", "玫瑰金", "动物", "可复现性"] if term in q
+            if any(term in q for term in ["紫色", "动物", "可复现性"]) and not any(
+                term in haystack for term in ["紫色", "动物", "可复现性"] if term in q
             ):
                 continue
             parts = [part for part in q.split() if len(part) >= 2]

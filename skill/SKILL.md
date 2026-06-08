@@ -29,7 +29,7 @@ Never silently turn every statement into long-term memory. Extract only reusable
 - `history`: past action or event that should inform future avoidance or continuity
 - `context_fact`: stable background fact or external signal that informs judgment
 
-Use generic `type` values. Put the task domain in `scope` such as `relationship_gift`, `life_family_travel`, `work_report`, `study_plan`, or `research_review`. Do not create domain-specific types such as `gift_history`; use `type=history` and `scope=relationship_gift`.
+Use generic `type` values. Put the task domain in `scope` such as `life_family_travel`, `work_report`, `study_plan`, `research_review`, or another user-provided task domain. Do not create domain-specific types; use `type=history` for past actions and put the domain in `scope`.
 
 Each memory must carry: `id`, `type`, `content`, `scope`, `source`, `confidence`, `status`, `evidence`, `applies_when`, and `user_approved`. Runtime memory may also carry structured fields: `subject`, `target`, `object`, `predicate`, and `validity`.
 

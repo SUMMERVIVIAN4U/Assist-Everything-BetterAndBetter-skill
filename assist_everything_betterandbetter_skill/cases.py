@@ -86,20 +86,6 @@ CASES: list[EvalCase] = [
         delete_retest_task="再做一段简短综述。",
         module="研究方法模板与模式切换模块",
     ),
-    EvalCase(
-        id="C05",
-        title="恋爱礼物记忆推理",
-        domain="relationship_gift",
-        initial_task="帮我给女朋友选个礼物。",
-        feedback="1000 左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；她已经收到过玫瑰金项链，送过的就不要再送了。",
-        memory_query="展示当前记忆。",
-        second_task="给我一个礼物推荐。",
-        preference_change="不是，我说送过的就不要再送；如果还在同品类送应该还是玫瑰金。如果不送首饰，才能考虑紫色。能不能换个非首饰品类？",
-        third_task="那给我一个非首饰推荐。",
-        delete_query="删除女朋友喜欢紫色这条记忆。",
-        delete_retest_task="再给一个礼物方向。",
-        module="跨记忆组合与用户费力度模块",
-    ),
 ]
 
 
