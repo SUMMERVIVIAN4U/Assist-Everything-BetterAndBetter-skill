@@ -70,6 +70,8 @@
     .settings-form label { color:var(--muted); font-size:13px; }
     .settings-form input { border:1px solid var(--line); border-radius:6px; padding:8px; min-width:0; }
     .settings-form .wide { grid-column:1 / -1; }
+    .check-row { display:flex; gap:8px; align-items:center; color:var(--ink) !important; }
+    .check-row input { width:16px; height:16px; padding:0; min-width:16px; }
     .loading-row { display:flex; align-items:center; gap:8px; color:var(--muted); }
     .spinner { width:14px; height:14px; border:2px solid #d7dee8; border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }

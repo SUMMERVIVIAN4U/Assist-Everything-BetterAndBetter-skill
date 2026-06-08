@@ -18,8 +18,13 @@ class MemoryToolbox:
         memory_dir: str | None = None,
         persist: bool | None = None,
         mem0_config: Mem0Config | None = None,
+        memory_enabled: bool | None = None,
     ) -> None:
-        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist, mem0_config=mem0_config)
+        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist, mem0_config=mem0_config, memory_enabled=memory_enabled)
+
+    @property
+    def memory_enabled(self) -> bool:
+        return self.skill.memory_enabled
 
     def reset_memory(self) -> tuple[SkillResponse, ToolCall]:
         response = self.skill.reset_memory()

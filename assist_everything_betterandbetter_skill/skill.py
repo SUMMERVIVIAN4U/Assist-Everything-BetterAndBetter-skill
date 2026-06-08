@@ -58,9 +58,13 @@ class AssistSkill:
         persist: bool | None = None,
         privacy_markers: list[str] | tuple[str, ...] | None = None,
         mem0_config: Mem0Config | None = None,
+        memory_enabled: bool | None = None,
     ) -> None:
         if persist is None:
             persist = os.getenv("ASSIST_MEMORY_PERSIST", "1") != "0"
+        if memory_enabled is None:
+            memory_enabled = os.getenv("ASSIST_MEMORY_ENABLED", "1") != "0"
+        self.memory_enabled = memory_enabled
         storage_dir = memory_dir if memory_dir is not None else os.getenv("ASSIST_MEMORY_DIR", "memories/default")
         self.memory = MemoryStore(storage_dir if persist else None)
         self.pending_proposals: list[MemoryItem] = []
@@ -70,6 +74,17 @@ class AssistSkill:
         self.mem0_client = Mem0Client(self.mem0_config) if self.mem0_config.ready else None
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
+        if not self.memory_enabled:
+            memory_mode = {"mode": "disabled", "loads": [], "reason": "memory_feature_disabled"}
+            response_text = self.compose_response(text, [], [], [], context)
+            return SkillResponse(
+                response_text,
+                [],
+                [],
+                [],
+                diagnostics={"memory_mode": memory_mode, "profile": {"interaction_style": []}},
+            )
+
         command = self._try_memory_command(text)
         if command:
             return command

@@ -18,7 +18,6 @@ let report = null;
       settings = await (await fetch('/api/settings')).json();
       document.getElementById('settingsAgent').textContent = `agent_mode=${settings.agent_mode || ''}`;
       document.getElementById('soulMd').value = settings.soul_md || '';
-      document.getElementById('memoryMd').value = settings.memory_md || '未配置 memory.md';
       document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
       renderMemoryBackendSettings();
@@ -36,6 +35,7 @@ let report = null;
       document.getElementById('settingsView' + id[0].toUpperCase() + id.slice(1)).classList.remove('hidden');
       document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
       el.classList.add('active');
+      if (id === 'mem0') fetchMem0Memory();
     }
     function privacyItemsFromInput() {
       return document.getElementById('privacyItems').value.split(/\n+/).map(item => item.trim()).filter(Boolean);
@@ -72,26 +72,42 @@ let report = null;
     function renderMemoryBackendSettings() {
       const backend = settings?.memory_backend || {};
       const mem0 = backend.mem0 || {};
+      document.getElementById('memoryEnabled').checked = backend.memory_enabled !== false;
       document.getElementById('memoryBackend').value = backend.backend || 'local';
       document.getElementById('memoryBackendSummary').textContent = JSON.stringify({
         backend: backend.backend || 'local',
+        memory_enabled: backend.memory_enabled !== false,
         mem0: {
-          project_name: mem0.project_name || '',
-          base_url: mem0.base_url || '',
-          user_id: mem0.user_id || '',
-          app_id: mem0.app_id || '',
-          project_id: mem0.project_id || '',
-          api_key_configured: !!mem0.api_key_configured,
-          timeout: mem0.timeout
+          configured: !!(mem0.api_key_configured && mem0.endpoint_configured && mem0.user_configured),
+          api_key_configured: !!mem0.api_key_configured
         }
       }, null, 2);
       document.getElementById('memoryBackendStatus').textContent = mem0.api_key_configured ? 'Mem0 API key 已配置' : 'Mem0 API key 未配置';
+    }
+    async function fetchMem0Memory() {
+      const status = document.getElementById('mem0MemoryStatus');
+      const target = document.getElementById('settingsMem0Memory');
+      status.textContent = 'loading...';
+      try {
+        const data = await (await fetch('/api/mem0-memory')).json();
+        if (!data.ok) {
+          status.textContent = `Mem0 Memory 暂不可用：${data.error || data.stage || 'unknown'}`;
+          target.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+        status.textContent = `Mem0 Memory · ${data.count || 0} 条`;
+        target.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        status.textContent = `Mem0 Memory 加载失败：${err.message}`;
+        target.textContent = '{}';
+      }
     }
     async function saveMemoryBackend() {
       const status = document.getElementById('memoryBackendStatus');
       status.textContent = 'saving...';
       const payload = {
-        backend: document.getElementById('memoryBackend').value
+        backend: document.getElementById('memoryBackend').value,
+        memory_enabled: document.getElementById('memoryEnabled').checked
       };
       const data = await (await fetch('/api/settings/memory-backend', {
         method:'POST',
@@ -105,7 +121,7 @@ let report = null;
       settings = data.settings;
       renderMemoryBackendSettings();
       document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
-      status.textContent = `已切换到 ${settings.memory_backend?.backend || 'local'}`;
+      status.textContent = `已保存 · 记忆${settings.memory_backend?.memory_enabled === false ? '关闭' : '开启'} · ${settings.memory_backend?.backend || 'local'}`;
     }
     async function checkMem0Health() {
       const status = document.getElementById('memoryBackendStatus');

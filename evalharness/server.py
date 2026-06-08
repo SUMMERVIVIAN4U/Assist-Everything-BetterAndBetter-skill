@@ -59,6 +59,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(_llm_health())
         elif path == "/api/mem0-health":
             self._send_json(_mem0_health())
+        elif path == "/api/mem0-memory":
+            self._send_json(_mem0_memory())
         else:
             self.send_error(404)
 
@@ -205,6 +207,7 @@ def _new_workbench_agent(agent_mode: str) -> HarnessAgent:
         llm_mode=agent_mode,
         memory_dir="memories/workbench",
         mem0_config=_mem0_config(),
+        memory_enabled=_memory_enabled(),
     )
     _apply_privacy_settings(agent)
     return agent
@@ -227,6 +230,7 @@ def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
         backend = "local"
     return {
         "backend": backend,
+        "memory_enabled": bool(data.get("memory_enabled", True)),
         "mem0": {
             "base_url": str(data.get("mem0", {}).get("base_url") or ""),
             "api_key": str(data.get("mem0", {}).get("api_key") or ""),
@@ -246,19 +250,20 @@ def _mem0_config() -> Mem0Config:
     return config_from_dict(mem0)
 
 
+def _memory_enabled() -> bool:
+    return bool(_memory_backend_config().get("memory_enabled", True))
+
+
 def _public_backend_config() -> dict[str, Any]:
     data = _memory_backend_config()
     mem0 = data["mem0"]
     return {
         "backend": data["backend"],
+        "memory_enabled": bool(data.get("memory_enabled", True)),
         "mem0": {
-            "base_url": mem0["base_url"],
+            "endpoint_configured": bool(mem0["base_url"]),
             "api_key_configured": bool(mem0["api_key"]),
-            "user_id": mem0["user_id"],
-            "app_id": mem0["app_id"],
-            "project_id": mem0["project_id"],
-            "project_name": mem0["project_name"],
-            "timeout": mem0["timeout"],
+            "user_configured": bool(mem0["user_id"]),
         },
     }
 
@@ -267,6 +272,8 @@ def _config_from_backend_body(body: dict[str, Any], current: dict[str, Any]) -> 
     config = _normalize_backend_config(current)
     backend = str(body.get("backend") or config["backend"]).strip().lower()
     config["backend"] = backend if backend in {"local", "mem0"} else "local"
+    if "memory_enabled" in body:
+        config["memory_enabled"] = bool(body.get("memory_enabled"))
     mem0_body = body.get("mem0") if isinstance(body.get("mem0"), dict) else {}
     mem0 = dict(config["mem0"])
     for key in ["base_url", "user_id", "app_id", "project_id", "project_name"]:
@@ -299,6 +306,52 @@ def _mem0_health() -> dict[str, Any]:
         return result
     except Exception as exc:
         return {"ok": False, "stage": "request", "backend": _public_backend_config(), "error": str(exc)}
+
+
+def _mem0_memory() -> dict[str, Any]:
+    data = _memory_backend_config()
+    mem0 = dict(data["mem0"])
+    inspect_config = config_from_dict({**mem0, "enabled": bool(mem0.get("base_url") and mem0.get("api_key") and mem0.get("user_id"))})
+    if not inspect_config.ready:
+        return {"ok": False, "stage": "config", "backend": _public_backend_config(), "error": "Mem0 is not configured"}
+    try:
+        raw = Mem0Client(inspect_config).get_all(page_size=50)
+        records = _mem0_records(raw)
+        return {
+            "ok": True,
+            "backend": _public_backend_config(),
+            "count": len(records),
+            "memories": [_compact_mem0_record(record) for record in records],
+        }
+    except Exception as exc:
+        return {"ok": False, "stage": "request", "backend": _public_backend_config(), "error": str(exc)}
+
+
+def _mem0_records(raw: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+    if not isinstance(raw, dict):
+        return []
+    for key in ["results", "memories", "data"]:
+        value = raw.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _compact_mem0_record(record: dict[str, Any]) -> dict[str, Any]:
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    assist = metadata.get("assist_memory") if isinstance(metadata.get("assist_memory"), dict) else {}
+    return {
+        "id": record.get("id"),
+        "local_memory_id": metadata.get("local_memory_id") or assist.get("id"),
+        "memory": record.get("memory") or record.get("text") or assist.get("content"),
+        "type": metadata.get("type") or assist.get("type"),
+        "scope": metadata.get("scope") or assist.get("scope"),
+        "status": metadata.get("status") or assist.get("status"),
+        "created_at": record.get("created_at"),
+        "updated_at": record.get("updated_at"),
+    }
 
 
 def _apply_privacy_settings(agent: HarnessAgent) -> None:
@@ -346,12 +399,10 @@ def _chat_report(judge_mode: str) -> dict[str, Any]:
 
 def _settings_payload() -> dict[str, Any]:
     soul = Path("soul.md")
-    memory = Path("memory.md")
     privacy_report = STATE.chat_agent.toolbox.skill.privacy_report()
     return {
         "agent_mode": STATE.agent_mode,
         "soul_md": soul.read_text(encoding="utf-8") if soul.exists() else "",
-        "memory_md": memory.read_text(encoding="utf-8") if memory.exists() else "",
         "workbench_memory": STATE.chat_agent.toolbox.snapshot(),
         "privacy_items": _privacy_items(),
         "default_privacy_items": list(PRIVATE_MARKERS),

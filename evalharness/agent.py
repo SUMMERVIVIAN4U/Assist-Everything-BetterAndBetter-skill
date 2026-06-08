@@ -27,9 +27,15 @@ class HarnessAgent:
         memory_dir: str | None = None,
         persist_memory: bool | None = None,
         mem0_config: Mem0Config | None = None,
+        memory_enabled: bool | None = None,
     ) -> None:
         self.name = name
-        self.toolbox = toolbox or MemoryToolbox(memory_dir=memory_dir, persist=persist_memory, mem0_config=mem0_config)
+        self.toolbox = toolbox or MemoryToolbox(
+            memory_dir=memory_dir,
+            persist=persist_memory,
+            mem0_config=mem0_config,
+            memory_enabled=memory_enabled,
+        )
         self.session = HarnessSession()
         self.llm_mode = llm_mode
         self.llm_client = llm_client
@@ -39,7 +45,7 @@ class HarnessAgent:
         context = self._recent_context(include_pre_reset=True)
         rewrite_context = self._recent_context(include_pre_reset=False)
         response, call = self.toolbox.process_message(user_text, context=context)
-        semantic_actions = self._maybe_classify_confirmation(user_text, context, response.to_dict())
+        semantic_actions = self._maybe_classify_confirmation(user_text, context, response.to_dict()) if self.toolbox.memory_enabled else []
         if semantic_actions:
             response.memory_actions.extend(semantic_actions)
         if not _authoritative_memory_operation(call):

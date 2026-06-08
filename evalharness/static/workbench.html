@@ -68,29 +68,34 @@
           <div class="settings-tabs">
             <button class="settings-tab active" onclick="setSettingsTab('agent', this)">Agent 配置</button>
             <button class="settings-tab" onclick="setSettingsTab('soul', this)">soul.md</button>
-            <button class="settings-tab" onclick="setSettingsTab('memory', this)">memory.md</button>
             <button class="settings-tab" onclick="setSettingsTab('workbench', this)">Workbench Memory</button>
+            <button class="settings-tab" onclick="setSettingsTab('mem0', this)">Mem0 Memory</button>
             <button class="settings-tab" onclick="setSettingsTab('privacy', this)">隐私设置</button>
           </div>
           <div id="settingsViewAgent" class="settings-view">
             <h2>Agent 配置</h2>
             <div id="settingsAgent" class="muted"></div>
             <div class="settings-form">
+              <label for="memoryEnabled">记忆功能</label>
+              <label class="check-row"><input id="memoryEnabled" type="checkbox"> 启用记忆</label>
               <label for="memoryBackend">长期记忆后端</label>
-              <select id="memoryBackend"><option value="local">本地 Markdown / JSON</option><option value="mem0">火山引擎 Mem0</option></select>
+              <select id="memoryBackend"><option value="local">本地 Markdown / JSON</option><option value="mem0">Mem0</option></select>
               <div class="wide privacy-actions">
-                <button class="primary" onclick="saveMemoryBackend()">保存长期记忆后端</button>
+                <button class="primary" onclick="saveMemoryBackend()">保存 Agent 配置</button>
                 <button onclick="checkMem0Health()">Check Mem0</button>
                 <span id="memoryBackendStatus" class="status-line"></span>
               </div>
             </div>
             <h3>Mem0 配置来源</h3>
-            <div class="note">Mem0 的项目名称、公网地址、User ID、App ID、API Key 以 `.env` 或本地 git-ignored 配置为准，不在页面中编辑。</div>
+            <div class="note">Mem0 连接参数以 `.env` 或本地 git-ignored 配置为准，不在页面中编辑或展示。</div>
             <pre id="memoryBackendSummary">{}</pre>
           </div>
           <div id="settingsViewSoul" class="settings-view hidden"><textarea id="soulMd" readonly></textarea></div>
-          <div id="settingsViewMemory" class="settings-view hidden"><textarea id="memoryMd" readonly></textarea></div>
           <div id="settingsViewWorkbench" class="settings-view hidden"><pre id="settingsMemory">{}</pre></div>
+          <div id="settingsViewMem0" class="settings-view hidden">
+            <div class="case-head"><div><h2>Mem0 Memory</h2><div id="mem0MemoryStatus" class="muted">点击刷新后查看远端记忆。</div></div><button onclick="fetchMem0Memory()">刷新</button></div>
+            <pre id="settingsMem0Memory">{}</pre>
+          </div>
           <div id="settingsViewPrivacy" class="settings-view hidden">
             <div class="case-head"><div><h2>隐私设置</h2><div class="muted">逐行填写，命中后不会写入长期记忆。</div></div></div>
             <div class="privacy-editor">
