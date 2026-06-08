@@ -81,6 +81,36 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertEqual(add_action["remote"]["backend"], "mem0")
         self.assertTrue(add_action["remote"]["ok"])
 
+    def test_memory_disabled_skips_local_and_remote_memory(self):
+        skill = AssistSkill(
+            memory_dir=self.tmp.name,
+            persist=True,
+            mem0_config=Mem0Config(enabled=True, base_url="https://mem0.example", api_key="test-key", user_id="u1"),
+            memory_enabled=False,
+        )
+
+        class FakeMem0:
+            def add(self, item):
+                raise AssertionError("memory disabled should not sync additions")
+
+            def search(self, query, top_k=8):
+                raise AssertionError("memory disabled should not search remote memory")
+
+        skill.mem0_client = FakeMem0()
+        response = skill.process_message("以后请记住：我喜欢先看结论。")
+
+        self.assertEqual(response.memory_actions, [])
+        self.assertEqual(response.applied_memories, [])
+        self.assertEqual(skill.memory.active(), [])
+        self.assertEqual(response.diagnostics["memory_mode"]["mode"], "disabled")
+
+    def test_ad_hoc_chat_does_not_use_hardcoded_gift_fixture(self):
+        response = self.skill.process_message("帮我给女朋友选个礼物。")
+
+        self.assertNotIn("小众香氛礼盒", response.text)
+        self.assertFalse(any("候选方案" in action.get("detail", "") for action in response.memory_actions))
+        self.assertEqual(self.skill.memory.active(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

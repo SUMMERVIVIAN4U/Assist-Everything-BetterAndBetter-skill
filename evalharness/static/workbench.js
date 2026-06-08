@@ -197,36 +197,12 @@ let report = null;
       const data = await (await fetch('/api/reset-memory', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({agent:document.getElementById('agentMode').value})})).json();
       appendMsg('assistant', data.response?.text || '已重置 memory。');
       document.getElementById('chatMemory').textContent = JSON.stringify(data.memory || {}, null, 2);
-      document.getElementById('chatEvalStatus').textContent = 'Memory 已重置；Run Eval 后刷新评分。';
-    }
-    async function runGiftAB() {
-      const btn = document.getElementById('abRunBtn');
-      const status = document.getElementById('abStatus');
-      const panel = document.getElementById('abPanel');
-      btn.disabled = true;
-      status.innerHTML = '<span class="loading-row"><span class="spinner"></span><span>正在回放当前 chat 主线...</span></span>';
-      try {
-        const data = await (await fetch('/api/run-current-ab', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({})})).json();
-        if (!data.ok) {
-          status.textContent = '当前对话还不能跑 A/B。';
-          panel.innerHTML = `<div class="note">${escapeHtml(data.reason || '需要先完成礼物选择并确认满意。')}</div>`;
-          return;
-        }
-        const s = data.summary || {};
-        status.textContent = `当前 chat replay 完成：节省 ${s.effort_saved}，少 ${s.turns_saved} 轮。`;
-        panel.innerHTML = `
-          <div class="metrics">
-            <div class="metric"><span class="muted">Memory 费力度</span><b>${s.memory_user_effort}</b></div>
-            <div class="metric"><span class="muted">Baseline 费力度</span><b>${s.baseline_user_effort}</b></div>
-            <div class="metric"><span class="muted">节省</span><b>${s.effort_saved}</b></div>
-          </div>
-          <div class="note">选定礼物：${escapeHtml(s.selected_gift || '')}。Baseline 最后推荐：${escapeHtml(s.baseline_last_pick || '未命中')}。${s.baseline_reached_same_gift ? 'Baseline 在满意节点前命中同一礼物。' : 'Baseline 未在满意节点前命中同一礼物，因此计入额外解释轮。'}</div>`;
-      } catch (err) {
-        status.textContent = 'A/B 失败。';
-        panel.innerHTML = `<div class="note" style="color:var(--bad)">ERROR: ${escapeHtml(err.message)}</div>`;
-      } finally {
-        btn.disabled = false;
-      }
+      const remote = data.mem0_reset;
+      const remoteText = remote?.stage === 'delete_all'
+        ? `Mem0 已删除 ${remote.deleted_count || 0}/${remote.found_count || 0} 条。`
+        : 'Mem0 未启用或未配置。';
+      document.getElementById('chatEvalStatus').textContent = `Memory 已重置；${remoteText} Run Eval 后刷新评分。`;
+      fetchMem0Memory();
     }
     function appendMsg(role, content) {
       const div = document.createElement('div');

@@ -5,7 +5,6 @@ from math import ceil
 from typing import Any
 
 from .agent import HarnessAgent
-from .intent import classify_confirmation_intent
 from .schemas import HarnessSession, Message, ToolCall, TurnTrace
 from .tools import MemoryToolbox
 
@@ -77,78 +76,6 @@ def run_gift_ab_script(agent_mode: str = "local") -> dict[str, Any]:
     }
 
 
-def run_current_chat_ab(turns: list[dict[str, Any]], final_memory: dict[str, Any]) -> dict[str, Any]:
-    selected = _selected_gift(final_memory)
-    main_turns = [turn for turn in turns if _gift_mainline_user(turn)]
-    satisfaction_index = next(
-        (idx for idx, turn in enumerate(main_turns) if _confirmation_for_turn(main_turns, idx).is_confirmation),
-        -1,
-    )
-    if not selected and satisfaction_index >= 0:
-        selected = _confirmation_for_turn(main_turns, satisfaction_index).gift_object
-    if not selected or satisfaction_index < 0:
-        return {
-            "ok": False,
-            "reason": "当前对话还没有形成可识别的满意确认礼物；需要用户明确满意并确认方案。",
-            "selected_gift": selected,
-        }
-
-    memory_effort = _effort_for_path([_mark_session(turn, "current") for turn in main_turns[: satisfaction_index + 1]])
-    baseline = NoSkillGiftBaseline("current-chat-baseline")
-    baseline_turns: list[dict[str, Any]] = []
-    for turn in main_turns[:satisfaction_index]:
-        replay = baseline.reply(turn.get("user", {}).get("content", ""), stage="relationship_gift").to_dict()
-        replay["script_session"] = "current"
-        baseline_turns.append(replay)
-
-    baseline_pick = _last_recommended_gift(baseline_turns)
-    reached = bool(baseline_pick and selected in baseline_pick)
-    if reached:
-        satisfaction = baseline.reply(main_turns[satisfaction_index].get("user", {}).get("content", ""), stage="relationship_gift").to_dict()
-        satisfaction["script_session"] = "current"
-        baseline_turns.append(satisfaction)
-    else:
-        repair = baseline.reply(f"我满意的是{selected}，按这个收敛，别让我重复解释。", stage="relationship_gift").to_dict()
-        repair["script_session"] = "current"
-        repair["injected_for_comparison"] = True
-        baseline_turns.append(repair)
-
-    baseline_effort = _effort_for_path(baseline_turns)
-    return {
-        "ok": True,
-        "script": {
-            "name": "current_chat_replay",
-            "source": "agent_chat",
-            "selected_gift": selected,
-            "mainline_user_turns": [turn.get("user", {}).get("content", "") for turn in main_turns],
-        },
-        "summary": {
-            "selected_gift": selected,
-            "memory_user_effort": memory_effort["score"],
-            "baseline_user_effort": baseline_effort["score"],
-            "effort_saved": baseline_effort["score"] - memory_effort["score"],
-            "memory_user_turns": memory_effort["user_turns"],
-            "baseline_user_turns": baseline_effort["user_turns"],
-            "turns_saved": baseline_effort["user_turns"] - memory_effort["user_turns"],
-            "baseline_reached_same_gift": reached,
-            "baseline_last_pick": baseline_pick,
-        },
-        "rules": USER_EFFORT_COMPARISON_RULES,
-        "memory": {
-            "label": "Memory Agent 当前对话",
-            "description": "当前真实对话里已经达到满意确认的主线轨迹。",
-            "turns": [_mark_session(turn, "current") for turn in main_turns[: satisfaction_index + 1]],
-            "effort": memory_effort,
-        },
-        "baseline": {
-            "label": "No-memory Replay",
-            "description": "不加载 skill memory，只回放当前对话的主线用户输入；未命中原满意礼物时计入额外解释轮。",
-            "turns": baseline_turns,
-            "effort": baseline_effort,
-        },
-    }
-
-
 def _run_memory_path(agent_mode: str) -> dict[str, Any]:
     toolbox = MemoryToolbox(persist=False)
     session1 = HarnessAgent(name="gift-memory-session1", toolbox=toolbox, llm_mode=agent_mode)
@@ -165,73 +92,6 @@ def _run_memory_path(agent_mode: str) -> dict[str, Any]:
         "turns": turns,
         "final_memory": toolbox.snapshot(),
     }
-
-
-def _mark_session(turn: dict[str, Any], session: str) -> dict[str, Any]:
-    copied = dict(turn)
-    copied["script_session"] = session
-    return copied
-
-
-def _gift_mainline_user(turn: dict[str, Any]) -> bool:
-    user = turn.get("user", {}).get("content", "")
-    if _management_text(user):
-        return False
-    return any(token in user for token in ["礼物", "女朋友", "预算", "元", "首饰", "手链", "耳钉", "满意", "就这个", "确认送出", "换一个", "香水", "香氛"])
-
-
-def _management_text(text: str) -> bool:
-    normalized = text.replace(" ", "").lower()
-    if any(token in normalized for token in ["resetmemory", "showmemory", "展示当前记忆", "查看当前记忆"]):
-        return True
-    management_tokens = ["删除", "delete", "forget", "降权", "降级", "downgrade", "归档", "archive"]
-    return any(token in normalized for token in management_tokens) and "然后" not in normalized
-
-
-def _is_satisfaction(text: str) -> bool:
-    return any(token in text for token in ["满意", "就这个", "按这个", "可以", "确认送出", "下单", "送出"])
-
-
-def _confirmation_for_turn(turns: list[dict[str, Any]], idx: int):
-    context = "\n".join(
-        f"{role}: {content}"
-        for turn in turns[:idx]
-        for role, content in [
-            ("user", turn.get("user", {}).get("content", "")),
-            ("assistant", turn.get("assistant", {}).get("content", "")),
-        ]
-    )
-    return classify_confirmation_intent(turns[idx].get("user", {}).get("content", ""), context)
-
-
-def _selected_gift(snapshot: dict[str, Any]) -> str:
-    for item in reversed(snapshot.get("active", [])):
-        if item.get("type") in {"history", "decision"}:
-            obj = str(item.get("object") or "").strip()
-            if obj:
-                return obj
-            content = str(item.get("content") or "")
-            for marker in ["已选定为", "送过"]:
-                if marker in content:
-                    return content.split(marker, 1)[1].strip(" 。")
-    return ""
-
-
-def _last_recommended_gift(turns: list[dict[str, Any]]) -> str:
-    for turn in reversed(turns):
-        text = turn.get("assistant", {}).get("content", "")
-        gift = _extract_recommendation(text)
-        if gift:
-            return gift
-    return ""
-
-
-def _extract_recommendation(text: str) -> str:
-    for marker in ["推荐：", "推荐:"]:
-        if marker in text:
-            rest = text.split(marker, 1)[1].strip()
-            return rest.split("。", 1)[0].split("\n", 1)[0].strip()
-    return ""
 
 
 def _run_baseline_path() -> dict[str, Any]:

@@ -6,13 +6,10 @@ import subprocess
 from typing import Any
 
 from .llm import MimoClient, MimoConfig, mimo_configured
-from .intent import classify_confirmation_intent, should_classify_confirmation
 from .schemas import HarnessSession, Message, TurnTrace
 from .soul import load_soul_prompt
 from .tools import MemoryToolbox
-from assist_everything_betterandbetter_skill.memory import MemoryItem
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
-from assist_everything_betterandbetter_skill.skill import DECISION, HISTORY
 
 
 class HarnessAgent:
@@ -45,9 +42,6 @@ class HarnessAgent:
         context = self._recent_context(include_pre_reset=True)
         rewrite_context = self._recent_context(include_pre_reset=False)
         response, call = self.toolbox.process_message(user_text, context=context)
-        semantic_actions = self._maybe_classify_confirmation(user_text, context, response.to_dict()) if self.toolbox.memory_enabled else []
-        if semantic_actions:
-            response.memory_actions.extend(semantic_actions)
         if not _authoritative_memory_operation(call):
             response.text = self._maybe_llm_rewrite(user_text, stage, response.text, response.applied_memories, rewrite_context)
 
@@ -121,55 +115,6 @@ class HarnessAgent:
             return False
         return mimo_configured()
 
-    def _maybe_classify_confirmation(self, user_text: str, context: str, response: dict[str, Any]) -> list[dict[str, Any]]:
-        actions = response.get("memory_actions", [])
-        if any(action.get("detail", "").startswith("本次给女朋友的礼物已选定为") for action in actions):
-            return []
-        if not should_classify_confirmation(user_text, context):
-            return []
-        client = self.llm_client or (_workbench_mimo_client() if self._use_mimo() else None)
-        intent = classify_confirmation_intent(user_text, context, client=client)
-        if not intent.is_confirmation:
-            return []
-        created = []
-        decision = MemoryItem(
-            DECISION,
-            f"本次给女朋友的礼物已选定为{intent.gift_object}",
-            scope="relationship_gift",
-            subject="user",
-            target="girlfriend",
-            object=intent.gift_object,
-            predicate="selected",
-            source="semantic_confirmation_classifier",
-            evidence=[user_text],
-            applies_when=["relationship_gift"],
-            tags=["礼物", "选定", intent.gift_object, "满意"],
-            validity={"time_scope": "current_task", "status": "accepted"},
-        )
-        if not self.toolbox.skill._is_duplicate(decision):
-            self.toolbox.skill.memory.add(decision)
-            created.append(self.toolbox.skill.memory.events[-1])
-        if intent.action == "sent":
-            history = MemoryItem(
-                HISTORY,
-                f"已经给女朋友送过{intent.gift_object}",
-                scope="relationship_gift",
-                subject="user",
-                target="girlfriend",
-                object=intent.gift_object,
-                predicate="gave",
-                source="semantic_confirmation_classifier",
-                evidence=[user_text],
-                applies_when=["relationship_gift"],
-                tags=["礼物", "送过", intent.gift_object],
-                validity={"time_scope": "past"},
-            )
-            if not self.toolbox.skill._is_duplicate(history):
-                self.toolbox.skill.memory.add(history)
-                created.append(self.toolbox.skill.memory.events[-1])
-        return created
-
-
 def _workbench_mimo_client() -> MimoClient:
     config = MimoConfig.from_env()
     timeout = float(os.getenv("EVALHARNESS_AGENT_MIMO_TIMEOUT", os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120")))
@@ -181,8 +126,6 @@ def _system_prompt(soul: str) -> str:
         "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
         "记忆工具已经完成提取、更新、删除和检索。"
         "必须尊重 tool_draft 和 memory_snapshot，不要虚构或使用 deleted/superseded 记忆。"
-        "注意主体归属：如果上下文是在给女朋友选礼物，预算通常是用户的送礼预算，"
-        "颜色/喜好通常归属女朋友，不要误写成用户本人喜欢。"
         "默认用中文短答，像正常人说话；不要主动解释记忆工具和推理链路。"
     )
     if not soul:

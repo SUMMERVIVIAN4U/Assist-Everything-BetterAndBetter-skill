@@ -86,7 +86,55 @@ class Mem0Client:
         )
 
     def delete(self, memory_id: str) -> dict[str, Any]:
-        return self._request("DELETE", f"/v1/memories/{memory_id}/", None)
+        return self._request_first(
+            "DELETE",
+            [f"/v1/memories/{memory_id}/", f"/v2/memories/{memory_id}/", f"/v3/memories/{memory_id}/"],
+            None,
+        )
+
+    def delete_all(self, *, page_size: int = 200) -> dict[str, Any]:
+        data = self.get_all(page_size=page_size)
+        records = _mem0_results(data)
+        found_count = len(records)
+        try:
+            result = self._request_first(
+                "DELETE",
+                [
+                    f"/v1/memories?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v1/memories/?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v2/memories?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v2/memories/?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v3/memories?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v3/memories/?{urlencode({'user_id': self.config.user_id})}",
+                ],
+                None,
+            )
+            return {
+                "mode": "bulk",
+                "found_count": found_count,
+                "deleted_count": found_count,
+                "errors": [],
+                "result": result,
+            }
+        except Exception as exc:
+            bulk_error = str(exc)
+        deleted = []
+        errors = []
+        for record in records:
+            memory_id = str(record.get("id") or "").strip()
+            if not memory_id:
+                continue
+            try:
+                deleted.append({"id": memory_id, "result": self.delete(memory_id)})
+            except Exception as exc:
+                errors.append({"id": memory_id, "error": str(exc)})
+        return {
+            "mode": "individual",
+            "bulk_error": bulk_error,
+            "found_count": len(records),
+            "deleted_count": len(deleted),
+            "errors": errors,
+        }
 
     def health(self) -> dict[str, Any]:
         if not self.config.ready:

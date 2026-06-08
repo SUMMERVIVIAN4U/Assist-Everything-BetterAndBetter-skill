@@ -1,5 +1,7 @@
 import json
 import unittest
+import urllib.error
+from io import BytesIO
 from unittest.mock import patch
 
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Client, Mem0Config
@@ -7,6 +9,9 @@ from assist_everything_betterandbetter_skill.memory import MemoryItem
 
 
 class _FakeResponse:
+    def __init__(self, body: bytes = b'{"results":[{"id":"remote_1","event":"ADD"}]}'):
+        self.body = body
+
     status = 200
 
     def __enter__(self):
@@ -16,7 +21,7 @@ class _FakeResponse:
         return False
 
     def read(self):
-        return b'{"results":[{"id":"remote_1","event":"ADD"}]}'
+        return self.body
 
 
 class Mem0BackendTest(unittest.TestCase):
@@ -49,6 +54,67 @@ class Mem0BackendTest(unittest.TestCase):
         self.assertFalse(captured["payload"]["async_mode"])
         self.assertEqual(captured["payload"]["user_id"], "u1")
         self.assertEqual(captured["payload"]["metadata"]["project_id"], "project1")
+
+    def test_delete_all_falls_back_to_individual_deletes_when_bulk_is_unavailable(self):
+        calls = []
+
+        def fake_urlopen(request, timeout):
+            calls.append((request.get_method(), request.full_url))
+            if request.get_method() == "GET":
+                return _FakeResponse(b'{"results":[{"id":"remote_1"},{"id":"remote_2"}]}')
+            if "remote_" not in request.full_url:
+                raise urllib.error.HTTPError(request.full_url, 404, "Not Found", hdrs=None, fp=BytesIO(b'{"detail":"Not Found"}'))
+            return _FakeResponse(b'{}')
+
+        client = Mem0Client(
+            Mem0Config(
+                enabled=True,
+                base_url="https://mem0.example",
+                api_key="test-key",
+                user_id="u1",
+            )
+        )
+
+        with patch("assist_everything_betterandbetter_skill.mem0_backend.urllib.request.urlopen", fake_urlopen):
+            result = client.delete_all()
+
+        self.assertEqual(result["found_count"], 2)
+        self.assertEqual(result["deleted_count"], 2)
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(calls[0][0], "GET")
+        self.assertIn("/v1/memories/?user_id=u1", calls[0][1])
+        self.assertEqual(result["mode"], "individual")
+        individual_deletes = [call for call in calls if "remote_" in call[1]]
+        self.assertEqual([call[0] for call in individual_deletes], ["DELETE", "DELETE"])
+        self.assertTrue(individual_deletes[0][1].endswith("/v1/memories/remote_1/"))
+        self.assertTrue(individual_deletes[1][1].endswith("/v1/memories/remote_2/"))
+
+    def test_delete_all_prefers_user_scoped_bulk_delete(self):
+        calls = []
+
+        def fake_urlopen(request, timeout):
+            calls.append((request.get_method(), request.full_url))
+            if request.get_method() == "GET":
+                return _FakeResponse(b'{"results":[{"id":"remote_1"},{"id":"remote_2"}]}')
+            return _FakeResponse(b'{}')
+
+        client = Mem0Client(
+            Mem0Config(
+                enabled=True,
+                base_url="https://mem0.example",
+                api_key="test-key",
+                user_id="u1",
+            )
+        )
+
+        with patch("assist_everything_betterandbetter_skill.mem0_backend.urllib.request.urlopen", fake_urlopen):
+            result = client.delete_all()
+
+        self.assertEqual(result["found_count"], 2)
+        self.assertEqual(result["deleted_count"], 2)
+        self.assertEqual(result["errors"], [])
+        self.assertEqual([call[0] for call in calls], ["GET", "DELETE"])
+        self.assertIn("/v1/memories?user_id=u1", calls[1][1])
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ from assist_everything_betterandbetter_skill.mem0_backend import Mem0Client, Mem
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
-from .ab import run_current_chat_ab, run_gift_ab_script
+from .ab import run_gift_ab_script
 from .evaluation import build_report, evaluate_case_run, save_report, with_history
 from .judge import score_with_fallback
 from .llm import MimoConfig
@@ -83,13 +83,6 @@ class Handler(BaseHTTPRequestHandler):
             print(f"[workbench] run gift A/B script agent={body.get('agent', 'local')}")
             report = run_gift_ab_script(agent_mode=body.get("agent", "local"))
             self._send_json(report)
-        elif path == "/api/run-current-ab":
-            print("[workbench] run current chat A/B replay")
-            report = run_current_chat_ab(
-                [turn.to_dict() for turn in STATE.chat_agent.session.turns],
-                STATE.chat_agent.toolbox.snapshot(),
-            )
-            self._send_json(report)
         elif path == "/api/chat":
             message = str(body.get("message", "")).strip()
             mode = str(body.get("agent", STATE.agent_mode))
@@ -119,12 +112,14 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/reset-memory":
             print("[workbench] reset chat memory")
             response, call = STATE.chat_agent.toolbox.reset_memory()
+            mem0_reset = _reset_mem0_memory()
             STATE.chat_agent.mark_memory_reset_boundary()
             self._send_json(
                 {
                     "ok": True,
                     "response": response.to_dict(),
                     "tool_call": call.to_dict(),
+                    "mem0_reset": mem0_reset,
                     "memory": STATE.chat_agent.toolbox.snapshot(),
                     "session": STATE.chat_agent.session.to_dict(),
                 }
@@ -327,6 +322,17 @@ def _mem0_memory() -> dict[str, Any]:
         return {"ok": False, "stage": "request", "backend": _public_backend_config(), "error": str(exc)}
 
 
+def _reset_mem0_memory() -> dict[str, Any]:
+    config = _mem0_config()
+    if not config.ready:
+        return {"ok": True, "stage": "skipped", "reason": "Mem0 backend is not active or configured"}
+    try:
+        result = Mem0Client(config).delete_all(page_size=200)
+        return {"ok": not result["errors"], "stage": "delete_all", **result}
+    except Exception as exc:
+        return {"ok": False, "stage": "request", "error": str(exc)}
+
+
 def _mem0_records(raw: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
     if isinstance(raw, list):
         return [item for item in raw if isinstance(item, dict)]
@@ -511,9 +517,6 @@ def _chat_case(
 
 
 def _infer_chat_domain(turns: list[dict[str, Any]]) -> str:
-    text = " ".join(turn.get("user", {}).get("content", "") for turn in turns)
-    if any(token in text for token in ["女朋友", "礼物", "首饰", "手链", "项链", "送过"]):
-        return "relationship_gift"
     return "ad_hoc_chat"
 
 
