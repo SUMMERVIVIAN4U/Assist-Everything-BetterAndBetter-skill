@@ -67,15 +67,8 @@ def reset_demo_memory(client: Any | None) -> dict[str, Any]:
             "errors": ["Mem0 client is not configured"],
         }
     client_user_id = getattr(getattr(client, "config", None), "user_id", None)
-    if client_user_id is not None and client_user_id != DEMO_USER_ID:
-        return {
-            "ok": False,
-            "stage": "scope",
-            "demo_user_id": DEMO_USER_ID,
-            "found_count": 0,
-            "deleted_count": 0,
-            "errors": [f"Mem0 client user_id {client_user_id!r} is not the demo user"],
-        }
+    if client_user_id != DEMO_USER_ID:
+        return _reset_scope_error(client_user_id)
     try:
         result = client.delete_all(page_size=200)
     except Exception as exc:
@@ -87,16 +80,54 @@ def reset_demo_memory(client: Any | None) -> dict[str, Any]:
             "deleted_count": 0,
             "errors": [str(exc)],
         }
-    errors = result.get("errors", []) if isinstance(result, dict) else []
+    if not isinstance(result, dict):
+        return {
+            "ok": False,
+            "stage": "delete_all",
+            "demo_user_id": DEMO_USER_ID,
+            "found_count": 0,
+            "deleted_count": 0,
+            "errors": ["Mem0 delete_all returned an invalid result"],
+            "result": result,
+        }
+    errors = _normalize_errors(result.get("errors", []))
     return {
         "ok": not errors,
         "stage": "delete_all",
         "demo_user_id": DEMO_USER_ID,
-        "found_count": int(result.get("found_count", 0)) if isinstance(result, dict) else 0,
-        "deleted_count": int(result.get("deleted_count", 0)) if isinstance(result, dict) else 0,
+        "found_count": _safe_int(result.get("found_count")),
+        "deleted_count": _safe_int(result.get("deleted_count")),
         "errors": errors,
         "result": result,
     }
+
+
+def _reset_scope_error(client_user_id: Any) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "stage": "scope",
+        "demo_user_id": DEMO_USER_ID,
+        "found_count": 0,
+        "deleted_count": 0,
+        "errors": [
+            f"Mem0 reset requires a demo-scoped Mem0 client for {DEMO_USER_ID!r}; got user_id {client_user_id!r}"
+        ],
+    }
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _normalize_errors(errors: Any) -> list[str]:
+    if errors is None:
+        return []
+    if isinstance(errors, list):
+        return [str(error) for error in errors]
+    return [str(errors)]
 
 
 def generate_demo_memories(scale: int, seed: int = 42) -> list[dict[str, Any]]:

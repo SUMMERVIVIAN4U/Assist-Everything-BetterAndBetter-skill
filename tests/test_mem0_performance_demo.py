@@ -140,3 +140,75 @@ class Mem0PerformanceIsolationTest(unittest.TestCase):
         self.assertEqual(0, result["found_count"])
         self.assertEqual(0, result["deleted_count"])
         self.assertIn("workbench-user", result["errors"][0])
+
+    def test_reset_demo_memory_rejects_client_without_config(self):
+        class FakeClient:
+            def __init__(self):
+                self.deleted = False
+
+            def delete_all(self, page_size=200):
+                self.deleted = True
+                return {"mode": "user_scoped", "found_count": 3, "deleted_count": 3, "errors": []}
+
+        client = FakeClient()
+
+        result = reset_demo_memory(client)
+
+        self.assertFalse(client.deleted)
+        self.assertFalse(result["ok"])
+        self.assertEqual("scope", result["stage"])
+        self.assertEqual(DEMO_USER_ID, result["demo_user_id"])
+        self.assertEqual(0, result["found_count"])
+        self.assertEqual(0, result["deleted_count"])
+        self.assertIn("requires a demo-scoped Mem0 client", result["errors"][0])
+
+    def test_reset_demo_memory_rejects_client_without_user_id(self):
+        class FakeClient:
+            def __init__(self):
+                self.config = Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id=None)
+                self.deleted = False
+
+            def delete_all(self, page_size=200):
+                self.deleted = True
+                return {"mode": "user_scoped", "found_count": 3, "deleted_count": 3, "errors": []}
+
+        client = FakeClient()
+
+        result = reset_demo_memory(client)
+
+        self.assertFalse(client.deleted)
+        self.assertFalse(result["ok"])
+        self.assertEqual("scope", result["stage"])
+        self.assertEqual(0, result["deleted_count"])
+        self.assertIn("requires a demo-scoped Mem0 client", result["errors"][0])
+
+    def test_reset_demo_memory_rejects_non_dict_delete_result(self):
+        class FakeClient:
+            def __init__(self):
+                self.config = Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id=DEMO_USER_ID)
+
+            def delete_all(self, page_size=200):
+                return "deleted"
+
+        result = reset_demo_memory(FakeClient())
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("delete_all", result["stage"])
+        self.assertEqual(0, result["found_count"])
+        self.assertEqual(0, result["deleted_count"])
+        self.assertEqual(["Mem0 delete_all returned an invalid result"], result["errors"])
+
+    def test_reset_demo_memory_normalizes_malformed_counts_and_errors(self):
+        class FakeClient:
+            def __init__(self):
+                self.config = Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id=DEMO_USER_ID)
+
+            def delete_all(self, page_size=200):
+                return {"found_count": None, "deleted_count": "many", "errors": "partial failure"}
+
+        result = reset_demo_memory(FakeClient())
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(0, result["found_count"])
+        self.assertEqual(0, result["deleted_count"])
+        self.assertEqual(["partial failure"], result["errors"])
