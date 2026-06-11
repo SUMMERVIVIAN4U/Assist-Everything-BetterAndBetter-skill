@@ -383,9 +383,10 @@ def _reset_mem0_memory() -> dict[str, Any]:
 
 
 def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
-    engine = _normalize_mem0_performance_engine(body.get("engine") or _memory_backend_config()["backend"])
+    raw_engine = body["engine"] if "engine" in body else _memory_backend_config()["backend"]
+    engine = _normalize_mem0_performance_engine(raw_engine)
     if engine not in {"mem0_hosted", "mem0_sdk"}:
-        return {"ok": False, "stage": "run", "error": f"unsupported engine: {body.get('engine') or _memory_backend_config()['backend']}"}
+        return {"ok": False, "stage": "run", "error": f"unsupported engine: {raw_engine}"}
     mode = str(body.get("mode") or "dry_run")
     try:
         scale = _body_int(body, "scale", 1000)
@@ -400,9 +401,10 @@ def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _reset_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
-    engine = _normalize_mem0_performance_engine(body.get("engine") or _memory_backend_config()["backend"])
+    raw_engine = body["engine"] if "engine" in body else _memory_backend_config()["backend"]
+    engine = _normalize_mem0_performance_engine(raw_engine)
     if engine not in {"mem0_hosted", "mem0_sdk"}:
-        return {"ok": False, "stage": "config", "error": f"unsupported engine: {body.get('engine') or _memory_backend_config()['backend']}"}
+        return {"ok": False, "stage": "config", "error": f"unsupported engine: {raw_engine}"}
     try:
         config = config_for_demo_user(_mem0_config())
         client = _mem0_client_for_backend(engine, config)
@@ -412,7 +414,7 @@ def _reset_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_mem0_performance_engine(engine: Any) -> str:
-    normalized = str(engine or "").strip().lower()
+    normalized = str(engine).strip().lower()
     aliases = {
         "mem0": "mem0_hosted",
         "hosted_mem0": "mem0_hosted",
@@ -423,7 +425,7 @@ def _normalize_mem0_performance_engine(engine: Any) -> str:
 
 
 def _body_int(body: dict[str, Any], key: str, default: int) -> int:
-    if key not in body or body.get(key) is None or body.get(key) == "":
+    if key not in body:
         return default
     return int(body[key])
 

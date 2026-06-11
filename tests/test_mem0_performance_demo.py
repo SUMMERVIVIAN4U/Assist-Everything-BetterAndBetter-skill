@@ -247,9 +247,33 @@ class Mem0PerformanceApiTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual("run", result["stage"])
 
+    def test_run_mem0_performance_demo_rejects_empty_scale(self):
+        result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "scale": ""})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+
+    def test_run_mem0_performance_demo_rejects_none_query_count(self):
+        result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "query_count": None})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+
     def test_run_mem0_performance_demo_rejects_invalid_engine(self):
         with patch("evalharness.server._mem0_client_for_backend") as client_factory:
             result = server._run_mem0_performance_demo({"engine": "bogus", "mode": "real_run", "scale": 1000})
+
+        client_factory.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+        self.assertIn("unsupported engine", result["error"])
+
+    def test_run_mem0_performance_demo_rejects_falsy_engine(self):
+        with (
+            patch("evalharness.server._memory_backend_config", return_value={"backend": "mem0_hosted"}),
+            patch("evalharness.server._mem0_client_for_backend") as client_factory,
+        ):
+            result = server._run_mem0_performance_demo({"engine": 0, "mode": "real_run", "scale": 1000})
 
         client_factory.assert_not_called()
         self.assertFalse(result["ok"])
@@ -276,6 +300,18 @@ class Mem0PerformanceApiTest(unittest.TestCase):
     def test_reset_mem0_performance_demo_rejects_invalid_engine(self):
         with patch("evalharness.server._mem0_client_for_backend") as client_factory:
             result = server._reset_mem0_performance_demo({"engine": "bogus"})
+
+        client_factory.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("config", result["stage"])
+        self.assertIn("unsupported engine", result["error"])
+
+    def test_reset_mem0_performance_demo_rejects_falsy_engine(self):
+        with (
+            patch("evalharness.server._memory_backend_config", return_value={"backend": "mem0_hosted"}),
+            patch("evalharness.server._mem0_client_for_backend") as client_factory,
+        ):
+            result = server._reset_mem0_performance_demo({"engine": False})
 
         client_factory.assert_not_called()
         self.assertFalse(result["ok"])
