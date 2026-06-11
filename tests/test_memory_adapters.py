@@ -127,6 +127,45 @@ class MemoryAdapterTest(unittest.TestCase):
             self.assertEqual("add", response.memory_actions[0]["action"])
             self.assertEqual("remote_structured", response.memory_actions[0]["storage"])
 
+    def test_hosted_mem0_backend_saves_explicit_parent_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(
+                memory_dir=tmp,
+                persist=True,
+                mem0_config=Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id="u1"),
+                memory_backend="mem0_hosted",
+            )
+
+            class FakeHosted:
+                def __init__(self):
+                    self.added_items = []
+
+                def add(self, item):
+                    self.added_items.append(item)
+                    return {"event_id": "evt_identity"}
+
+                def search(self, query, top_k=8):
+                    return []
+
+                def get_all(self, page_size=50):
+                    return {"results": []}
+
+            fake = FakeHosted()
+            skill.mem0_client = fake
+
+            response = skill.process_message(
+                "我是一个宝妈，记住我的身份",
+                context="user: 帮我规划一个端午节去上海旅游的行程\nassistant: 有老人、小孩或需要省力一点吗？",
+            )
+
+            self.assertEqual(1, len(fake.added_items))
+            self.assertEqual("我是一个宝妈，记住我的身份", fake.added_items[0].content)
+            self.assertEqual("life_family_travel", fake.added_items[0].scope)
+            self.assertEqual("context_fact", fake.added_items[0].type)
+            self.assertEqual("add", response.memory_actions[0]["action"])
+            self.assertEqual("mem0_hosted", response.memory_actions[0]["backend"])
+            self.assertTrue(response.memory_actions[0]["ok"])
+
     def test_hosted_mem0_backend_applies_update_strategy_to_remote_records(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill = AssistSkill(

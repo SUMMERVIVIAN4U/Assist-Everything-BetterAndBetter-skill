@@ -2,6 +2,7 @@ let report = null;
     let settings = null;
     let selectedCaseKey = null;
     let chatEvalReport = null;
+    let performanceReport = null;
     const dimNames = {reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用', update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'};
     const dimMax = {reproducibility:10, memory_extraction:20, memory_application:25, update_and_decay:20, transparency:10, result_quality:15};
     const memoryBackendLabels = {local:'本地JSON', mem0_hosted:'Mem0 Hosted', mem0_sdk:'Mem0 SDK'};
@@ -30,6 +31,7 @@ let report = null;
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       el.classList.add('active');
       if (id === 'settings') fetchSettings();
+      if (id === 'performance') fetchPerformanceLatest();
     }
     function setSettingsTab(id, el) {
       document.querySelectorAll('.settings-view').forEach(view => view.classList.add('hidden'));
@@ -211,6 +213,108 @@ let report = null;
       status.textContent = `checking ${label}...`;
       const data = await (await fetch(`/api/mem0-health?engine=${encodeURIComponent(engine)}`)).json();
       status.textContent = data.ok ? `${label} OK · ${data.stage} · results=${data.result_count ?? 0}` : `${label} FAIL · ${data.stage} · ${data.error || ''}`;
+    }
+    async function fetchPerformanceLatest() {
+      const status = document.getElementById('performanceStatus');
+      status.textContent = 'loading latest report...';
+      try {
+        const data = await (await fetch('/api/mem0-performance-demo/latest')).json();
+        performanceReport = data;
+        renderPerformanceReport(data);
+      } catch (err) {
+        status.textContent = `加载失败：${err.message}`;
+      }
+    }
+    async function runPerformanceDemo() {
+      const btn = document.getElementById('performanceRunBtn');
+      const status = document.getElementById('performanceStatus');
+      const mode = document.getElementById('performanceMode').value;
+      if (mode === 'real_run' && !window.confirm('Real Run 会向隔离 demo 用户写入大量 Mem0 记忆，完成后会尝试清理。确认继续？')) return;
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      status.innerHTML = '<span class="loading-row"><span class="spinner"></span><span>正在运行性能演示...</span></span>';
+      try {
+        const payload = {
+          engine: document.getElementById('performanceEngine').value,
+          mode,
+          scale: Number(document.getElementById('performanceScale').value),
+          query_count: Number(document.getElementById('performanceQueries').value)
+        };
+        const data = await (await fetch('/api/mem0-performance-demo/run', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify(payload)
+        })).json();
+        performanceReport = data;
+        renderPerformanceReport(data);
+      } catch (err) {
+        status.textContent = `运行失败：${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Demo';
+      }
+    }
+    async function resetPerformanceDemo() {
+      const status = document.getElementById('performanceStatus');
+      status.textContent = 'resetting demo memory...';
+      try {
+        const payload = {engine: document.getElementById('performanceEngine').value};
+        const data = await (await fetch('/api/mem0-performance-demo/reset', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify(payload)
+        })).json();
+        status.textContent = data.ok
+          ? `Demo Memory 已重置 · 删除 ${data.deleted_count || 0}/${data.found_count || 0} 条`
+          : `Demo Memory 重置失败 · ${data.stage || ''} · ${data.error || (data.errors || []).join('; ')}`;
+      } catch (err) {
+        status.textContent = `重置失败：${err.message}`;
+      }
+    }
+    function renderPerformanceReport(data) {
+      const status = document.getElementById('performanceStatus');
+      const metrics = document.getElementById('performanceMetrics');
+      const timeline = document.getElementById('performanceTimeline');
+      const examples = document.getElementById('performanceExamples');
+      const raw = document.getElementById('performanceReport');
+      raw.textContent = JSON.stringify(data || {}, null, 2);
+      if (!data || data.ok === false) {
+        const error = data?.error || (data?.errors || []).join('; ') || 'No performance demo has run yet.';
+        status.textContent = `${data?.stage || 'empty'} · ${error}`;
+        metrics.innerHTML = '';
+        timeline.innerHTML = '';
+        examples.innerHTML = '<div class="muted">暂无演示结果。</div>';
+        return;
+      }
+      status.textContent = `${data.mode} · ${data.engine} · ${data.scale} 条 · demo_user=${data.demo_user_id}`;
+      metrics.innerHTML = [
+        metricHtml('Write QPS', data.metrics?.write_qps),
+        metricHtml('Search P50', `${data.metrics?.search_p50_ms ?? '-'} ms`),
+        metricHtml('Search P95', `${data.metrics?.search_p95_ms ?? '-'} ms`),
+        metricHtml('Error Rate', data.metrics?.error_rate ?? 0)
+      ].join('');
+      timeline.innerHTML = (data.phases || []).map(phase => `
+        <div class="timeline-step ${phase.ok ? 'good' : 'bad'}">
+          <b>${escapeHtml(phase.name || '')}</b>
+          <span>${phase.elapsed_ms ?? 0} ms</span>
+          <span class="muted">count=${phase.count ?? '-'}</span>
+        </div>`).join('');
+      examples.innerHTML = (data.examples || []).map(example => `
+        <div class="turn-card">
+          <div class="case-head"><b>${escapeHtml(example.query || '')}</b><span class="chip">${example.latency_ms ?? 0} ms</span></div>
+          <div class="turn-list">${(example.top_k || []).map(item => `
+            <div class="mini">
+              <div class="case-head"><b>${escapeHtml(item.id || '')}</b><span class="score">${item.retrieval_score ?? item.score ?? '-'}</span></div>
+              <div class="body">${escapeHtml(item.content || '')}</div>
+              <div class="muted">${escapeHtml(item.scope || '')} · ${escapeHtml(item.updated_at || '')} · ${escapeHtml(item.retrieval_rank_strategy || '')}</div>
+            </div>`).join('') || '<div class="muted">无匹配结果。</div>'}</div>
+        </div>`).join('') || '<div class="muted">暂无检索样例。</div>';
+    }
+    function metricHtml(label, value) {
+      return `<div class="metric"><span class="muted">${escapeHtml(label)}</span><b>${escapeHtml(value ?? '-')}</b></div>`;
+    }
+    function safeJsonParse(text, fallback = {}) {
+      try { return JSON.parse(text); } catch { return fallback; }
     }
     async function runPresetCases() {
       const list = document.getElementById('caseList');

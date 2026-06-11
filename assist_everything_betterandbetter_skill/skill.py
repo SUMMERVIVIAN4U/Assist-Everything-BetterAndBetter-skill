@@ -932,6 +932,9 @@ def _confidence_for_memory(text: str, item: MemoryItem) -> tuple[float, str]:
     if _explicit_memory_request(text):
         score += 0.25
         reasons.append("explicit_memory_signal")
+    if _is_parent_identity_fact(text):
+        score += 0.25
+        reasons.append("parent_identity_fact")
     if any(marker in text for marker in HIGH_CONFIDENCE_MARKERS):
         score += 0.2
         reasons.append("durable_or_decisive_marker")
@@ -1144,8 +1147,15 @@ def _has_contextual_task_fact(text: str, context: str = "") -> bool:
     return bool(re.search(r"\d+\s*[-~到至]?\s*\d*\s*岁", text)) or any(marker in text for marker in fact_markers)
 
 
+def _is_parent_identity_fact(text: str) -> bool:
+    return any(marker in text for marker in ["宝妈", "宝爸"]) or (
+        any(marker in text for marker in ["我是", "我的身份"])
+        and any(marker in text for marker in ["妈妈", "母亲", "爸爸", "父亲", "家长"])
+    )
+
+
 def _infer_scope(text: str, context: str = "") -> str:
-    if any(token in text for token in ["家庭", "亲子", "旅行", "行程", "路线", "半日游", "动物", "网红", "父亲", "小孩", "孩子", "景点", "上海"]):
+    if _is_parent_identity_fact(text) or any(token in text for token in ["家庭", "亲子", "旅行", "行程", "路线", "半日游", "动物", "网红", "父亲", "小孩", "孩子", "景点", "上海"]):
         return "life_family_travel"
     if any(token in text for token in ["老板", "周报", "项目", "跨部门", "同步", "研发", "设计", "运营", "风险", "负责人"]):
         return "work_report"
@@ -1157,7 +1167,7 @@ def _infer_scope(text: str, context: str = "") -> str:
 
 
 def _infer_memory_type(text: str, scope: str) -> str:
-    if scope == "life_family_travel" and (any(token in text for token in ["小孩", "孩子", "老人", "同行"]) or re.search(r"\d+\s*[-~到至]?\s*\d*\s*岁", text)):
+    if scope == "life_family_travel" and (_is_parent_identity_fact(text) or any(token in text for token in ["小孩", "孩子", "老人", "同行"]) or re.search(r"\d+\s*[-~到至]?\s*\d*\s*岁", text)):
         return CONTEXT_FACT
     if scope == "work_report" and any(token in text for token in ["只用于", "仅用于", "不要", "不用", "不能"]):
         return CONSTRAINT

@@ -24,6 +24,7 @@
     <button class="tab active" onclick="setTab('chat', this)">Agent Chat</button>
     <button class="tab" onclick="setTab('cases', this)">History Evals</button>
     <button class="tab" onclick="setTab('stats', this)">统计</button>
+    <button class="tab" onclick="setTab('performance', this)">Performance Demo</button>
     <button class="tab" onclick="setTab('settings', this)">设置</button>
   </nav>
   <main>
@@ -67,6 +68,54 @@
       </div>
     </section>
     <section id="stats" class="hidden"></section>
+    <section id="performance" class="hidden">
+      <div class="performance-layout">
+        <div class="panel">
+          <div class="case-head">
+            <div>
+              <h2>Mem0 超大记忆性能演示</h2>
+              <div id="performanceStatus" class="muted">Dry Run 不访问远端；Real Run 使用隔离用户 workbench-demo-large-memory。</div>
+            </div>
+            <button onclick="fetchPerformanceLatest()">刷新</button>
+          </div>
+          <div class="demo-controls">
+            <label for="performanceEngine">记忆引擎</label>
+            <select id="performanceEngine">
+              <option value="mem0_hosted">Mem0 Hosted</option>
+              <option value="mem0_sdk">Mem0 SDK</option>
+            </select>
+            <label for="performanceMode">运行模式</label>
+            <select id="performanceMode">
+              <option value="dry_run">Dry Run</option>
+              <option value="real_run">Real Run</option>
+            </select>
+            <label for="performanceScale">记忆规模</label>
+            <select id="performanceScale">
+              <option value="1000">1,000</option>
+              <option value="10000">10,000</option>
+              <option value="50000">50,000</option>
+            </select>
+            <label for="performanceQueries">检索次数</label>
+            <input id="performanceQueries" type="number" min="1" max="100" value="20">
+            <div class="wide privacy-actions">
+              <button id="performanceRunBtn" class="primary" onclick="runPerformanceDemo()">Run Demo</button>
+              <button onclick="resetPerformanceDemo()">Reset Demo Memory</button>
+              <span class="status-line">Real Run 会写入并清理隔离 demo 用户，不影响 Agent Chat 用户。</span>
+            </div>
+          </div>
+          <div id="performanceMetrics" class="metrics performance-metrics"></div>
+          <div id="performanceTimeline" class="timeline"></div>
+        </div>
+        <div class="panel">
+          <div class="case-head"><div><h2>检索样例</h2><div class="muted">统一按得分 + 时间排序展示 TopK。</div></div></div>
+          <div id="performanceExamples" class="turn-list"><div class="muted">暂无演示结果。</div></div>
+        </div>
+        <div class="panel">
+          <div class="case-head"><div><h2>原始报告</h2><div class="muted">用于审计 demo_user_id、阶段、reset 结果。</div></div></div>
+          <pre id="performanceReport">{}</pre>
+        </div>
+      </div>
+    </section>
     <section id="settings" class="hidden">
       <div class="grid">
         <div class="panel">

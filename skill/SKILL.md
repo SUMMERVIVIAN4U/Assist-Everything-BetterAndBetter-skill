@@ -3,9 +3,9 @@ name: assist-everything-betterandbetter-skill
 description: 当任务需要授权协作记忆、Workbench 记忆检查、隐私友好的本地或 Mem0 记忆后端、可复现记忆评测，或需要记录纠正、错误、能力缺口和可复用经验以形成自我改进闭环时使用。
 ---
 
-# Assist Everything BetterAndBetter Skill
+# 万事越来越好协作记忆 Skill
 
-This skill provides an authorized collaboration-memory workflow that can also 从错误中学习、在经验中成长. It treats memory as an auditable user-controlled capability, not a silent transcript dump.
+这个 Skill 提供一套经过授权的协作记忆工作流，也支持“从错误中学习、在经验中成长”。它把记忆视为用户可控、可审计的能力，而不是静默记录完整对话。
 
 ## Trigger
 
@@ -16,7 +16,7 @@ Use when the user or evaluator asks for:
 - handling preference changes, conflict, narrowed scope, downgrade, archive, delete, or reset
 - inspecting memory profile, compact snapshot, three-layer memory state, privacy controls, or backend state
 - running reproducible evals for memory extraction, application, update/decay, transparency, and result quality
-- operating the Workbench Agent Chat, History Evals, Stats, Settings, Workbench Memory, Mem0 Memory, 当前 Memory, or `/api/current-memory` views
+- operating the Workbench Agent Chat, History Evals, Stats, Performance Demo, Settings, Workbench Memory, Mem0 Memory, 当前 Memory, or `/api/current-memory` views
 - logging corrections, command failures, integration errors, feature requests, and recurring patterns into `.learnings/`
 
 ## Memory Policy
@@ -103,6 +103,7 @@ Workbench tabs:
 - `Agent Chat`: live conversation through the same `process_message(...)` path as evals.
 - `History Evals`: saved preset and chat eval runs.
 - `统计`: summary metrics across historical runs.
+- `Performance Demo`: Mem0 超大记忆端到端性能演示，展示写入、检索、score+time 排序、样例 TopK、阶段耗时和 reset 结果。
 - `设置`: Agent 配置, Workbench Memory, Mem0 Memory, 隐私设置.
 
 Agent Chat must keep the right-side `当前 Memory` panel intuitive:
@@ -118,6 +119,14 @@ Settings rules:
 - Workbench Memory shows local trace/audit memory.
 - Mem0 Memory shows remote memory for comparison when configured.
 - 隐私设置 lets the user maintain private marker lines; matching content is rejected/redacted and not saved.
+
+Performance Demo rules:
+
+- 默认使用 `Dry Run`，只生成确定性数据和模拟指标，不访问远端 Mem0。
+- `Real Run` 只允许使用隔离用户 `workbench-demo-large-memory`，不得复用 Agent Chat 当前用户。
+- 演示结果必须展示 `demo_user_id`、记忆规模、写入 QPS、检索 P50/P95、错误率、阶段时间线和检索样例。
+- 检索样例使用与运行时一致的统一策略：按 `retrieval_score` 降序，再按更新时间降序，并标记 `retrieval_rank_strategy=score_time`。
+- `Reset Demo Memory` 只清理隔离 demo 用户的记忆；不得清理当前 Agent Chat 用户或全局记忆库。
 
 Reset Memory must reset only the selected engine. For HostedMem0Client and Mem0SdkClient, deletion/reset must be scoped to the configured `user_id`; never call a global reset when user-scoped deletion is available.
 

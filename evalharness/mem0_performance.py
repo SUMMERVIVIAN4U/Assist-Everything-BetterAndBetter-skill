@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -176,25 +177,26 @@ def run_performance_demo(
     _validate_mode(mode)
     _validate_run_scale(scale)
     _validate_positive_int("query_count", query_count)
-    if mode == "real_run":
-        raise ValueError("real_run mode is not implemented for Task 1")
 
     memories = generate_demo_memories(scale)
     queries = generate_demo_queries(query_count)
     run_id = _run_id(engine, mode, scale, query_count)
-    started_at = _BASE_TIME
+    started_at = datetime.now(timezone.utc).isoformat() if mode == "real_run" else _BASE_TIME
 
-    phases, metrics, examples, reset = _run_dry_demo(memories, queries)
+    if mode == "real_run":
+        phases, metrics, examples, reset = _run_real_demo(client, memories, queries)
+    else:
+        phases, metrics, examples, reset = _run_dry_demo(memories, queries)
 
     report = {
-        "ok": len(reset["errors"]) == 0,
+        "ok": all(phase.get("ok") for phase in phases) and len(reset["errors"]) == 0,
         "run_id": run_id,
         "engine": engine,
         "mode": mode,
         "scale": scale,
         "demo_user_id": DEMO_USER_ID,
         "started_at": started_at,
-        "finished_at": _finished_at(scale, query_count),
+        "finished_at": datetime.now(timezone.utc).isoformat() if mode == "real_run" else _finished_at(scale, query_count),
         "phases": phases,
         "metrics": metrics,
         "examples": examples,
@@ -250,6 +252,118 @@ def _run_dry_demo(
     }
     reset = {"found_count": len(memories), "deleted_count": len(memories), "errors": []}
     return phases, metrics, examples, reset
+
+
+def _run_real_demo(
+    client: Any | None,
+    memories: list[dict[str, Any]],
+    queries: list[str],
+) -> tuple[list[dict[str, Any]], dict[str, float], list[dict[str, Any]], dict[str, Any]]:
+    if client is None:
+        raise ValueError("real_run requires a configured Mem0 client")
+    errors: list[str] = []
+    write_count = 0
+    write_started = time.perf_counter()
+    for memory in memories:
+        try:
+            client.add_text(memory["content"], context="mem0_large_memory_performance_demo")
+            write_count += 1
+        except Exception as exc:
+            errors.append(f"{memory['id']}: {exc}")
+            if len(errors) >= 10:
+                break
+    write_ms = round((time.perf_counter() - write_started) * 1000, 3)
+
+    examples: list[dict[str, Any]] = []
+    search_errors: list[str] = []
+    search_latencies: list[float] = []
+    for query in queries:
+        search_started = time.perf_counter()
+        try:
+            raw_results = client.search(query, top_k=10)
+            top_k = _normalize_real_results(raw_results)
+            examples.append(
+                {
+                    "query": query,
+                    "latency_ms": round((time.perf_counter() - search_started) * 1000, 3),
+                    "top_k": top_k[:5],
+                }
+            )
+        except Exception as exc:
+            search_errors.append(f"{query}: {exc}")
+            examples.append({"query": query, "latency_ms": 0.0, "top_k": []})
+        search_latencies.append(round((time.perf_counter() - search_started) * 1000, 3))
+
+    reset = reset_demo_memory(client)
+    reset_errors = _normalize_errors(reset.get("errors", []))
+    phases = [
+        {"name": "generate", "ok": True, "count": len(memories), "elapsed_ms": 0.0},
+        {"name": "write", "ok": not errors, "count": write_count, "elapsed_ms": write_ms, "errors": errors[:3]},
+        {
+            "name": "search",
+            "ok": not search_errors,
+            "count": len(queries) - len(search_errors),
+            "elapsed_ms": round(sum(search_latencies), 3),
+            "errors": search_errors[:3],
+        },
+        {
+            "name": "reset",
+            "ok": bool(reset.get("ok")),
+            "count": reset.get("deleted_count", 0),
+            "elapsed_ms": 0.0,
+            "errors": reset_errors[:3],
+        },
+    ]
+    total_errors = len(errors) + len(search_errors) + len(reset_errors)
+    metrics = {
+        "write_qps": round(write_count / max(write_ms / 1000.0, 0.001), 3),
+        "search_qps": round(len(queries) / max(sum(search_latencies) / 1000.0, 0.001), 3),
+        "search_p50_ms": round(_percentile(search_latencies, 50), 3),
+        "search_p95_ms": round(_percentile(search_latencies, 95), 3),
+        "error_rate": round(total_errors / max(len(memories) + len(queries) + 1, 1), 6),
+        "memory_count": float(len(memories)),
+        "query_count": float(len(queries)),
+    }
+    reset = {**reset, "errors": reset_errors}
+    return phases, metrics, examples, reset
+
+
+def _normalize_real_results(results: Any) -> list[dict[str, Any]]:
+    if not isinstance(results, list):
+        results = []
+    normalized = [_real_result_record(result) for result in results]
+    active = [item for item in normalized if item.get("status", "active") == "active"]
+    active.sort(key=lambda item: (item["retrieval_score"], item.get("updated_at") or item.get("created_at") or ""), reverse=True)
+    return active
+
+
+def _real_result_record(result: Any) -> dict[str, Any]:
+    if hasattr(result, "to_dict"):
+        data = result.to_dict()
+    elif isinstance(result, dict):
+        data = dict(result)
+    else:
+        data = {}
+    validity = data.get("validity") if isinstance(data.get("validity"), dict) else {}
+    score = _safe_float(validity.get("retrieval_score", validity.get("mem0_score", data.get("score", data.get("confidence", 0.0)))))
+    return {
+        "id": data.get("id"),
+        "content": data.get("content") or data.get("memory") or data.get("text") or "",
+        "scope": data.get("scope") or "mem0",
+        "status": data.get("status") or "active",
+        "score": score,
+        "retrieval_score": score,
+        "updated_at": data.get("updated_at") or "",
+        "created_at": data.get("created_at") or "",
+        "retrieval_rank_strategy": "score_time",
+    }
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return round(float(value), 6)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _dry_top_k(query: str, memories: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:

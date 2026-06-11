@@ -3,101 +3,71 @@
   "engine": "mem0_hosted",
   "examples": [
     {
-      "latency_ms": 28.86,
+      "latency_ms": 0.0,
       "query": "What should I remember about Shanghai family trip?",
-      "top_k": [
-        {
-          "content": "Remember that monthly spending review preference #668 favors option 1.",
-          "id": "demo_mem_000668",
-          "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.998362,
-          "scope": "learning_research",
-          "score": 0.998362,
-          "updated_at": "2026-06-11T20:00:00+00:00"
-        },
-        {
-          "content": "Remember that quarterly roadmap preference #951 favors option 2.",
-          "id": "demo_mem_000951",
-          "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.99799,
-          "scope": "life_family_travel",
-          "score": 0.99799,
-          "updated_at": "2026-06-11T15:00:00+00:00"
-        },
-        {
-          "content": "Remember that home organization preference #764 favors option 5.",
-          "id": "demo_mem_000764",
-          "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.996704,
-          "scope": "finance_budgeting",
-          "score": 0.996704,
-          "updated_at": "2026-06-11T20:00:00+00:00"
-        },
-        {
-          "content": "Remember that Shanghai family trip preference #129 favors option 2.",
-          "id": "demo_mem_000129",
-          "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.996442,
-          "scope": "learning_research",
-          "score": 0.996442,
-          "updated_at": "2026-06-11T09:00:00+00:00"
-        },
-        {
-          "content": "Remember that home organization preference #779 favors option 1.",
-          "id": "demo_mem_000779",
-          "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.996388,
-          "scope": "finance_budgeting",
-          "score": 0.996388,
-          "updated_at": "2026-06-11T11:00:00+00:00"
-        }
-      ]
+      "top_k": []
     }
   ],
-  "finished_at": "2026-06-11T00:00:01+00:00",
+  "finished_at": "2026-06-11T03:15:52.574292+00:00",
   "metrics": {
-    "error_rate": 0.0,
+    "error_rate": 0.011976,
     "memory_count": 1000.0,
     "query_count": 1.0,
-    "search_p50_ms": 28.86,
-    "search_p95_ms": 28.86,
-    "search_qps": 34.65,
-    "write_qps": 5555.556
+    "search_p50_ms": 0.002,
+    "search_p95_ms": 0.002,
+    "search_qps": 1000.0,
+    "write_qps": 0.0
   },
-  "mode": "dry_run",
-  "ok": true,
+  "mode": "real_run",
+  "ok": false,
   "phases": [
     {
       "count": 1000,
-      "elapsed_ms": 30.0,
+      "elapsed_ms": 0.0,
       "name": "generate",
       "ok": true
     },
     {
-      "count": 1000,
-      "elapsed_ms": 180.0,
+      "count": 0,
+      "elapsed_ms": 0.012,
+      "errors": [
+        "demo_mem_000001: 'object' object has no attribute 'add_text'",
+        "demo_mem_000002: 'object' object has no attribute 'add_text'",
+        "demo_mem_000003: 'object' object has no attribute 'add_text'"
+      ],
       "name": "write",
-      "ok": true
+      "ok": false
     },
     {
-      "count": 1,
-      "elapsed_ms": 28.86,
+      "count": 0,
+      "elapsed_ms": 0.002,
+      "errors": [
+        "What should I remember about Shanghai family trip?: 'object' object has no attribute 'search'"
+      ],
       "name": "search",
-      "ok": true
+      "ok": false
     },
     {
-      "count": 1000,
-      "elapsed_ms": 20.0,
+      "count": 0,
+      "elapsed_ms": 0.0,
+      "errors": [
+        "Mem0 reset requires a demo-scoped Mem0 client for 'workbench-demo-large-memory'; got user_id None"
+      ],
       "name": "reset",
-      "ok": true
+      "ok": false
     }
   ],
   "reset": {
-    "deleted_count": 1000,
-    "errors": [],
-    "found_count": 1000
+    "deleted_count": 0,
+    "demo_user_id": "workbench-demo-large-memory",
+    "errors": [
+      "Mem0 reset requires a demo-scoped Mem0 client for 'workbench-demo-large-memory'; got user_id None"
+    ],
+    "found_count": 0,
+    "ok": false,
+    "stage": "scope"
   },
-  "run_id": "mem0-perf-050e7880354f",
+  "run_id": "mem0-perf-78e92313ce76",
   "scale": 1000,
-  "started_at": "2026-06-11T00:00:00+00:00"
+  "started_at": "2026-06-11T03:15:52.574250+00:00"
 }

@@ -76,9 +76,64 @@ class Mem0PerformanceDemoTest(unittest.TestCase):
 
         self.assertTrue(report["ok"])
 
-    def test_real_run_is_not_implemented_in_task_1(self):
-        with self.assertRaisesRegex(ValueError, "real_run mode is not implemented"):
-            run_performance_demo(engine="mem0_hosted", mode="real_run", scale=1000, query_count=1, client=object())
+    def test_real_run_writes_searches_and_resets_demo_user(self):
+        class FakeClient:
+            def __init__(self):
+                self.config = Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id=DEMO_USER_ID)
+                self.writes = []
+                self.searches = []
+                self.deleted = False
+
+            def add_text(self, text, context=""):
+                self.writes.append({"text": text, "context": context})
+                return {"id": f"mem0_{len(self.writes)}"}
+
+            def search(self, query, top_k=10):
+                self.searches.append({"query": query, "top_k": top_k})
+                return [
+                    {
+                        "id": "newer",
+                        "content": "newer result",
+                        "scope": "demo",
+                        "status": "active",
+                        "score": 0.8,
+                        "updated_at": "2026-06-11T02:00:00+00:00",
+                    },
+                    {
+                        "id": "older",
+                        "content": "older result",
+                        "scope": "demo",
+                        "status": "active",
+                        "score": 0.8,
+                        "updated_at": "2026-06-11T01:00:00+00:00",
+                    },
+                ]
+
+            def delete_all(self, page_size=200):
+                self.deleted = True
+                return {"mode": "user_scoped", "found_count": len(self.writes), "deleted_count": len(self.writes), "errors": []}
+
+        client = FakeClient()
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "mem0_performance_demo.json"
+            with patch.object(mem0_performance, "LATEST_PERFORMANCE_REPORT", report_path):
+                report = run_performance_demo(
+                    engine="mem0_hosted",
+                    mode="real_run",
+                    scale=1000,
+                    query_count=2,
+                    client=client,
+                )
+
+        self.assertTrue(report["ok"])
+        self.assertEqual("real_run", report["mode"])
+        self.assertEqual(1000, len(client.writes))
+        self.assertEqual(2, len(client.searches))
+        self.assertTrue(client.deleted)
+        self.assertEqual(DEMO_USER_ID, report["demo_user_id"])
+        self.assertEqual(1000, report["reset"]["deleted_count"])
+        self.assertEqual("score_time", report["examples"][0]["top_k"][0]["retrieval_rank_strategy"])
+        self.assertEqual("newer", report["examples"][0]["top_k"][0]["id"])
 
 
 class Mem0PerformanceIsolationTest(unittest.TestCase):
