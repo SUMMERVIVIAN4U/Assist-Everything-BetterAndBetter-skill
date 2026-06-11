@@ -78,7 +78,7 @@ class MemoryAdapterTest(unittest.TestCase):
         self.assertEqual(1024, captured["config"]["vector_store"]["config"]["embedding_model_dims"])
         self.assertIn("mem0_sdk_qdrant", captured["config"]["vector_store"]["config"]["path"])
 
-    def test_hosted_mem0_backend_is_mutually_exclusive_with_local_extraction(self):
+    def test_hosted_mem0_backend_uses_local_strategy_and_keeps_local_store_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill = AssistSkill(
                 memory_dir=tmp,
@@ -89,17 +89,22 @@ class MemoryAdapterTest(unittest.TestCase):
 
             class FakeHosted:
                 def __init__(self):
-                    self.added = []
+                    self.added_items = []
+                    self.added_text = []
 
                 def add_text(self, text, context=""):
-                    self.added.append({"text": text, "context": context})
-                    return {"event_id": "evt_hosted"}
+                    self.added_text.append({"text": text, "context": context})
+                    return {"event_id": "evt_text"}
+
+                def add(self, item):
+                    self.added_items.append(item)
+                    return {"event_id": "evt_structured"}
 
                 def search(self, query, top_k=8):
                     return []
 
                 def get_all(self, page_size=50):
-                    return {"results": [{"id": "remote_1", "memory": "优先室内，少走路，孩子怕热"}]}
+                    return {"results": []}
 
                 def delete_all(self, page_size=200):
                     return {"mode": "individual", "found_count": 1, "deleted_count": 1, "errors": []}
@@ -107,12 +112,78 @@ class MemoryAdapterTest(unittest.TestCase):
             fake = FakeHosted()
             skill.mem0_client = fake
 
-            response = skill.process_message("优先室内，少走路，孩子怕热", context="user: 上海亲子游")
+            response = skill.process_message(
+                "有小孩，玩3天",
+                context="user: 帮我规划一个上海旅游行程\nassistant: 你们同行人有老人、小孩或行动不便的情况吗？",
+            )
 
-            self.assertEqual([{"text": "优先室内，少走路，孩子怕热", "context": "user: 上海亲子游"}], fake.added)
+            self.assertEqual([], fake.added_text)
+            self.assertEqual(1, len(fake.added_items))
+            self.assertEqual("有小孩，玩3天", fake.added_items[0].content)
+            self.assertEqual("life_family_travel", fake.added_items[0].scope)
+            self.assertEqual("context_fact", fake.added_items[0].type)
             self.assertEqual([], skill.memory.active())
             self.assertEqual("mem0_hosted", response.memory_actions[0]["backend"])
-            self.assertEqual("remote_extract", response.memory_actions[0]["action"])
+            self.assertEqual("add", response.memory_actions[0]["action"])
+            self.assertEqual("remote_structured", response.memory_actions[0]["storage"])
+
+    def test_hosted_mem0_backend_applies_update_strategy_to_remote_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(
+                memory_dir=tmp,
+                persist=True,
+                mem0_config=Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id="u1"),
+                memory_backend="mem0_hosted",
+            )
+
+            class FakeHosted:
+                def __init__(self):
+                    self.added_items = []
+                    self.deleted_ids = []
+
+                def add(self, item):
+                    self.added_items.append(item)
+                    return {"event_id": "evt_new"}
+
+                def search(self, query, top_k=8):
+                    return []
+
+                def get_all(self, page_size=50):
+                    return {
+                        "results": [
+                            {
+                                "id": "remote_old",
+                                "memory": "动物园，小孩3-4岁",
+                                "metadata": {
+                                    "assist_memory": {
+                                        "id": "mem_old",
+                                        "type": "context_fact",
+                                        "scope": "life_family_travel",
+                                        "content": "动物园，小孩3-4岁",
+                                        "status": "active",
+                                        "confidence": 0.8,
+                                    }
+                                },
+                            }
+                        ]
+                    }
+
+                def delete(self, memory_id):
+                    self.deleted_ids.append(memory_id)
+                    return {"deleted": memory_id}
+
+            fake = FakeHosted()
+            skill.mem0_client = fake
+
+            response = skill.process_message("不是动物园，改成室内科技馆，孩子怕热", context="user: 上海亲子游")
+
+            self.assertEqual(["remote_old"], fake.deleted_ids)
+            self.assertEqual(1, len(fake.added_items))
+            self.assertEqual("不是动物园，改成室内科技馆，孩子怕热", fake.added_items[0].content)
+            self.assertEqual([], skill.memory.active())
+            actions = response.memory_actions
+            self.assertTrue(any(action["action"] == "downgrade" and action["backend"] == "mem0_hosted" for action in actions))
+            self.assertTrue(any(action["action"] == "add" and action["backend"] == "mem0_hosted" for action in actions))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ let report = null;
     let chatEvalReport = null;
     const dimNames = {reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用', update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'};
     const dimMax = {reproducibility:10, memory_extraction:20, memory_application:25, update_and_decay:20, transparency:10, result_quality:15};
+    const memoryBackendLabels = {local:'本地JSON', mem0_hosted:'Mem0 Hosted', mem0_sdk:'Mem0 SDK'};
+    const memoryBackendCheckLabels = {local:'无需 Check Mem0', mem0_hosted:'Check Mem0 Hosted', mem0_sdk:'Check Mem0 SDK'};
 
     async function fetchConfig() {
       const cfg = await (await fetch('/api/config')).json();
@@ -17,7 +19,6 @@ let report = null;
     async function fetchSettings() {
       settings = await (await fetch('/api/settings')).json();
       document.getElementById('settingsAgent').textContent = `agent_mode=${settings.agent_mode || ''}`;
-      document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
       renderMemoryBackendSettings();
       renderChatMemory(settings.current_memory);
@@ -35,7 +36,8 @@ let report = null;
       document.getElementById('settingsView' + id[0].toUpperCase() + id.slice(1)).classList.remove('hidden');
       document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
       el.classList.add('active');
-      if (id === 'mem0') fetchMem0Memory();
+      const memoryStores = {localMemory:'local', mem0Hosted:'mem0_hosted', mem0Sdk:'mem0_sdk'};
+      if (memoryStores[id]) fetchMemoryStore(memoryStores[id]);
     }
     function privacyItemsFromInput() {
       return document.getElementById('privacyItems').value.split(/\n+/).map(item => item.trim()).filter(Boolean);
@@ -71,23 +73,40 @@ let report = null;
     }
     function renderMemoryBackendSettings() {
       const backend = settings?.memory_backend || {};
-      const mem0 = backend.mem0 || {};
       document.getElementById('memoryEnabled').checked = backend.memory_enabled !== false;
       document.getElementById('memoryBackend').value = backend.backend || 'local';
+      previewMemoryBackendSelection();
+    }
+    function selectedMemoryBackend() {
+      return document.getElementById('memoryBackend').value || settings?.memory_backend?.backend || 'local';
+    }
+    function previewMemoryBackendSelection() {
+      const stored = settings?.memory_backend || {};
+      const mem0 = stored.mem0 || {};
+      const backend = selectedMemoryBackend();
+      const memoryEnabled = document.getElementById('memoryEnabled').checked;
+      const checkButton = document.getElementById('checkMem0Button');
       document.getElementById('memoryBackendSummary').textContent = JSON.stringify({
-        backend: backend.backend || 'local',
-        memory_enabled: backend.memory_enabled !== false,
+        backend,
+        backend_label: memoryBackendLabels[backend] || backend,
+        saved_backend: stored.backend || 'local',
+        memory_enabled: memoryEnabled,
         mem0: {
           configured: !!(mem0.api_key_configured && mem0.endpoint_configured && mem0.user_configured),
           api_key_configured: !!mem0.api_key_configured
         }
       }, null, 2);
-      document.getElementById('memoryBackendStatus').textContent = mem0.api_key_configured ? 'Mem0 API key 已配置' : 'Mem0 API key 未配置';
+      checkButton.textContent = memoryBackendCheckLabels[backend] || 'Check Mem0';
+      checkButton.disabled = backend === 'local';
+      const savedSuffix = backend !== (stored.backend || 'local') ? ' · 待保存' : '';
+      document.getElementById('memoryBackendStatus').textContent = backend === 'local'
+        ? `本地JSON 已选择${savedSuffix}`
+        : `${memoryBackendLabels[backend] || backend} ${mem0.api_key_configured ? 'API key 已配置' : 'API key 未配置'}${savedSuffix}`;
     }
     function renderChatMemory(currentMemory) {
       const payload = currentMemory || {};
       const enabled = payload.memory_enabled !== false;
-      const engine = payload.engine_label || payload.selected_engine || '本地 Markdown / JSON';
+      const engine = payload.engine_label || payload.selected_engine || '本地JSON';
       const selected = payload.selected_engine || 'local';
       const content = payload.content || {};
       const count = selected === 'mem0'
@@ -111,23 +130,53 @@ let report = null;
         status.textContent = `当前 Memory 加载失败：${err.message}`;
       }
     }
-    async function fetchMem0Memory() {
-      const status = document.getElementById('mem0MemoryStatus');
-      const target = document.getElementById('settingsMem0Memory');
+    function memoryStoreElements(engine) {
+      return {
+        local: {status:'localMemoryStatus', target:'settingsLocalMemory', label:'本地Memory'},
+        mem0_hosted: {status:'mem0HostedMemoryStatus', target:'settingsMem0HostedMemory', label:'Mem0 Hosted'},
+        mem0_sdk: {status:'mem0SdkMemoryStatus', target:'settingsMem0SdkMemory', label:'Mem0 SDK'}
+      }[engine];
+    }
+    function memoryStoreEndpoint(engine) {
+      return {
+        local: '/api/memory-store?engine=local',
+        mem0_hosted: '/api/memory-store?engine=mem0_hosted',
+        mem0_sdk: '/api/memory-store?engine=mem0_sdk'
+      }[engine];
+    }
+    async function fetchMemoryStore(engine) {
+      const view = memoryStoreElements(engine);
+      if (!view) return;
+      const status = document.getElementById(view.status);
+      const target = document.getElementById(view.target);
       status.textContent = 'loading...';
       try {
-        const data = await (await fetch('/api/mem0-memory')).json();
-        if (!data.ok) {
-          status.textContent = `Mem0 Memory 暂不可用：${data.error || data.stage || 'unknown'}`;
+        const data = await (await fetch(memoryStoreEndpoint(engine))).json();
+        const content = data.content || {};
+        if (!data.ok || content.ok === false) {
+          const error = content.error || data.error || content.stage || data.stage || 'unknown';
+          status.textContent = `${view.label} 暂不可用：${error}`;
           target.textContent = JSON.stringify(data, null, 2);
           return;
         }
-        status.textContent = `Mem0 Memory · ${data.count || 0} 条`;
+        const count = engine === 'local'
+          ? ((content.active || []).length || 0)
+          : (content.count ?? (Array.isArray(content.memories) ? content.memories.length : 0));
+        status.textContent = `${view.label} · ${engine === 'local' ? 'active ' : ''}${count} 条`;
         target.textContent = JSON.stringify(data, null, 2);
       } catch (err) {
-        status.textContent = `Mem0 Memory 加载失败：${err.message}`;
+        status.textContent = `${view.label} 加载失败：${err.message}`;
         target.textContent = '{}';
       }
+    }
+    function refreshVisibleMemoryStore() {
+      const visible = Array.from(document.querySelectorAll('.settings-view')).find(view => !view.classList.contains('hidden'));
+      const stores = {
+        settingsViewLocalMemory: 'local',
+        settingsViewMem0Hosted: 'mem0_hosted',
+        settingsViewMem0Sdk: 'mem0_sdk'
+      };
+      if (visible && stores[visible.id]) fetchMemoryStore(stores[visible.id]);
     }
     async function saveMemoryBackend() {
       const status = document.getElementById('memoryBackendStatus');
@@ -147,15 +196,21 @@ let report = null;
       }
       settings = data.settings;
       renderMemoryBackendSettings();
-      document.getElementById('settingsMemory').textContent = JSON.stringify(settings.workbench_memory || {}, null, 2);
       renderChatMemory(settings.current_memory);
+      refreshVisibleMemoryStore();
       status.textContent = `已保存 · 记忆${settings.memory_backend?.memory_enabled === false ? '关闭' : '开启'} · ${settings.memory_backend?.backend || 'local'}`;
     }
     async function checkMem0Health() {
       const status = document.getElementById('memoryBackendStatus');
-      status.textContent = 'checking Mem0...';
-      const data = await (await fetch('/api/mem0-health')).json();
-      status.textContent = data.ok ? `Mem0 OK · ${data.stage} · results=${data.result_count ?? 0}` : `Mem0 FAIL · ${data.stage} · ${data.error || ''}`;
+      const engine = selectedMemoryBackend();
+      const label = memoryBackendLabels[engine] || engine;
+      if (engine === 'local') {
+        status.textContent = '本地JSON 无需 Check Mem0';
+        return;
+      }
+      status.textContent = `checking ${label}...`;
+      const data = await (await fetch(`/api/mem0-health?engine=${encodeURIComponent(engine)}`)).json();
+      status.textContent = data.ok ? `${label} OK · ${data.stage} · results=${data.result_count ?? 0}` : `${label} FAIL · ${data.stage} · ${data.error || ''}`;
     }
     async function runPresetCases() {
       const list = document.getElementById('caseList');
@@ -233,7 +288,7 @@ let report = null;
         ? `当前记忆引擎已重置${remote.ok === false ? '失败' : ''}。`
         : 'Mem0 未启用或未配置。';
       document.getElementById('chatEvalStatus').textContent = `Memory 已重置；${remoteText} Run Eval 后刷新评分。`;
-      fetchMem0Memory();
+      refreshVisibleMemoryStore();
     }
     function appendMsg(role, content) {
       const div = document.createElement('div');
