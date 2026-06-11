@@ -3,11 +3,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 from evalharness import mem0_performance
 from evalharness.mem0_performance import (
     DEMO_USER_ID,
+    config_for_demo_user,
     generate_demo_memories,
     generate_demo_queries,
+    reset_demo_memory,
     run_performance_demo,
 )
 
@@ -76,3 +79,33 @@ class Mem0PerformanceDemoTest(unittest.TestCase):
     def test_real_run_is_not_implemented_in_task_1(self):
         with self.assertRaisesRegex(ValueError, "real_run mode is not implemented"):
             run_performance_demo(engine="mem0_hosted", mode="real_run", scale=1000, query_count=1, client=object())
+
+
+class Mem0PerformanceIsolationTest(unittest.TestCase):
+    def test_config_for_demo_user_never_reuses_chat_user_id(self):
+        original = Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id="workbench-user")
+
+        demo = config_for_demo_user(original)
+
+        self.assertEqual(DEMO_USER_ID, demo.user_id)
+        self.assertNotEqual(original.user_id, demo.user_id)
+        self.assertEqual(original.base_url, demo.base_url)
+        self.assertEqual(original.api_key, demo.api_key)
+
+    def test_reset_demo_memory_uses_demo_scoped_client(self):
+        class FakeClient:
+            def __init__(self):
+                self.deleted = False
+
+            def delete_all(self, page_size=200):
+                self.deleted = True
+                return {"mode": "user_scoped", "found_count": 3, "deleted_count": 3, "errors": []}
+
+        client = FakeClient()
+
+        result = reset_demo_memory(client)
+
+        self.assertTrue(client.deleted)
+        self.assertTrue(result["ok"])
+        self.assertEqual(DEMO_USER_ID, result["demo_user_id"])
+        self.assertEqual(3, result["deleted_count"])

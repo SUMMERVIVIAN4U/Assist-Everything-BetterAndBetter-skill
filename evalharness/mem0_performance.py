@@ -3,9 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
 
 DEMO_USER_ID = "workbench-demo-large-memory"
@@ -47,6 +50,43 @@ _QUERY_TEMPLATES = [
     "Which saved notes help with {topic}?",
     "Summarize relevant memory for {topic}.",
 ]
+
+
+def config_for_demo_user(config: Mem0Config) -> Mem0Config:
+    return replace(config, user_id=DEMO_USER_ID)
+
+
+def reset_demo_memory(client: Any | None) -> dict[str, Any]:
+    if client is None:
+        return {
+            "ok": False,
+            "stage": "config",
+            "demo_user_id": DEMO_USER_ID,
+            "found_count": 0,
+            "deleted_count": 0,
+            "errors": ["Mem0 client is not configured"],
+        }
+    try:
+        result = client.delete_all(page_size=200)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "stage": "delete_all",
+            "demo_user_id": DEMO_USER_ID,
+            "found_count": 0,
+            "deleted_count": 0,
+            "errors": [str(exc)],
+        }
+    errors = result.get("errors", []) if isinstance(result, dict) else []
+    return {
+        "ok": not errors,
+        "stage": "delete_all",
+        "demo_user_id": DEMO_USER_ID,
+        "found_count": int(result.get("found_count", 0)) if isinstance(result, dict) else 0,
+        "deleted_count": int(result.get("deleted_count", 0)) if isinstance(result, dict) else 0,
+        "errors": errors,
+        "result": result,
+    }
 
 
 def generate_demo_memories(scale: int, seed: int = 42) -> list[dict[str, Any]]:
