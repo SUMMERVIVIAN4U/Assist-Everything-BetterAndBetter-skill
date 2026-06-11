@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 
 DEMO_USER_ID = "workbench-demo-large-memory"
-LATEST_PERFORMANCE_REPORT = Path("eval/output/latest/mem0_performance_demo.json")
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+LATEST_PERFORMANCE_REPORT = _REPO_ROOT / "eval/output/latest/mem0_performance_demo.json"
 
 ALLOWED_ENGINES = {"mem0_hosted", "mem0_sdk"}
 ALLOWED_MODES = {"dry_run", "real_run"}
@@ -93,16 +95,15 @@ def run_performance_demo(
     _validate_mode(mode)
     _validate_run_scale(scale)
     _validate_positive_int("query_count", query_count)
+    if mode == "real_run":
+        raise ValueError("real_run mode is not implemented for Task 1")
 
     memories = generate_demo_memories(scale)
     queries = generate_demo_queries(query_count)
     run_id = _run_id(engine, mode, scale, query_count)
     started_at = _BASE_TIME
 
-    if mode == "real_run":
-        phases, metrics, examples, reset = _run_real_demo(client, memories, queries)
-    else:
-        phases, metrics, examples, reset = _run_dry_demo(memories, queries)
+    phases, metrics, examples, reset = _run_dry_demo(memories, queries)
 
     report = {
         "ok": len(reset["errors"]) == 0,
@@ -152,32 +153,22 @@ def _run_dry_demo(
         for query, latency in zip(queries, search_latencies, strict=True)
     ]
     phases = [
-        {"name": "generate", "status": "ok", "count": len(memories), "duration_ms": round(len(memories) * 0.03, 3)},
-        {"name": "write", "status": "simulated", "count": len(memories), "duration_ms": round(write_ms, 3)},
-        {"name": "search", "status": "simulated", "count": len(queries), "duration_ms": round(search_total_ms, 3)},
-        {"name": "reset", "status": "simulated", "count": len(memories), "duration_ms": round(len(memories) * 0.02, 3)},
+        {"name": "generate", "ok": True, "count": len(memories), "elapsed_ms": round(len(memories) * 0.03, 3)},
+        {"name": "write", "ok": True, "count": len(memories), "elapsed_ms": round(write_ms, 3)},
+        {"name": "search", "ok": True, "count": len(queries), "elapsed_ms": round(search_total_ms, 3)},
+        {"name": "reset", "ok": True, "count": len(memories), "elapsed_ms": round(len(memories) * 0.02, 3)},
     ]
     metrics = {
         "write_qps": round(len(memories) / (write_ms / 1000.0), 3),
         "search_qps": round(len(queries) / (search_total_ms / 1000.0), 3),
         "search_p50_ms": round(_percentile(search_latencies, 50), 3),
         "search_p95_ms": round(_percentile(search_latencies, 95), 3),
+        "error_rate": 0.0,
         "memory_count": float(len(memories)),
         "query_count": float(len(queries)),
     }
-    reset = {"attempted": True, "mode": "dry_run", "deleted": len(memories), "errors": []}
+    reset = {"found_count": len(memories), "deleted_count": len(memories), "errors": []}
     return phases, metrics, examples, reset
-
-
-def _run_real_demo(
-    client: Any | None,
-    memories: list[dict[str, Any]],
-    queries: list[str],
-) -> tuple[list[dict[str, Any]], dict[str, float], list[dict[str, Any]], dict[str, Any]]:
-    if client is None:
-        raise ValueError("real_run mode requires a client")
-    # Keep the real-run surface minimal for Task 1; later tasks can wire Mem0 APIs here.
-    return _run_dry_demo(memories, queries)
 
 
 def _dry_top_k(query: str, memories: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:
@@ -192,6 +183,7 @@ def _dry_top_k(query: str, memories: list[dict[str, Any]], limit: int = 5) -> li
             "content": memory["content"],
             "scope": memory["scope"],
             "score": round(score, 6),
+            "retrieval_score": round(score, 6),
             "updated_at": memory["updated_at"],
             "retrieval_rank_strategy": "score_time",
         }
@@ -224,7 +216,8 @@ def _run_id(engine: str, mode: str, scale: int, query_count: int) -> str:
 
 def _finished_at(scale: int, query_count: int) -> str:
     seconds = max(1, round(scale * 0.0002 + query_count * 0.02))
-    return f"2026-06-11T00:00:{seconds:02d}+00:00"
+    finished = datetime(2026, 6, 11, tzinfo=timezone.utc) + timedelta(seconds=seconds)
+    return finished.isoformat()
 
 
 def _validate_engine(engine: str) -> None:
