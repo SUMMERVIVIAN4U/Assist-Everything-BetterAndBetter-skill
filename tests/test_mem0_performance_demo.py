@@ -235,6 +235,18 @@ class Mem0PerformanceApiTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual("run", result["stage"])
 
+    def test_run_mem0_performance_demo_rejects_zero_scale(self):
+        result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "scale": 0})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+
+    def test_run_mem0_performance_demo_rejects_zero_query_count(self):
+        result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "query_count": 0})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+
     def test_run_mem0_performance_demo_rejects_invalid_engine(self):
         with patch("evalharness.server._mem0_client_for_backend") as client_factory:
             result = server._run_mem0_performance_demo({"engine": "bogus", "mode": "real_run", "scale": 1000})

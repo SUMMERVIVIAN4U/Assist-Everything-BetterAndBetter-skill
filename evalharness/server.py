@@ -368,8 +368,8 @@ def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "stage": "run", "error": f"unsupported engine: {raw_engine}"}
     mode = str(body.get("mode") or "dry_run")
     try:
-        scale = int(body.get("scale") or 1000)
-        query_count = int(body.get("query_count") or 20)
+        scale = _body_int(body, "scale", 1000)
+        query_count = _body_int(body, "query_count", 20)
         client = None
         if mode == "real_run":
             config = config_for_demo_user(_mem0_config())
@@ -401,6 +401,12 @@ def _normalize_mem0_performance_engine(engine: Any) -> str:
         "sdk_mem0": "mem0_sdk",
     }
     return aliases.get(normalized, normalized)
+
+
+def _body_int(body: dict[str, Any], key: str, default: int) -> int:
+    if key not in body or body.get(key) is None or body.get(key) == "":
+        return default
+    return int(body[key])
 
 
 def _mem0_client_for_backend(backend: str, config: Mem0Config) -> Any:
