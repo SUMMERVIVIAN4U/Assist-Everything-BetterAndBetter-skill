@@ -216,13 +216,33 @@ class Mem0PerformanceIsolationTest(unittest.TestCase):
 
 class Mem0PerformanceApiTest(unittest.TestCase):
     def test_run_mem0_performance_demo_defaults_to_dry_run(self):
-        with patch("evalharness.server._mem0_client_for_backend") as client_factory:
-            result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "scale": 1000, "query_count": 3})
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "mem0_performance_demo.json"
+            with (
+                patch.object(mem0_performance, "LATEST_PERFORMANCE_REPORT", report_path),
+                patch("evalharness.server._mem0_client_for_backend") as client_factory,
+            ):
+                result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "scale": 1000, "query_count": 3})
 
         client_factory.assert_not_called()
         self.assertTrue(result["ok"])
         self.assertEqual("dry_run", result["mode"])
         self.assertEqual(1000, result["scale"])
+
+    def test_run_mem0_performance_demo_rejects_bad_scale(self):
+        result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "scale": "bad"})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+
+    def test_run_mem0_performance_demo_rejects_invalid_engine(self):
+        with patch("evalharness.server._mem0_client_for_backend") as client_factory:
+            result = server._run_mem0_performance_demo({"engine": "bogus", "mode": "real_run", "scale": 1000})
+
+        client_factory.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+        self.assertIn("unsupported engine", result["error"])
 
     def test_run_mem0_performance_demo_catches_client_setup_errors(self):
         with patch("evalharness.server._mem0_client_for_backend", side_effect=RuntimeError("boom")):
@@ -231,6 +251,24 @@ class Mem0PerformanceApiTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual("run", result["stage"])
         self.assertIn("boom", result["error"])
+
+    def test_reset_mem0_performance_demo_rejects_local_engine(self):
+        with patch("evalharness.server._mem0_client_for_backend") as client_factory:
+            result = server._reset_mem0_performance_demo({"engine": "local"})
+
+        client_factory.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("config", result["stage"])
+        self.assertIn("unsupported engine", result["error"])
+
+    def test_reset_mem0_performance_demo_rejects_invalid_engine(self):
+        with patch("evalharness.server._mem0_client_for_backend") as client_factory:
+            result = server._reset_mem0_performance_demo({"engine": "bogus"})
+
+        client_factory.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("config", result["stage"])
+        self.assertIn("unsupported engine", result["error"])
 
     def test_reset_mem0_performance_demo_uses_demo_config(self):
         class FakeClient:

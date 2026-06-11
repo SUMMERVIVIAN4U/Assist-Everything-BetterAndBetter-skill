@@ -362,13 +362,14 @@ def _reset_mem0_memory() -> dict[str, Any]:
 
 
 def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
-    engine = str(body.get("engine") or _memory_backend_config()["backend"])
-    if engine == "mem0":
-        engine = "mem0_hosted"
+    raw_engine = body.get("engine") or _memory_backend_config()["backend"]
+    engine = _normalize_mem0_performance_engine(raw_engine)
+    if engine not in {"mem0_hosted", "mem0_sdk"}:
+        return {"ok": False, "stage": "run", "error": f"unsupported engine: {raw_engine}"}
     mode = str(body.get("mode") or "dry_run")
-    scale = int(body.get("scale") or 1000)
-    query_count = int(body.get("query_count") or 20)
     try:
+        scale = int(body.get("scale") or 1000)
+        query_count = int(body.get("query_count") or 20)
         client = None
         if mode == "real_run":
             config = config_for_demo_user(_mem0_config())
@@ -379,15 +380,27 @@ def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _reset_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
-    engine = str(body.get("engine") or _memory_backend_config()["backend"])
-    if engine == "mem0":
-        engine = "mem0_hosted"
+    raw_engine = body.get("engine") or _memory_backend_config()["backend"]
+    engine = _normalize_mem0_performance_engine(raw_engine)
+    if engine not in {"mem0_hosted", "mem0_sdk"}:
+        return {"ok": False, "stage": "config", "error": f"unsupported engine: {raw_engine}"}
     try:
         config = config_for_demo_user(_mem0_config())
         client = _mem0_client_for_backend(engine, config)
         return reset_demo_memory(client)
     except Exception as exc:
         return {"ok": False, "stage": "reset", "error": str(exc)}
+
+
+def _normalize_mem0_performance_engine(engine: Any) -> str:
+    normalized = str(engine or "").strip().lower()
+    aliases = {
+        "mem0": "mem0_hosted",
+        "hosted_mem0": "mem0_hosted",
+        "mem0ai": "mem0_sdk",
+        "sdk_mem0": "mem0_sdk",
+    }
+    return aliases.get(normalized, normalized)
 
 
 def _mem0_client_for_backend(backend: str, config: Mem0Config) -> Any:
