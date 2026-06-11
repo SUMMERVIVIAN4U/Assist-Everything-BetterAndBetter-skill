@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from assist_everything_betterandbetter_skill.cases import DIMENSIONS
-from assist_everything_betterandbetter_skill.mem0_backend import Mem0Client, Mem0Config, config_from_dict
+from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Client, Mem0Config, Mem0SdkClient, config_from_dict
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
@@ -111,7 +111,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/reset-memory":
             print("[workbench] reset chat memory")
             response, call = STATE.chat_agent.toolbox.reset_memory()
-            mem0_reset = _reset_mem0_memory()
+            backend = _memory_backend_config()["backend"]
+            mem0_reset = response.memory_actions[0] if backend in {"mem0_hosted", "mem0_sdk"} and response.memory_actions else _reset_mem0_memory()
             STATE.chat_agent.mark_memory_reset_boundary()
             self._send_json(
                 {
@@ -203,6 +204,7 @@ def _new_workbench_agent(agent_mode: str) -> HarnessAgent:
         memory_dir="memories/workbench",
         mem0_config=_mem0_config(),
         memory_enabled=_memory_enabled(),
+        memory_backend=_memory_backend_config()["backend"],
     )
     _apply_privacy_settings(agent)
     return agent
@@ -221,7 +223,9 @@ def _memory_backend_config() -> dict[str, Any]:
 
 def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
     backend = str(data.get("backend") or "local").strip().lower()
-    if backend not in {"local", "mem0"}:
+    aliases = {"mem0": "mem0_hosted", "hosted_mem0": "mem0_hosted", "mem0ai": "mem0_sdk", "sdk_mem0": "mem0_sdk"}
+    backend = aliases.get(backend, backend)
+    if backend not in {"local", "mem0_hosted", "mem0_sdk"}:
         backend = "local"
     return {
         "backend": backend,
@@ -241,7 +245,7 @@ def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
 def _mem0_config() -> Mem0Config:
     data = _memory_backend_config()
     mem0 = dict(data["mem0"])
-    mem0["enabled"] = data["backend"] == "mem0"
+    mem0["enabled"] = data["backend"] in {"mem0_hosted", "mem0_sdk"}
     return config_from_dict(mem0)
 
 
@@ -266,7 +270,9 @@ def _public_backend_config() -> dict[str, Any]:
 def _config_from_backend_body(body: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     config = _normalize_backend_config(current)
     backend = str(body.get("backend") or config["backend"]).strip().lower()
-    config["backend"] = backend if backend in {"local", "mem0"} else "local"
+    aliases = {"mem0": "mem0_hosted", "hosted_mem0": "mem0_hosted", "mem0ai": "mem0_sdk", "sdk_mem0": "mem0_sdk"}
+    backend = aliases.get(backend, backend)
+    config["backend"] = backend if backend in {"local", "mem0_hosted", "mem0_sdk"} else "local"
     if "memory_enabled" in body:
         config["memory_enabled"] = bool(body.get("memory_enabled"))
     mem0_body = body.get("mem0") if isinstance(body.get("mem0"), dict) else {}
@@ -293,10 +299,11 @@ def _save_memory_backend_config(config: dict[str, Any]) -> None:
 
 def _mem0_health() -> dict[str, Any]:
     config = _mem0_config()
-    if not config.ready:
+    backend = _memory_backend_config()["backend"]
+    if backend == "mem0_hosted" and not config.ready:
         return {"ok": False, "stage": "config", "backend": _public_backend_config(), "error": "Mem0 is not enabled or missing base_url/api_key/user_id"}
     try:
-        result = Mem0Client(config).health()
+        result = _mem0_client_for_backend(backend, config).health()
         result["backend"] = _public_backend_config()
         return result
     except Exception as exc:
@@ -305,12 +312,15 @@ def _mem0_health() -> dict[str, Any]:
 
 def _mem0_memory() -> dict[str, Any]:
     data = _memory_backend_config()
+    backend = data["backend"]
     mem0 = dict(data["mem0"])
-    inspect_config = config_from_dict({**mem0, "enabled": bool(mem0.get("base_url") and mem0.get("api_key") and mem0.get("user_id"))})
-    if not inspect_config.ready:
+    inspect_config = config_from_dict({**mem0, "enabled": backend in {"mem0_hosted", "mem0_sdk"}})
+    if backend == "local":
+        return {"ok": False, "stage": "config", "backend": _public_backend_config(), "error": "Mem0 is not selected"}
+    if backend == "mem0_hosted" and not inspect_config.ready:
         return {"ok": False, "stage": "config", "backend": _public_backend_config(), "error": "Mem0 is not configured"}
     try:
-        raw = Mem0Client(inspect_config).get_all(page_size=50)
+        raw = _mem0_client_for_backend(backend, inspect_config).get_all(page_size=50)
         records = _mem0_records(raw)
         return {
             "ok": True,
@@ -324,13 +334,22 @@ def _mem0_memory() -> dict[str, Any]:
 
 def _reset_mem0_memory() -> dict[str, Any]:
     config = _mem0_config()
-    if not config.ready:
+    backend = _memory_backend_config()["backend"]
+    if backend == "local":
+        return {"ok": True, "stage": "skipped", "reason": "Mem0 backend is not active or configured"}
+    if backend == "mem0_hosted" and not config.ready:
         return {"ok": True, "stage": "skipped", "reason": "Mem0 backend is not active or configured"}
     try:
-        result = Mem0Client(config).delete_all(page_size=200)
+        result = _mem0_client_for_backend(backend, config).delete_all(page_size=200)
         return {"ok": not result["errors"], "stage": "delete_all", **result}
     except Exception as exc:
         return {"ok": False, "stage": "request", "error": str(exc)}
+
+
+def _mem0_client_for_backend(backend: str, config: Mem0Config) -> Any:
+    if backend == "mem0_sdk":
+        return Mem0SdkClient(config)
+    return HostedMem0Client(config)
 
 
 def _mem0_records(raw: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
@@ -420,8 +439,8 @@ def _settings_payload() -> dict[str, Any]:
 def _current_memory_payload(local_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     config = _memory_backend_config()
     selected = config["backend"]
-    labels = {"local": "本地 Markdown / JSON", "mem0": "Mem0"}
-    content = _mem0_memory() if selected == "mem0" else (local_snapshot or {})
+    labels = {"local": "本地 Markdown / JSON", "mem0": "Mem0", "mem0_hosted": "Mem0", "mem0_sdk": "Mem0 SDK"}
+    content = _mem0_memory() if selected in {"mem0", "mem0_hosted", "mem0_sdk"} else (local_snapshot or {})
     return {
         "memory_enabled": bool(config.get("memory_enabled", True)),
         "selected_engine": selected,

@@ -16,6 +16,12 @@ class SkillMarkdownContractTest(unittest.TestCase):
             "记忆功能",
             "隐私设置",
             "/api/current-memory",
+            "LocalMemoryStore",
+            "HostedMem0Client",
+            "Mem0SdkClient",
+            "mutually exclusive",
+            "mem0_sdk",
+            "user_id",
         ]
         for token in required:
             with self.subTest(token=token):

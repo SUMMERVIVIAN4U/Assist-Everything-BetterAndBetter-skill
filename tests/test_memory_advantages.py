@@ -54,7 +54,7 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertIn("delete", privacy["controls"])
         self.assertEqual(privacy["sensitive_storage"], "private_or_sensitive observations are redacted and not saved as memory")
 
-    def test_mem0_backend_syncs_added_memory_without_external_call(self):
+    def test_local_backend_does_not_sync_added_memory_to_mem0(self):
         skill = AssistSkill(
             memory_dir=self.tmp.name,
             persist=True,
@@ -77,11 +77,10 @@ class MemoryAdvantagesTest(unittest.TestCase):
         response = skill.process_message("我特别喜欢以后先看结论，再看评分标准。")
 
         add_action = next(action for action in response.memory_actions if action["action"] == "add")
-        self.assertEqual(fake.added, ["我特别喜欢先看结论，再看评分标准"])
-        self.assertEqual(add_action["remote"]["backend"], "mem0")
-        self.assertTrue(add_action["remote"]["ok"])
+        self.assertEqual(fake.added, [])
+        self.assertNotIn("remote", add_action)
 
-    def test_mem0_backend_syncs_context_fact_from_ongoing_chat(self):
+    def test_local_backend_extracts_context_fact_without_remote_sync(self):
         skill = AssistSkill(
             memory_dir=self.tmp.name,
             persist=True,
@@ -109,9 +108,8 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertEqual(1, len(add_actions))
         add_action = add_actions[0]
         self.assertIn("小孩3-4岁", add_action["detail"])
-        self.assertEqual(fake.added, [add_action["detail"]])
-        self.assertEqual(add_action["remote"]["backend"], "mem0")
-        self.assertTrue(add_action["remote"]["ok"])
+        self.assertEqual(fake.added, [])
+        self.assertNotIn("remote", add_action)
 
     def test_proactively_extracts_implicit_travel_preference_from_feedback(self):
         context = "user: 我想带小孩在上海玩两天\nassistant: 可以安排动物园和户外公园。"

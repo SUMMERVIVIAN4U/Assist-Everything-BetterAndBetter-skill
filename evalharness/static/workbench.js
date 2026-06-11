@@ -95,6 +95,8 @@ let report = null;
         : ((content.active || []).length || 0);
       const suffix = selected === 'mem0'
         ? (content.ok === false ? ` · ${content.stage || 'unavailable'}` : ` · ${count} 条`)
+        : (selected === 'mem0_hosted' || selected === 'mem0_sdk')
+        ? (content.ok === false ? ` · ${content.stage || 'unavailable'}` : ` · ${count} 条`)
         : ` · active ${count} 条`;
       document.getElementById('chatMemoryStatus').textContent = `记忆功能：${enabled ? '开启' : '关闭'} · 当前引擎：${engine}${suffix}`;
       document.getElementById('chatMemory').textContent = JSON.stringify(content, null, 2);
@@ -227,6 +229,8 @@ let report = null;
       const remote = data.mem0_reset;
       const remoteText = remote?.stage === 'delete_all'
         ? `Mem0 已删除 ${remote.deleted_count || 0}/${remote.found_count || 0} 条。`
+        : remote?.action === 'reset'
+        ? `当前记忆引擎已重置${remote.ok === false ? '失败' : ''}。`
         : 'Mem0 未启用或未配置。';
       document.getElementById('chatEvalStatus').textContent = `Memory 已重置；${remoteText} Run Eval 后刷新评分。`;
       fetchMem0Memory();

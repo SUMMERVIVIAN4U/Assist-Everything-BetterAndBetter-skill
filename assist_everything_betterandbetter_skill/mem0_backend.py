@@ -38,7 +38,7 @@ class Mem0Config:
         }
 
 
-class Mem0Client:
+class HostedMem0Client:
     """Small REST client for Mem0-compatible hosted memory projects."""
 
     def __init__(self, config: Mem0Config) -> None:
@@ -61,6 +61,21 @@ class Mem0Client:
                 "assist_memory": item.to_dict(),
             },
             "infer": False,
+            "async_mode": False,
+        }
+        return self._request_first("POST", ["/v1/memories/", "/v3/memories/add/"], payload)
+
+    def add_text(self, text: str, context: str = "") -> dict[str, Any]:
+        payload = {
+            "user_id": self.config.user_id,
+            "app_id": self.config.app_id,
+            "messages": [{"role": "user", "content": text}],
+            "metadata": {
+                "source": "agent_chat",
+                "context": context,
+                "project_id": self.config.project_id,
+            },
+            "infer": True,
             "async_mode": False,
         }
         return self._request_first("POST", ["/v1/memories/", "/v3/memories/add/"], payload)
@@ -175,6 +190,76 @@ class Mem0Client:
                 if "HTTP 404" not in str(exc):
                     break
         raise RuntimeError(errors[-1] if errors else f"Mem0 {method} failed")
+
+
+class Mem0SdkClient:
+    """Adapter for the open-source mem0ai Python SDK in local library mode."""
+
+    def __init__(self, config: Mem0Config, memory: Any | None = None) -> None:
+        self.config = config
+        if memory is not None:
+            self.memory = memory
+        else:
+            try:
+                from mem0 import Memory  # type: ignore
+            except Exception as exc:
+                raise RuntimeError("mem0ai is not installed. Install with `pip install mem0ai`.") from exc
+            self.memory = Memory()
+
+    def add_text(self, text: str, context: str = "") -> dict[str, Any]:
+        messages = [{"role": "user", "content": text}]
+        kwargs = {"metadata": {"source": "agent_chat", "context": context, "app_id": self.config.app_id}}
+        try:
+            return self.memory.add(messages, user_id=self.config.user_id, **kwargs)
+        except TypeError:
+            return self.memory.add(messages, user_id=self.config.user_id)
+
+    def search(self, query: str, *, top_k: int = 10) -> list[MemoryItem]:
+        if not query.strip():
+            return []
+        try:
+            raw = self.memory.search(query, user_id=self.config.user_id, limit=max(1, min(top_k, 50)))
+        except TypeError:
+            raw = self.memory.search(query, filters={"user_id": self.config.user_id}, limit=max(1, min(top_k, 50)))
+        return [_item_from_mem0_result(result) for result in _mem0_results(raw)]
+
+    def get_all(self, *, page_size: int = 50) -> dict[str, Any]:
+        try:
+            raw = self.memory.get_all(user_id=self.config.user_id, limit=max(1, min(page_size, 200)))
+        except TypeError:
+            raw = self.memory.get_all(filters={"user_id": self.config.user_id}, limit=max(1, min(page_size, 200)))
+        return raw if isinstance(raw, dict) else {"results": raw}
+
+    def delete(self, memory_id: str) -> dict[str, Any]:
+        try:
+            return self.memory.delete(memory_id=memory_id)
+        except TypeError:
+            return self.memory.delete(memory_id)
+
+    def delete_all(self, *, page_size: int = 200) -> dict[str, Any]:
+        try:
+            result = self.memory.delete_all(user_id=self.config.user_id)
+        except TypeError:
+            records = _mem0_results(self.get_all(page_size=page_size))
+            deleted = []
+            errors = []
+            for record in records:
+                memory_id = str(record.get("id") or "").strip()
+                if not memory_id:
+                    continue
+                try:
+                    deleted.append({"id": memory_id, "result": self.delete(memory_id)})
+                except Exception as exc:
+                    errors.append({"id": memory_id, "error": str(exc)})
+            return {"mode": "individual", "found_count": len(records), "deleted_count": len(deleted), "errors": errors}
+        return {"mode": "user_scoped", "found_count": 0, "deleted_count": 0, "errors": [], "result": result}
+
+    def health(self) -> dict[str, Any]:
+        data = self.search("health check", top_k=1)
+        return {"ok": True, "stage": "sdk_search", "result_count": len(data)}
+
+
+Mem0Client = HostedMem0Client
 
 
 def _mem0_results(data: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:

@@ -57,21 +57,31 @@ Statuses:
 
 Default runtime storage is local Markdown/JSON under `ASSIST_MEMORY_DIR`; Workbench uses `memories/workbench/`. `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs.
 
-The Workbench can switch the long-term memory engine between:
+The Workbench can switch the long-term memory engine between three mutually exclusive adapters:
 
-- `local`: 本地 Markdown / JSON, used as the primary visible Workbench Memory
-- `mem0`: Mem0-compatible backend, used as Mem0 Memory while local storage remains the trace/audit layer
+- `LocalMemoryStore`: 本地 JSON/Markdown, using the skill's transparent local extraction and audit trail
+- `HostedMem0Client`: hosted or REST-compatible Mem0, letting that backend perform extraction
+- `Mem0SdkClient`: open-source `mem0ai` Python SDK in local library mode, letting the SDK perform extraction
 
-When Mem0 is selected, added long-term memories are mirrored to Mem0 and Mem0 search results are merged during retrieval. Do not expose endpoint URLs, project IDs, or API keys in the UI. The public UI only shows whether endpoint, API key, and user are configured.
+Only one engine is active at a time. Extraction rules are mutually exclusive, and memory results are mutually exclusive:
+
+- local mode never mirrors extracted memories to Mem0
+- hosted Mem0 mode sends raw user/context text to HostedMem0Client and does not run local extraction
+- Mem0 SDK mode sends raw user/context text to Mem0SdkClient and does not run local extraction
+- UI snapshots may share the same display structure, but the content must come only from the selected engine
+
+When Mem0 is selected, do not expose endpoint URLs, project IDs, or API keys in the UI. The public UI only shows whether endpoint, API key, and user are configured.
 
 Configuration:
 
-- `ASSIST_MEMORY_BACKEND=local|mem0`
+- `ASSIST_MEMORY_BACKEND=local|mem0_hosted|mem0_sdk`
 - `ASSIST_MEMORY_ENABLED=0|1`
 - `MEM0_BASE_URL`
 - `MEM0_API_KEY`
 - `MEM0_USER_ID`
 - `MEM0_APP_ID`
+
+Mem0 SDK mode requires `pip install mem0ai`. Its storage/model provider configuration is owned by the SDK/runtime environment; keep project paths git-ignored when storing local vectors or history.
 
 ## Workbench Features
 
@@ -102,7 +112,9 @@ Settings rules:
 - Mem0 Memory shows remote memory for comparison when configured.
 - 隐私设置 lets the user maintain private marker lines; matching content is rejected/redacted and not saved.
 
-Reset Memory must reset local memory and, when Mem0 is active and configured, clear matching Mem0 memories for the configured user.
+Reset Memory must reset only the selected engine. For HostedMem0Client and Mem0SdkClient, deletion/reset must be scoped to the configured `user_id`; never call a global reset when user-scoped deletion is available.
+
+Because Mem0 automatic extraction is less explainable than the local MemoryItem path, every remote action must still expose a trace event with backend, raw detail, success/failure, and returned result summary.
 
 ## Commands
 

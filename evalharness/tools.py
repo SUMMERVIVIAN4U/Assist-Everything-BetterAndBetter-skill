@@ -19,8 +19,9 @@ class MemoryToolbox:
         persist: bool | None = None,
         mem0_config: Mem0Config | None = None,
         memory_enabled: bool | None = None,
+        memory_backend: str | None = None,
     ) -> None:
-        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist, mem0_config=mem0_config, memory_enabled=memory_enabled)
+        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist, mem0_config=mem0_config, memory_enabled=memory_enabled, memory_backend=memory_backend)
 
     @property
     def memory_enabled(self) -> bool:
@@ -43,7 +44,7 @@ class MemoryToolbox:
         return response, self._call("process_message", {"message": message, "context": context}, response.to_dict())
 
     def snapshot(self) -> dict[str, Any]:
-        return self.skill.memory.snapshot()
+        return self.skill.snapshot()
 
     def _call(self, name: str, input_data: dict[str, Any], output: dict[str, Any]) -> ToolCall:
         return ToolCall(name=name, input=input_data, output=output)

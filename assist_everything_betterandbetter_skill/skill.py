@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .mem0_backend import Mem0Client, Mem0Config
+from .mem0_backend import HostedMem0Client, Mem0Config, Mem0SdkClient, _item_from_mem0_result, _mem0_results
 from .memory import ACTIVE, DELETED, SUPERSEDED, MemoryItem, MemoryStore
 
 
@@ -59,6 +59,7 @@ class AssistSkill:
         privacy_markers: list[str] | tuple[str, ...] | None = None,
         mem0_config: Mem0Config | None = None,
         memory_enabled: bool | None = None,
+        memory_backend: str | None = None,
     ) -> None:
         if persist is None:
             persist = os.getenv("ASSIST_MEMORY_PERSIST", "1") != "0"
@@ -71,7 +72,15 @@ class AssistSkill:
         env_markers = [item.strip() for item in os.getenv("ASSIST_PRIVACY_MARKERS", "").split(",") if item.strip()]
         self.privacy_markers = tuple(dict.fromkeys([*PRIVATE_MARKERS, *env_markers, *(privacy_markers or [])]))
         self.mem0_config = mem0_config or _mem0_config_from_env()
-        self.mem0_client = Mem0Client(self.mem0_config) if self.mem0_config.ready else None
+        self.memory_backend = _normalize_memory_backend(memory_backend or os.getenv("ASSIST_MEMORY_BACKEND", "local"))
+        self.mem0_client = HostedMem0Client(self.mem0_config) if self.memory_backend == "mem0_hosted" and self.mem0_config.ready else None
+        self.mem0_sdk_error = ""
+        self.mem0_sdk_client = None
+        if self.memory_backend == "mem0_sdk":
+            try:
+                self.mem0_sdk_client = Mem0SdkClient(self.mem0_config)
+            except Exception as exc:
+                self.mem0_sdk_error = str(exc)
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
         if not self.memory_enabled:
@@ -113,23 +122,34 @@ class AssistSkill:
         )
 
     def reset_memory(self) -> SkillResponse:
+        if self.memory_backend == "mem0_hosted":
+            return self._reset_remote_memory(self.mem0_client, "mem0_hosted")
+        if self.memory_backend == "mem0_sdk":
+            return self._reset_remote_memory(self.mem0_sdk_client, "mem0_sdk")
         event = self.memory.reset()
         return SkillResponse("已重置记忆：当前为 M0 空白状态。", [event], [], [])
 
     def show_memory(self) -> SkillResponse:
-        snapshot = self.memory.snapshot()
-        if not self.memory.items:
+        snapshot = self.snapshot()
+        if not any(snapshot.get(key) for key in ["active", "superseded", "archived", "deleted"]):
             return SkillResponse("当前没有任何记忆。", [], [], [])
         lines = ["当前 active 记忆与历史状态："]
         for status in [ACTIVE, SUPERSEDED, "archived", DELETED]:
             items = snapshot.get(status if status != ACTIVE else "active", [])
             for item in items:
                 lines.append(f"- {item['id']} [{item['status']}/{item['type']}/{item['scope']}] {item['content']}")
-        active_ids = [item.id for item in self.memory.active()]
+        active_ids = [item["id"] for item in snapshot.get("active", [])]
         return SkillResponse("\n".join(lines), [], active_ids, [])
 
+    def snapshot(self) -> dict[str, Any]:
+        if self.memory_backend == "mem0_hosted":
+            return self._remote_snapshot(self.mem0_client)
+        if self.memory_backend == "mem0_sdk":
+            return self._remote_snapshot(self.mem0_sdk_client)
+        return self.memory.snapshot()
+
     def compact_snapshot(self, limit: int = 8) -> dict[str, Any]:
-        snapshot = self.memory.snapshot()
+        snapshot = self.snapshot()
         active = snapshot.get("active", [])
         recent = sorted(active, key=lambda item: item.get("updated_at", ""), reverse=True)[:limit]
         all_items = active + snapshot.get("superseded", []) + snapshot.get("archived", []) + snapshot.get("deleted", [])
@@ -159,7 +179,7 @@ class AssistSkill:
         }
 
     def memory_profile(self) -> dict[str, Any]:
-        active = self.memory.snapshot().get("active", [])
+        active = self.snapshot().get("active", [])
         profile: dict[str, Any] = {
             "preference_memory": [],
             "workflow_rules": [],
@@ -194,7 +214,7 @@ class AssistSkill:
         return profile
 
     def memory_layers(self) -> dict[str, Any]:
-        snapshot = self.memory.snapshot()
+        snapshot = self.snapshot()
         compact = self.compact_snapshot(limit=6)
         active = snapshot.get("active", [])
         audit = snapshot.get("superseded", []) + snapshot.get("archived", []) + snapshot.get("deleted", [])
@@ -248,7 +268,7 @@ class AssistSkill:
         }
 
     def privacy_report(self) -> dict[str, Any]:
-        snapshot = self.memory.snapshot()
+        snapshot = self.snapshot()
         counts = {
             "active": len(snapshot.get("active", [])),
             "superseded": len(snapshot.get("superseded", [])),
@@ -283,6 +303,10 @@ class AssistSkill:
         return SkillResponse("未识别到记忆管理命令。支持 reset/show/find/delete/downgrade/archive。", [], [], [])
 
     def retrieve_relevant_memories(self, text: str, context: str = "") -> list[MemoryItem]:
+        if self.memory_backend == "mem0_hosted":
+            return self._search_remote(self.mem0_client, text)
+        if self.memory_backend == "mem0_sdk":
+            return self._search_remote(self.mem0_sdk_client, text)
         scope = _infer_scope(text, context)
         terms = _keywords(text)
         if "不适用" in text:
@@ -311,7 +335,6 @@ class AssistSkill:
             term_hit = any(term and term in haystack for term in terms)
             if scope_hit or term_hit:
                 relevant.append(item)
-        relevant.extend(self._search_mem0(text, existing_ids={item.id for item in relevant}))
         return relevant
 
     def compose_response(
@@ -444,6 +467,10 @@ class AssistSkill:
                     "reason": block_reason,
                 }
             ]
+        if self.memory_backend == "mem0_hosted":
+            return self._apply_remote_updates(self.mem0_client, "mem0_hosted", text, context)
+        if self.memory_backend == "mem0_sdk":
+            return self._apply_remote_updates(self.mem0_sdk_client, "mem0_sdk", text, context)
         for match in self._conflicting_memories(text, context):
             self.memory.downgrade(match.id, f"新反馈缩小或推翻旧规则：{text}")
             actions.append(self.memory.events[-1])
@@ -490,11 +517,49 @@ class AssistSkill:
             event["confidence"] = confidence
             event["reason"] = confidence_reason
             event["approval"] = "auto_high_confidence" if not item.user_approved else "explicit_or_contextual"
-            remote = self._sync_mem0_add(item)
-            if remote:
-                event["remote"] = remote
             actions.append(event)
         return actions
+
+    def _apply_remote_updates(self, client: Any, backend: str, text: str, context: str = "") -> list[dict[str, Any]]:
+        if not client:
+            error = self.mem0_sdk_error if backend == "mem0_sdk" and self.mem0_sdk_error else "memory backend is not configured"
+            return [{"action": "remote_extract", "backend": backend, "detail": text, "ok": False, "error": error}]
+        try:
+            result = client.add_text(text, context=context)
+            return [{"action": "remote_extract", "backend": backend, "detail": text, "ok": True, "result": _compact_remote_result(result)}]
+        except Exception as exc:
+            return [{"action": "remote_extract", "backend": backend, "detail": text, "ok": False, "error": str(exc)}]
+
+    def _reset_remote_memory(self, client: Any, backend: str) -> SkillResponse:
+        if not client:
+            error = self.mem0_sdk_error if backend == "mem0_sdk" and self.mem0_sdk_error else "memory backend is not configured"
+            action = {"action": "reset", "backend": backend, "memory_id": None, "detail": error, "ok": False}
+            return SkillResponse("远端记忆后端未配置，无法重置。", [action], [], [])
+        try:
+            result = client.delete_all(page_size=200)
+            action = {"action": "reset", "backend": backend, "memory_id": None, "detail": "remote memory reset", "ok": not result.get("errors"), "result": result}
+            return SkillResponse("已重置当前记忆后端。", [action], [], [])
+        except Exception as exc:
+            action = {"action": "reset", "backend": backend, "memory_id": None, "detail": str(exc), "ok": False}
+            return SkillResponse(f"重置当前记忆后端失败：{exc}", [action], [], [])
+
+    def _remote_snapshot(self, client: Any) -> dict[str, Any]:
+        if not client:
+            return {"version": "M0", "active": [], "superseded": [], "archived": [], "deleted": []}
+        try:
+            raw = client.get_all(page_size=50)
+            items = [_item_from_mem0_result(record).to_dict() for record in _mem0_results(raw)]
+        except Exception:
+            items = []
+        return {"version": f"M{len(items)}", "active": items, "superseded": [], "archived": [], "deleted": []}
+
+    def _search_remote(self, client: Any, text: str) -> list[MemoryItem]:
+        if not client:
+            return []
+        try:
+            return [item for item in client.search(text, top_k=8) if item.status == ACTIVE and not _is_polluted_memory_item(item)]
+        except Exception:
+            return []
 
     def _sync_mem0_add(self, item: MemoryItem) -> dict[str, Any] | None:
         if not self.mem0_client:
@@ -693,9 +758,9 @@ def _memory_block_reason(text: str, private_markers: list[str] | tuple[str, ...]
 
 
 def _mem0_config_from_env() -> Mem0Config:
-    backend = os.getenv("ASSIST_MEMORY_BACKEND", "local").strip().lower()
+    backend = _normalize_memory_backend(os.getenv("ASSIST_MEMORY_BACKEND", "local"))
     return Mem0Config(
-        enabled=backend == "mem0",
+        enabled=backend in {"mem0_hosted", "mem0_sdk"},
         base_url=os.getenv("MEM0_BASE_URL", "").strip(),
         api_key=os.getenv("MEM0_API_KEY", "").strip(),
         user_id=os.getenv("MEM0_USER_ID", "workbench-user").strip(),
@@ -706,7 +771,27 @@ def _mem0_config_from_env() -> Mem0Config:
     )
 
 
+def _normalize_memory_backend(value: str) -> str:
+    normalized = (value or "local").strip().lower().replace("-", "_")
+    aliases = {
+        "mem0": "mem0_hosted",
+        "hosted_mem0": "mem0_hosted",
+        "volcengine_mem0": "mem0_hosted",
+        "mem0_rest": "mem0_hosted",
+        "sdk_mem0": "mem0_sdk",
+        "mem0ai": "mem0_sdk",
+        "local_json": "local",
+        "local_markdown": "local",
+    }
+    normalized = aliases.get(normalized, normalized)
+    return normalized if normalized in {"local", "mem0_hosted", "mem0_sdk"} else "local"
+
+
 def _compact_remote_result(result: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(result, list):
+        return {"count": len(result)}
+    if not isinstance(result, dict):
+        return {"value": str(result)}
     compact = {
         "event_id": result.get("event_id"),
         "status": result.get("status"),

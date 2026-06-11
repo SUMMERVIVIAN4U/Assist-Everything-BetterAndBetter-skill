@@ -24,6 +24,7 @@ class HarnessAgent:
         persist_memory: bool | None = None,
         mem0_config: Mem0Config | None = None,
         memory_enabled: bool | None = None,
+        memory_backend: str | None = None,
     ) -> None:
         self.name = name
         self.toolbox = toolbox or MemoryToolbox(
@@ -31,6 +32,7 @@ class HarnessAgent:
             persist=persist_memory,
             mem0_config=mem0_config,
             memory_enabled=memory_enabled,
+            memory_backend=memory_backend,
         )
         self.session = HarnessSession()
         self.llm_mode = llm_mode
