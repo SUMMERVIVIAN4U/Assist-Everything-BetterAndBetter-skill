@@ -469,7 +469,7 @@ class AssistSkill:
                 }
             ]
         if self.memory_backend == "mem0_hosted":
-            return self._apply_remote_updates(self.mem0_client, "mem0_hosted", text, context)
+            return self._apply_remote_structured_updates(self.mem0_client, "mem0_hosted", text, context)
         if self.memory_backend == "mem0_sdk":
             return self._apply_remote_updates(self.mem0_sdk_client, "mem0_sdk", text, context)
         for match in self._conflicting_memories(text, context):
@@ -531,6 +531,116 @@ class AssistSkill:
         except Exception as exc:
             return [{"action": "remote_extract", "backend": backend, "detail": text, "ok": False, "error": str(exc)}]
 
+    def _apply_remote_structured_updates(self, client: Any, backend: str, text: str, context: str = "") -> list[dict[str, Any]]:
+        if not client:
+            return [{"action": "add", "backend": backend, "storage": "remote_structured", "detail": text, "ok": False, "error": "memory backend is not configured"}]
+        actions: list[dict[str, Any]] = []
+        remote_active = self._remote_active_items(client)
+        for match in self._conflicting_memories(text, context, active_items=remote_active):
+            remote_id = str(match.validity.get("mem0_id") or match.id)
+            try:
+                result = client.delete(remote_id)
+                actions.append(
+                    {
+                        "action": "downgrade",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": match.id,
+                        "remote_memory_id": remote_id,
+                        "detail": f"新反馈缩小或推翻旧规则：{text}",
+                        "ok": True,
+                        "result": _compact_remote_result(result),
+                    }
+                )
+                remote_active = [item for item in remote_active if item.id != match.id]
+            except Exception as exc:
+                actions.append(
+                    {
+                        "action": "downgrade",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": match.id,
+                        "remote_memory_id": remote_id,
+                        "detail": f"新反馈缩小或推翻旧规则：{text}",
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
+        for item in self.extract_memory_candidates(text, context):
+            confidence, confidence_reason = _confidence_for_memory(text, item)
+            item.confidence = confidence
+            if confidence < 0.5:
+                actions.append(
+                    {
+                        "action": "ask",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": None,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": confidence_reason,
+                    }
+                )
+                continue
+            if confidence < 0.8 and item.validity.get("time_scope") == "long_term":
+                actions.append(
+                    {
+                        "action": "propose",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": None,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": confidence_reason,
+                    }
+                )
+                continue
+            if self._is_duplicate(item, active_items=remote_active):
+                actions.append(
+                    {
+                        "action": "dedupe",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": None,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": "duplicate_active_memory",
+                    }
+                )
+                continue
+            try:
+                result = client.add(item)
+                actions.append(
+                    {
+                        "action": "add",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": item.id,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": confidence_reason,
+                        "approval": "auto_high_confidence" if not item.user_approved else "explicit_or_contextual",
+                        "ok": True,
+                        "result": _compact_remote_result(result),
+                    }
+                )
+                remote_active.append(item)
+            except Exception as exc:
+                actions.append(
+                    {
+                        "action": "add",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": item.id,
+                        "detail": item.content,
+                        "confidence": confidence,
+                        "reason": confidence_reason,
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
+        return actions
+
     def _reset_remote_memory(self, client: Any, backend: str) -> SkillResponse:
         if not client:
             error = self.mem0_sdk_error if backend == "mem0_sdk" and self.mem0_sdk_error else "memory backend is not configured"
@@ -560,6 +670,18 @@ class AssistSkill:
         try:
             candidates = [item for item in client.search(text, top_k=8) if item.status == ACTIVE and not _is_polluted_memory_item(item)]
             return _rank_retrieved_memories(candidates, text, context, limit=8)
+        except Exception:
+            return []
+
+    def _remote_active_items(self, client: Any) -> list[MemoryItem]:
+        if not client:
+            return []
+        try:
+            return [
+                item
+                for item in (_item_from_mem0_result(record) for record in _mem0_results(client.get_all(page_size=50)))
+                if item.status == ACTIVE and not _is_polluted_memory_item(item)
+            ]
         except Exception:
             return []
 
@@ -621,13 +743,14 @@ class AssistSkill:
             )
         return candidates
 
-    def _conflicting_memories(self, text: str, context: str = "") -> list[MemoryItem]:
+    def _conflicting_memories(self, text: str, context: str = "", active_items: list[MemoryItem] | None = None) -> list[MemoryItem]:
         lowered = text.lower()
         conflict_terms = ["不适用", "不用", "不要", "不能", "只用于", "仅用于", "改成", "推翻", "不再"]
         if not any(term in lowered for term in conflict_terms):
             return []
         scope = _infer_scope(text, context)
         terms = _keywords(text)
+        active = active_items if active_items is not None else self.memory.active()
         if "不适用" in text:
             if "步行不适用" in text or "少步行不适用" in text:
                 terms = ["步行"]
@@ -635,27 +758,28 @@ class AssistSkill:
                 scoped_terms = [term for term in terms if f"{term}不适用" in text or f"{term} 不适用" in text]
                 terms = scoped_terms or terms
         matches = []
-        for item in self.memory.active():
+        for item in active:
             if any(term and term in item.content for term in terms):
                 matches.append(item)
         if not matches:
             topic_terms = ["步行", "风险", "番茄钟", "文献综述", "模板", "自测", "可复现"]
-            for item in self.memory.active():
+            for item in active:
                 if item.scope == scope and any(term in item.content for term in topic_terms if term in text):
                     matches.append(item)
         if not matches and "模板" in text:
             scope = _infer_scope(text, context)
             matches.extend(
                 item
-                for item in self.memory.active()
+                for item in active
                 if item.scope == scope
                 and item.type == WORKFLOW
                 and any(term in item.content for term in ["文献综述", "方法", "数据集", "局限", "可复现", "模板"])
             )
         return matches
 
-    def _is_duplicate(self, candidate: MemoryItem) -> bool:
-        for item in self.memory.active():
+    def _is_duplicate(self, candidate: MemoryItem, active_items: list[MemoryItem] | None = None) -> bool:
+        active = active_items if active_items is not None else self.memory.active()
+        for item in active:
             same_content = item.content == candidate.content and item.scope == candidate.scope
             same_fact = (
                 candidate.predicate
