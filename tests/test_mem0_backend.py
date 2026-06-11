@@ -165,7 +165,7 @@ class Mem0BackendTest(unittest.TestCase):
         self.assertEqual(result["deleted_count"], 2)
         self.assertEqual(result["errors"], [])
         self.assertEqual([call[0] for call in calls], ["GET", "DELETE"])
-        self.assertIn("/v1/memories?user_id=u1", calls[1][1])
+        self.assertIn("/v1/memories/?user_id=u1", calls[1][1])
 
 
 if __name__ == "__main__":

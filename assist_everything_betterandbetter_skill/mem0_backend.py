@@ -117,12 +117,12 @@ class HostedMem0Client:
             result = self._request_first(
                 "DELETE",
                 [
-                    f"/v1/memories?{urlencode({'user_id': self.config.user_id})}",
                     f"/v1/memories/?{urlencode({'user_id': self.config.user_id})}",
-                    f"/v2/memories?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v1/memories?{urlencode({'user_id': self.config.user_id})}",
                     f"/v2/memories/?{urlencode({'user_id': self.config.user_id})}",
-                    f"/v3/memories?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v2/memories?{urlencode({'user_id': self.config.user_id})}",
                     f"/v3/memories/?{urlencode({'user_id': self.config.user_id})}",
+                    f"/v3/memories?{urlencode({'user_id': self.config.user_id})}",
                 ],
                 None,
             )
@@ -145,13 +145,17 @@ class HostedMem0Client:
                 deleted.append({"id": memory_id, "result": self.delete(memory_id)})
             except Exception as exc:
                 errors.append({"id": memory_id, "error": str(exc)})
-        return {
+        response = {
             "mode": "individual",
-            "bulk_error": bulk_error,
             "found_count": len(records),
             "deleted_count": len(deleted),
             "errors": errors,
         }
+        if bulk_error and errors:
+            response["bulk_error"] = bulk_error
+        elif bulk_error:
+            response["warnings"] = [f"bulk delete unavailable; used individual delete: {bulk_error}"]
+        return response
 
     def health(self) -> dict[str, Any]:
         if not self.config.ready:

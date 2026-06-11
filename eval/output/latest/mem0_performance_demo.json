@@ -1,1240 +1,1040 @@
 {
   "demo_user_id": "workbench-demo-large-memory",
-  "engine": "mem0_hosted",
+  "engine": "local",
   "examples": [
     {
-      "latency_ms": 428.054,
+      "latency_ms": 126.801,
       "query": "What should I remember about Shanghai family trip?",
       "top_k": [
         {
-          "content": "用户提及上海家庭旅行偏好#6倾向于选择方案9。",
-          "created_at": "2026-06-11T12:30:26+08:00",
-          "id": "mem0_9560b3_MVOC20260611123026_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #4388 favors option 7.",
+          "id": "demo_mem_004388",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.555,
-          "scope": "general",
-          "score": 0.555,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581427,
+          "scope": "work_project_planning",
+          "score": 0.581427,
+          "updated_at": "2026-06-11T20:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好选项5",
-          "created_at": "2026-06-11T12:29:58+08:00",
-          "id": "mem0_ad276f_MVOC20260611122958_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #45350 favors option 3.",
+          "id": "demo_mem_045350",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.548,
-          "scope": "general",
-          "score": 0.548,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581426,
+          "scope": "finance_budgeting",
+          "score": 0.581426,
+          "updated_at": "2026-06-11T14:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好6倾向于选项9",
-          "created_at": "2026-06-11T12:30:31+08:00",
-          "id": "mem0_46476f_MVOC20260611123031_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #23049 favors option 2.",
+          "id": "demo_mem_023049",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.536,
-          "scope": "general",
-          "score": 0.536,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581422,
+          "scope": "work_project_planning",
+          "score": 0.581422,
+          "updated_at": "2026-06-11T09:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好#1倾向于选择方案5。",
-          "created_at": "2026-06-11T12:30:00+08:00",
-          "id": "mem0_697342_MVOC20260611123000_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #6065 favors option 7.",
+          "id": "demo_mem_006065",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.529,
-          "scope": "general",
-          "score": 0.529,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581418,
+          "scope": "work_project_planning",
+          "score": 0.581418,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好#4倾向于选择选项2。",
-          "created_at": "2026-06-11T12:30:15+08:00",
-          "id": "mem0_ee97a9_MVOC20260611123015_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #21793 favors option 5.",
+          "id": "demo_mem_021793",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.525,
-          "scope": "general",
-          "score": 0.525,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581415,
+          "scope": "life_family_travel",
+          "score": 0.581415,
+          "updated_at": "2026-06-11T01:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 354.851,
+      "latency_ms": 124.451,
       "query": "Which saved notes help with morning workout?",
       "top_k": [
         {
-          "content": "有晨练偏好",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_387e4e_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #2446 favors option 8.",
+          "id": "demo_mem_002446",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.517,
-          "scope": "general",
-          "score": 0.517,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.295712,
+          "scope": "life_family_travel",
+          "score": 0.295712,
+          "updated_at": "2026-06-11T22:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #25611 favors option 4.",
+          "id": "demo_mem_025611",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.491,
-          "scope": "general",
-          "score": 0.491,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.295709,
+          "scope": "finance_budgeting",
+          "score": 0.295709,
+          "updated_at": "2026-06-11T03:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #16690 favors option 2.",
+          "id": "demo_mem_016690",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.481,
-          "scope": "general",
-          "score": 0.481,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.295708,
+          "scope": "learning_research",
+          "score": 0.295708,
+          "updated_at": "2026-06-11T10:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #49460 favors option 9.",
+          "id": "demo_mem_049460",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.462,
-          "scope": "general",
-          "score": 0.462,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.295707,
+          "scope": "work_project_planning",
+          "score": 0.295707,
+          "updated_at": "2026-06-11T20:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #29167 favors option 4.",
+          "id": "demo_mem_029167",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.315,
-          "scope": "general",
-          "score": 0.315,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.295707,
+          "scope": "finance_budgeting",
+          "score": 0.295707,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 286.828,
+      "latency_ms": 162.815,
       "query": "Find my latest preference for Python study plan.",
       "top_k": [
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #23307 favors option 9.",
+          "id": "demo_mem_023307",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.464,
-          "scope": "general",
-          "score": 0.464,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581426,
+          "scope": "work_project_planning",
+          "score": 0.581426,
+          "updated_at": "2026-06-11T03:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #39698 favors option 7.",
+          "id": "demo_mem_039698",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.456,
-          "scope": "general",
-          "score": 0.456,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581425,
+          "scope": "finance_budgeting",
+          "score": 0.581425,
+          "updated_at": "2026-06-11T02:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #21898 favors option 6.",
+          "id": "demo_mem_021898",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.446,
-          "scope": "general",
-          "score": 0.446,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581425,
+          "scope": "work_project_planning",
+          "score": 0.581425,
+          "updated_at": "2026-06-11T10:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #41969 favors option 6.",
+          "id": "demo_mem_041969",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.438,
-          "scope": "general",
-          "score": 0.438,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.581422,
+          "scope": "learning_research",
+          "score": 0.581422,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #33151 favors option 3.",
+          "id": "demo_mem_033151",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.431,
-          "scope": "general",
-          "score": 0.431,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581419,
+          "scope": "work_project_planning",
+          "score": 0.581419,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 341.417,
+      "latency_ms": 123.831,
       "query": "What should I remember about quarterly roadmap?",
       "top_k": [
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #35908 favors option 5.",
+          "id": "demo_mem_035908",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.543,
-          "scope": "general",
-          "score": 0.543,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.51,
+          "scope": "finance_budgeting",
+          "score": 0.51,
+          "updated_at": "2026-06-11T04:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #15101 favors option 8.",
+          "id": "demo_mem_015101",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.519,
-          "scope": "general",
-          "score": 0.519,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.51,
+          "scope": "life_family_travel",
+          "score": 0.51,
+          "updated_at": "2026-06-11T05:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #17712 favors option 5.",
+          "id": "demo_mem_017712",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.342,
-          "scope": "general",
-          "score": 0.342,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509999,
+          "scope": "life_family_travel",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T00:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #40447 favors option 7.",
+          "id": "demo_mem_040447",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.33,
-          "scope": "general",
-          "score": 0.33,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509998,
+          "scope": "life_family_travel",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #8127 favors option 8.",
+          "id": "demo_mem_008127",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.305,
-          "scope": "general",
-          "score": 0.305,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.509998,
+          "scope": "health_routine",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T15:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 385.079,
+      "latency_ms": 123.23,
       "query": "Summarize relevant memory for Shanghai family trip.",
       "top_k": [
         {
-          "content": "用户提及上海家庭旅行偏好#6倾向于选择方案9。",
-          "created_at": "2026-06-11T12:30:26+08:00",
-          "id": "mem0_9560b3_MVOC20260611123026_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #15787 favors option 3.",
+          "id": "demo_mem_015787",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.586,
-          "scope": "general",
-          "score": 0.586,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438571,
+          "scope": "work_project_planning",
+          "score": 0.438571,
+          "updated_at": "2026-06-11T19:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好选项5",
-          "created_at": "2026-06-11T12:29:58+08:00",
-          "id": "mem0_ad276f_MVOC20260611122958_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #30281 favors option 8.",
+          "id": "demo_mem_030281",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.556,
-          "scope": "general",
-          "score": 0.556,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.43857,
+          "scope": "finance_budgeting",
+          "score": 0.43857,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好#1倾向于选择方案5。",
-          "created_at": "2026-06-11T12:30:00+08:00",
-          "id": "mem0_697342_MVOC20260611123000_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #7441 favors option 2.",
+          "id": "demo_mem_007441",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.549,
-          "scope": "general",
-          "score": 0.549,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438567,
+          "scope": "finance_budgeting",
+          "score": 0.438567,
+          "updated_at": "2026-06-11T01:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好6倾向于选项9",
-          "created_at": "2026-06-11T12:30:31+08:00",
-          "id": "mem0_46476f_MVOC20260611123031_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #28611 favors option 4.",
+          "id": "demo_mem_028611",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.547,
-          "scope": "general",
-          "score": 0.547,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438567,
+          "scope": "health_routine",
+          "score": 0.438567,
+          "updated_at": "2026-06-11T03:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好#4倾向于选择选项2。",
-          "created_at": "2026-06-11T12:30:15+08:00",
-          "id": "mem0_ee97a9_MVOC20260611123015_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #11719 favors option 8.",
+          "id": "demo_mem_011719",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.547,
-          "scope": "general",
-          "score": 0.547,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438563,
+          "scope": "health_routine",
+          "score": 0.438563,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 380.923,
+      "latency_ms": 140.63,
       "query": "What should I remember about quarterly roadmap?",
       "top_k": [
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #35908 favors option 5.",
+          "id": "demo_mem_035908",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.543,
-          "scope": "general",
-          "score": 0.543,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.51,
+          "scope": "finance_budgeting",
+          "score": 0.51,
+          "updated_at": "2026-06-11T04:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #15101 favors option 8.",
+          "id": "demo_mem_015101",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.519,
-          "scope": "general",
-          "score": 0.519,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.51,
+          "scope": "life_family_travel",
+          "score": 0.51,
+          "updated_at": "2026-06-11T05:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #17712 favors option 5.",
+          "id": "demo_mem_017712",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.342,
-          "scope": "general",
-          "score": 0.342,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509999,
+          "scope": "life_family_travel",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T00:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #40447 favors option 7.",
+          "id": "demo_mem_040447",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.33,
-          "scope": "general",
-          "score": 0.33,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509998,
+          "scope": "life_family_travel",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         },
         {
-          "content": "用户提醒家庭组织偏好第7条倾向于选项4。",
-          "created_at": "2026-06-11T12:30:32+08:00",
-          "id": "mem0_ef3e16_MVOC20260611123032_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #8127 favors option 8.",
+          "id": "demo_mem_008127",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.315,
-          "scope": "general",
-          "score": 0.315,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509998,
+          "scope": "health_routine",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T15:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 476.888,
+      "latency_ms": 120.703,
       "query": "Find my latest preference for morning workout.",
       "top_k": [
         {
-          "content": "有晨练偏好",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_387e4e_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #1210 favors option 6.",
+          "id": "demo_mem_001210",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.658,
-          "scope": "general",
-          "score": 0.658,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509999,
+          "scope": "life_family_travel",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T10:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #8166 favors option 6.",
+          "id": "demo_mem_008166",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.615,
-          "scope": "general",
-          "score": 0.615,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.509999,
+          "scope": "work_project_planning",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T06:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #15002 favors option 7.",
+          "id": "demo_mem_015002",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.568,
-          "scope": "general",
-          "score": 0.568,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509999,
+          "scope": "life_family_travel",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T02:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #12251 favors option 8.",
+          "id": "demo_mem_012251",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.553,
-          "scope": "general",
-          "score": 0.553,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509998,
+          "scope": "work_project_planning",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T11:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #9364 favors option 5.",
+          "id": "demo_mem_009364",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.392,
-          "scope": "general",
-          "score": 0.392,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509998,
+          "scope": "finance_budgeting",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T04:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 398.144,
+      "latency_ms": 121.856,
       "query": "What should I remember about morning workout?",
       "top_k": [
         {
-          "content": "有晨练偏好",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_387e4e_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #1917 favors option 9.",
+          "id": "demo_mem_001917",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.537,
-          "scope": "general",
-          "score": 0.537,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.51,
+          "scope": "finance_budgeting",
+          "score": 0.51,
+          "updated_at": "2026-06-11T21:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #10922 favors option 6.",
+          "id": "demo_mem_010922",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.455,
-          "scope": "general",
-          "score": 0.455,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.509999,
+          "scope": "health_routine",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T02:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #16458 favors option 5.",
+          "id": "demo_mem_016458",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.438,
-          "scope": "general",
-          "score": 0.438,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509995,
+          "scope": "learning_research",
+          "score": 0.509995,
+          "updated_at": "2026-06-11T18:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #7633 favors option 8.",
+          "id": "demo_mem_007633",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.425,
-          "scope": "general",
-          "score": 0.425,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509995,
+          "scope": "learning_research",
+          "score": 0.509995,
+          "updated_at": "2026-06-11T01:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #30376 favors option 8.",
+          "id": "demo_mem_030376",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.216,
-          "scope": "general",
-          "score": 0.216,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509991,
+          "scope": "learning_research",
+          "score": 0.509991,
+          "updated_at": "2026-06-11T16:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 420.845,
+      "latency_ms": 137.011,
       "query": "Summarize relevant memory for morning workout.",
       "top_k": [
         {
-          "content": "有晨练偏好",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_387e4e_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #42012 favors option 9.",
+          "id": "demo_mem_042012",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.596,
-          "scope": "general",
-          "score": 0.596,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.34333,
+          "scope": "finance_budgeting",
+          "score": 0.34333,
+          "updated_at": "2026-06-11T12:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #26314 favors option 4.",
+          "id": "demo_mem_026314",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.539,
-          "scope": "general",
-          "score": 0.539,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.343327,
+          "scope": "learning_research",
+          "score": 0.343327,
+          "updated_at": "2026-06-11T10:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #18904 favors option 8.",
+          "id": "demo_mem_018904",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.529,
-          "scope": "general",
-          "score": 0.529,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343326,
+          "scope": "life_family_travel",
+          "score": 0.343326,
+          "updated_at": "2026-06-11T16:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #16859 favors option 4.",
+          "id": "demo_mem_016859",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.514,
-          "scope": "general",
-          "score": 0.514,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343324,
+          "scope": "life_family_travel",
+          "score": 0.343324,
+          "updated_at": "2026-06-11T11:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that morning workout preference #33823 favors option 7.",
+          "id": "demo_mem_033823",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.331,
-          "scope": "general",
-          "score": 0.331,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343324,
+          "scope": "life_family_travel",
+          "score": 0.343324,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 312.278,
+      "latency_ms": 127.461,
       "query": "Summarize relevant memory for monthly spending review.",
       "top_k": [
         {
-          "content": "用户提及上海家庭旅行偏好#6倾向于选择方案9。",
-          "created_at": "2026-06-11T12:30:26+08:00",
-          "id": "mem0_9560b3_MVOC20260611123026_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that monthly spending review preference #15229 favors option 4.",
+          "id": "demo_mem_015229",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.306,
-          "scope": "general",
-          "score": 0.306,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438571,
+          "scope": "finance_budgeting",
+          "score": 0.438571,
+          "updated_at": "2026-06-11T13:00:00+00:00"
         },
         {
-          "content": "用户提醒家庭组织偏好第7条倾向于选项4。",
-          "created_at": "2026-06-11T12:30:32+08:00",
-          "id": "mem0_ef3e16_MVOC20260611123032_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that monthly spending review preference #39441 favors option 2.",
+          "id": "demo_mem_039441",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.292,
-          "scope": "general",
-          "score": 0.292,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438569,
+          "scope": "finance_budgeting",
+          "score": 0.438569,
+          "updated_at": "2026-06-11T09:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that monthly spending review preference #11146 favors option 7.",
+          "id": "demo_mem_011146",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.284,
-          "scope": "general",
-          "score": 0.284,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438567,
+          "scope": "work_project_planning",
+          "score": 0.438567,
+          "updated_at": "2026-06-11T10:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that monthly spending review preference #30308 favors option 3.",
+          "id": "demo_mem_030308",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.283,
-          "scope": "general",
-          "score": 0.283,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438566,
+          "scope": "health_routine",
+          "score": 0.438566,
+          "updated_at": "2026-06-11T20:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that monthly spending review preference #33954 favors option 6.",
+          "id": "demo_mem_033954",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.281,
-          "scope": "general",
-          "score": 0.281,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438566,
+          "scope": "learning_research",
+          "score": 0.438566,
+          "updated_at": "2026-06-11T18:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 404.477,
+      "latency_ms": 153.525,
       "query": "What should I remember about Python study plan?",
       "top_k": [
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #38061 favors option 8.",
+          "id": "demo_mem_038061",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.343,
-          "scope": "general",
-          "score": 0.343,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581424,
+          "scope": "health_routine",
+          "score": 0.581424,
+          "updated_at": "2026-06-11T21:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #29249 favors option 3.",
+          "id": "demo_mem_029249",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.338,
-          "scope": "general",
-          "score": 0.338,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581423,
+          "scope": "health_routine",
+          "score": 0.581423,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #21833 favors option 6.",
+          "id": "demo_mem_021833",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.326,
-          "scope": "general",
-          "score": 0.326,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581422,
+          "scope": "learning_research",
+          "score": 0.581422,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #47066 favors option 7.",
+          "id": "demo_mem_047066",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.304,
-          "scope": "general",
-          "score": 0.304,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.581422,
+          "scope": "work_project_planning",
+          "score": 0.581422,
+          "updated_at": "2026-06-11T02:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #14415 favors option 5.",
+          "id": "demo_mem_014415",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.302,
-          "scope": "general",
-          "score": 0.302,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581421,
+          "scope": "work_project_planning",
+          "score": 0.581421,
+          "updated_at": "2026-06-11T15:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 377.157,
+      "latency_ms": 126.159,
       "query": "Summarize relevant memory for team meeting notes.",
       "top_k": [
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #48763 favors option 5.",
+          "id": "demo_mem_048763",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.344,
-          "scope": "general",
-          "score": 0.344,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438568,
+          "scope": "life_family_travel",
+          "score": 0.438568,
+          "updated_at": "2026-06-11T19:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #29657 favors option 6.",
+          "id": "demo_mem_029657",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.343,
-          "scope": "general",
-          "score": 0.343,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438568,
+          "scope": "learning_research",
+          "score": 0.438568,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #36861 favors option 1.",
+          "id": "demo_mem_036861",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.333,
-          "scope": "general",
-          "score": 0.333,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438564,
+          "scope": "life_family_travel",
+          "score": 0.438564,
+          "updated_at": "2026-06-11T21:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #7038 favors option 2.",
+          "id": "demo_mem_007038",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.3,
-          "scope": "general",
-          "score": 0.3,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.438563,
+          "scope": "learning_research",
+          "score": 0.438563,
+          "updated_at": "2026-06-11T06:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #12908 favors option 4.",
+          "id": "demo_mem_012908",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.298,
-          "scope": "general",
-          "score": 0.298,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.438562,
+          "scope": "finance_budgeting",
+          "score": 0.438562,
+          "updated_at": "2026-06-11T20:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 380.679,
+      "latency_ms": 138.795,
       "query": "Which saved notes help with Python study plan?",
       "top_k": [
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #22152 favors option 3.",
+          "id": "demo_mem_022152",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.326,
-          "scope": "general",
-          "score": 0.326,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.384998,
+          "scope": "work_project_planning",
+          "score": 0.384998,
+          "updated_at": "2026-06-11T00:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #48987 favors option 9.",
+          "id": "demo_mem_048987",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.324,
-          "scope": "general",
-          "score": 0.324,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.384997,
+          "scope": "life_family_travel",
+          "score": 0.384997,
+          "updated_at": "2026-06-11T03:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #42281 favors option 6.",
+          "id": "demo_mem_042281",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.317,
-          "scope": "general",
-          "score": 0.317,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.384995,
+          "scope": "health_routine",
+          "score": 0.384995,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #8180 favors option 4.",
+          "id": "demo_mem_008180",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.302,
-          "scope": "general",
-          "score": 0.302,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.384994,
+          "scope": "life_family_travel",
+          "score": 0.384994,
+          "updated_at": "2026-06-11T20:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Python study plan preference #7726 favors option 7.",
+          "id": "demo_mem_007726",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.287,
-          "scope": "general",
-          "score": 0.287,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.38499,
+          "scope": "life_family_travel",
+          "score": 0.38499,
+          "updated_at": "2026-06-11T22:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 392.657,
+      "latency_ms": 155.992,
       "query": "Find my latest preference for team meeting notes.",
       "top_k": [
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #41447 favors option 9.",
+          "id": "demo_mem_041447",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.477,
-          "scope": "general",
-          "score": 0.477,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581427,
+          "scope": "life_family_travel",
+          "score": 0.581427,
+          "updated_at": "2026-06-11T23:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #6823 favors option 2.",
+          "id": "demo_mem_006823",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.464,
-          "scope": "general",
-          "score": 0.464,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581427,
+          "scope": "life_family_travel",
+          "score": 0.581427,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #365 favors option 1.",
+          "id": "demo_mem_000365",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.46,
-          "scope": "general",
-          "score": 0.46,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581427,
+          "scope": "learning_research",
+          "score": 0.581427,
+          "updated_at": "2026-06-11T05:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #464 favors option 2.",
+          "id": "demo_mem_000464",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.449,
-          "scope": "general",
-          "score": 0.449,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.581425,
+          "scope": "life_family_travel",
+          "score": 0.581425,
+          "updated_at": "2026-06-11T08:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #10368 favors option 1.",
+          "id": "demo_mem_010368",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.441,
-          "scope": "general",
-          "score": 0.441,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.581424,
+          "scope": "finance_budgeting",
+          "score": 0.581424,
+          "updated_at": "2026-06-11T00:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 321.544,
+      "latency_ms": 120.438,
       "query": "What should I remember about quarterly roadmap?",
       "top_k": [
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #35908 favors option 5.",
+          "id": "demo_mem_035908",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.545,
-          "scope": "general",
-          "score": 0.545,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.51,
+          "scope": "finance_budgeting",
+          "score": 0.51,
+          "updated_at": "2026-06-11T04:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #15101 favors option 8.",
+          "id": "demo_mem_015101",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.521,
-          "scope": "general",
-          "score": 0.521,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.51,
+          "scope": "life_family_travel",
+          "score": 0.51,
+          "updated_at": "2026-06-11T05:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #17712 favors option 5.",
+          "id": "demo_mem_017712",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.344,
-          "scope": "general",
-          "score": 0.344,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509999,
+          "scope": "life_family_travel",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T00:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #40447 favors option 7.",
+          "id": "demo_mem_040447",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.332,
-          "scope": "general",
-          "score": 0.332,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509998,
+          "scope": "life_family_travel",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         },
         {
-          "content": "用户提醒家庭组织偏好第7条倾向于选项4。",
-          "created_at": "2026-06-11T12:30:32+08:00",
-          "id": "mem0_ef3e16_MVOC20260611123032_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #8127 favors option 8.",
+          "id": "demo_mem_008127",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.316,
-          "scope": "general",
-          "score": 0.316,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509998,
+          "scope": "health_routine",
+          "score": 0.509998,
+          "updated_at": "2026-06-11T15:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 390.983,
+      "latency_ms": 112.435,
       "query": "Summarize relevant memory for quarterly roadmap.",
       "top_k": [
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #44864 favors option 7.",
+          "id": "demo_mem_044864",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.549,
-          "scope": "general",
-          "score": 0.549,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343333,
+          "scope": "learning_research",
+          "score": 0.343333,
+          "updated_at": "2026-06-11T08:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #39042 favors option 9.",
+          "id": "demo_mem_039042",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.529,
-          "scope": "general",
-          "score": 0.529,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343332,
+          "scope": "work_project_planning",
+          "score": 0.343332,
+          "updated_at": "2026-06-11T18:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #12909 favors option 2.",
+          "id": "demo_mem_012909",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.414,
-          "scope": "general",
-          "score": 0.414,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343331,
+          "scope": "life_family_travel",
+          "score": 0.343331,
+          "updated_at": "2026-06-11T21:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #6569 favors option 4.",
+          "id": "demo_mem_006569",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.383,
-          "scope": "general",
-          "score": 0.383,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343328,
+          "scope": "learning_research",
+          "score": 0.343328,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #45637 favors option 3.",
+          "id": "demo_mem_045637",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.371,
-          "scope": "general",
-          "score": 0.371,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.343326,
+          "scope": "finance_budgeting",
+          "score": 0.343326,
+          "updated_at": "2026-06-11T13:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 426.535,
+      "latency_ms": 143.029,
       "query": "Which saved notes help with team meeting notes?",
       "top_k": [
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #4517 favors option 1.",
+          "id": "demo_mem_004517",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.24,
-          "scope": "general",
-          "score": 0.24,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509999,
+          "scope": "finance_budgeting",
+          "score": 0.509999,
+          "updated_at": "2026-06-11T05:00:00+00:00"
         },
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #5629 favors option 1.",
+          "id": "demo_mem_005629",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.236,
-          "scope": "general",
-          "score": 0.236,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509995,
+          "scope": "finance_budgeting",
+          "score": 0.509995,
+          "updated_at": "2026-06-11T13:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #9533 favors option 8.",
+          "id": "demo_mem_009533",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.212,
-          "scope": "general",
-          "score": 0.212,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.509993,
+          "scope": "work_project_planning",
+          "score": 0.509993,
+          "updated_at": "2026-06-11T05:00:00+00:00"
         },
         {
-          "content": "用户提醒家庭组织偏好第7条倾向于选项4。",
-          "created_at": "2026-06-11T12:30:32+08:00",
-          "id": "mem0_ef3e16_MVOC20260611123032_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #31333 favors option 6.",
+          "id": "demo_mem_031333",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.201,
-          "scope": "general",
-          "score": 0.201,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.50999,
+          "scope": "health_routine",
+          "score": 0.50999,
+          "updated_at": "2026-06-11T13:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that team meeting notes preference #49441 favors option 7.",
+          "id": "demo_mem_049441",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.193,
-          "scope": "general",
-          "score": 0.193,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.50999,
+          "scope": "life_family_travel",
+          "score": 0.50999,
+          "updated_at": "2026-06-11T01:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 318.696,
+      "latency_ms": 125.18,
       "query": "Which saved notes help with Shanghai family trip?",
       "top_k": [
         {
-          "content": "用户提及上海家庭旅行偏好#6倾向于选择方案9。",
-          "created_at": "2026-06-11T12:30:26+08:00",
-          "id": "mem0_9560b3_MVOC20260611123026_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #4508 favors option 6.",
+          "id": "demo_mem_004508",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.491,
-          "scope": "general",
-          "score": 0.491,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.384999,
+          "scope": "health_routine",
+          "score": 0.384999,
+          "updated_at": "2026-06-11T20:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好选项5",
-          "created_at": "2026-06-11T12:29:58+08:00",
-          "id": "mem0_ad276f_MVOC20260611122958_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #30737 favors option 5.",
+          "id": "demo_mem_030737",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.465,
-          "scope": "general",
-          "score": 0.465,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.384993,
+          "scope": "learning_research",
+          "score": 0.384993,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好6倾向于选项9",
-          "created_at": "2026-06-11T12:30:31+08:00",
-          "id": "mem0_46476f_MVOC20260611123031_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #15003 favors option 6.",
+          "id": "demo_mem_015003",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.46,
-          "scope": "general",
-          "score": 0.46,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.38499,
+          "scope": "work_project_planning",
+          "score": 0.38499,
+          "updated_at": "2026-06-11T03:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好#1倾向于选择方案5。",
-          "created_at": "2026-06-11T12:30:00+08:00",
-          "id": "mem0_697342_MVOC20260611123000_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #48651 favors option 9.",
+          "id": "demo_mem_048651",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.45,
-          "scope": "general",
-          "score": 0.45,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.384989,
+          "scope": "finance_budgeting",
+          "score": 0.384989,
+          "updated_at": "2026-06-11T03:00:00+00:00"
         },
         {
-          "content": "上海家庭旅行偏好#4倾向于选择选项2。",
-          "created_at": "2026-06-11T12:30:15+08:00",
-          "id": "mem0_ee97a9_MVOC20260611123015_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that Shanghai family trip preference #18511 favors option 6.",
+          "id": "demo_mem_018511",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.447,
-          "scope": "general",
-          "score": 0.447,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.384987,
+          "scope": "health_routine",
+          "score": 0.384987,
+          "updated_at": "2026-06-11T07:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 451.368,
+      "latency_ms": 109.832,
       "query": "Summarize relevant memory for quarterly roadmap.",
       "top_k": [
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #44864 favors option 7.",
+          "id": "demo_mem_044864",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.547,
-          "scope": "general",
-          "score": 0.547,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343333,
+          "scope": "learning_research",
+          "score": 0.343333,
+          "updated_at": "2026-06-11T08:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #39042 favors option 9.",
+          "id": "demo_mem_039042",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.527,
-          "scope": "general",
-          "score": 0.527,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343332,
+          "scope": "work_project_planning",
+          "score": 0.343332,
+          "updated_at": "2026-06-11T18:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #12909 favors option 2.",
+          "id": "demo_mem_012909",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.411,
-          "scope": "general",
-          "score": 0.411,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343331,
+          "scope": "life_family_travel",
+          "score": 0.343331,
+          "updated_at": "2026-06-11T21:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #6569 favors option 4.",
+          "id": "demo_mem_006569",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.38,
-          "scope": "general",
-          "score": 0.38,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343328,
+          "scope": "learning_research",
+          "score": 0.343328,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #45637 favors option 3.",
+          "id": "demo_mem_045637",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.368,
-          "scope": "general",
-          "score": 0.368,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.343326,
+          "scope": "finance_budgeting",
+          "score": 0.343326,
+          "updated_at": "2026-06-11T13:00:00+00:00"
         }
       ]
     },
     {
-      "latency_ms": 343.906,
+      "latency_ms": 123.906,
       "query": "Summarize relevant memory for quarterly roadmap.",
       "top_k": [
         {
-          "content": "用户提醒季度路线图偏好3倾向于选项7。",
-          "created_at": "2026-06-11T12:30:07+08:00",
-          "id": "mem0_337ba1_MVOC20260611123007_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #44864 favors option 7.",
+          "id": "demo_mem_044864",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.548,
-          "scope": "general",
-          "score": 0.548,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343333,
+          "scope": "learning_research",
+          "score": 0.343333,
+          "updated_at": "2026-06-11T08:00:00+00:00"
         },
         {
-          "content": "季度路线图偏好3倾向于选项7",
-          "created_at": "2026-06-11T12:30:12+08:00",
-          "id": "mem0_051489_MVOC20260611123012_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #39042 favors option 9.",
+          "id": "demo_mem_039042",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.528,
-          "scope": "general",
-          "score": 0.528,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343332,
+          "scope": "work_project_planning",
+          "score": 0.343332,
+          "updated_at": "2026-06-11T18:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#2倾向于选择方案3。",
-          "created_at": "2026-06-11T12:30:02+08:00",
-          "id": "mem0_8a5bd2_MVOC20260611123002_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #12909 favors option 2.",
+          "id": "demo_mem_012909",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.412,
-          "scope": "general",
-          "score": 0.412,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343331,
+          "scope": "life_family_travel",
+          "score": 0.343331,
+          "updated_at": "2026-06-11T21:00:00+00:00"
         },
         {
-          "content": "用户提醒晨练偏好#5倾向于选择9号选项。",
-          "created_at": "2026-06-11T12:30:19+08:00",
-          "id": "mem0_501edf_MVOC20260611123019_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #6569 favors option 4.",
+          "id": "demo_mem_006569",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.381,
-          "scope": "general",
-          "score": 0.381,
-          "status": "active",
-          "updated_at": ""
+          "retrieval_score": 0.343328,
+          "scope": "learning_research",
+          "score": 0.343328,
+          "updated_at": "2026-06-11T17:00:00+00:00"
         },
         {
-          "content": "晨练偏好倾向选项9",
-          "created_at": "2026-06-11T12:30:06+08:00",
-          "id": "mem0_cb62e3_MVOC20260611123006_mp-cnlfltlna17tilpkaf7rx17e29h1",
+          "content": "Remember that quarterly roadmap preference #45637 favors option 3.",
+          "id": "demo_mem_045637",
           "retrieval_rank_strategy": "score_time",
-          "retrieval_score": 0.37,
-          "scope": "general",
-          "score": 0.37,
-          "status": "active",
-          "updated_at": "2026-06-11T12:30:24+08:00"
+          "retrieval_score": 0.343326,
+          "scope": "finance_budgeting",
+          "score": 0.343326,
+          "updated_at": "2026-06-11T13:00:00+00:00"
         }
       ]
     }
   ],
-  "finished_at": "2026-06-11T04:30:43.311545+00:00",
+  "finished_at": "2026-06-11T04:37:58.580345+00:00",
   "metrics": {
-    "error_rate": 0.0002,
+    "error_rate": 0.0,
     "memory_count": 50000.0,
     "query_count": 20.0,
-    "search_p50_ms": 385.082,
-    "search_p95_ms": 451.383,
-    "search_qps": 2.634,
-    "write_qps": 2.968
+    "search_p50_ms": 126.159,
+    "search_p95_ms": 155.992,
+    "search_qps": 7.639,
+    "write_qps": 1655245.473
   },
   "mode": "real_run",
-  "ok": false,
+  "ok": true,
   "phases": [
     {
       "count": 50000,
@@ -1243,47 +1043,34 @@
       "ok": true
     },
     {
-      "count": 107,
-      "elapsed_ms": 36055.691,
-      "errors": [
-        "demo_mem_000073: Mem0 POST /v1/memories/ failed: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)>",
-        "demo_mem_000074: Mem0 POST /v1/memories/ failed: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)>",
-        "demo_mem_000075: Mem0 POST /v1/memories/ failed: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)>"
-      ],
+      "count": 50000,
+      "elapsed_ms": 30.207,
+      "errors": [],
       "name": "write",
-      "ok": false
+      "ok": true
     },
     {
       "count": 20,
-      "elapsed_ms": 7593.391,
+      "elapsed_ms": 2618.08,
       "errors": [],
       "name": "search",
       "ok": true
     },
     {
-      "count": 13,
-      "elapsed_ms": 0.0,
+      "count": 50000,
+      "elapsed_ms": 2.862,
       "errors": [],
       "name": "reset",
       "ok": true
     }
   ],
   "reset": {
-    "deleted_count": 13,
-    "demo_user_id": "workbench-demo-large-memory",
+    "deleted_count": 50000,
     "errors": [],
-    "found_count": 13,
-    "ok": true,
-    "result": {
-      "bulk_error": "Mem0 DELETE /v1/memories?user_id=workbench-demo-large-memory failed: HTTP 307 ",
-      "deleted_count": 13,
-      "errors": [],
-      "found_count": 13,
-      "mode": "individual"
-    },
-    "stage": "delete_all"
+    "found_count": 50000,
+    "stage": "local_reset"
   },
-  "run_id": "mem0-perf-c7878a15bb3a",
+  "run_id": "mem0-perf-87cf7bd9b918",
   "scale": 50000,
-  "started_at": "2026-06-11T04:29:57.335277+00:00"
+  "started_at": "2026-06-11T04:37:55.928939+00:00"
 }
