@@ -18,6 +18,12 @@ from .agent import HarnessAgent
 from .evaluation import build_report, evaluate_case_run, save_report, with_history
 from .judge import score_with_fallback
 from .llm import MimoConfig
+from .mem0_performance import (
+    config_for_demo_user,
+    latest_report as latest_performance_report,
+    reset_demo_memory,
+    run_performance_demo,
+)
 from .runner import run_all
 
 LATEST = Path("eval/output/latest/eval_report.json")
@@ -60,6 +66,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(_mem0_health())
         elif path == "/api/mem0-memory":
             self._send_json(_mem0_memory())
+        elif path == "/api/mem0-performance-demo/latest":
+            self._send_json(
+                latest_performance_report()
+                or {"ok": False, "stage": "empty", "error": "No performance demo has run yet."}
+            )
         elif path == "/api/current-memory":
             self._send_json(_current_memory_payload(STATE.chat_agent.toolbox.snapshot()))
         else:
@@ -141,6 +152,10 @@ class Handler(BaseHTTPRequestHandler):
             STATE.chat_agent = _new_workbench_agent(STATE.agent_mode)
             print(f"[workbench] saved memory backend={config.get('backend', 'local')}")
             self._send_json({"ok": True, "settings": _settings_payload()})
+        elif path == "/api/mem0-performance-demo/run":
+            self._send_json(_run_mem0_performance_demo(body))
+        elif path == "/api/mem0-performance-demo/reset":
+            self._send_json(_reset_mem0_performance_demo(body))
         else:
             self.send_error(404)
 
@@ -344,6 +359,35 @@ def _reset_mem0_memory() -> dict[str, Any]:
         return {"ok": not result["errors"], "stage": "delete_all", **result}
     except Exception as exc:
         return {"ok": False, "stage": "request", "error": str(exc)}
+
+
+def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
+    engine = str(body.get("engine") or _memory_backend_config()["backend"])
+    if engine == "mem0":
+        engine = "mem0_hosted"
+    mode = str(body.get("mode") or "dry_run")
+    scale = int(body.get("scale") or 1000)
+    query_count = int(body.get("query_count") or 20)
+    client = None
+    if mode == "real_run":
+        config = config_for_demo_user(_mem0_config())
+        client = _mem0_client_for_backend(engine, config)
+    try:
+        return run_performance_demo(engine=engine, mode=mode, scale=scale, query_count=query_count, client=client)
+    except Exception as exc:
+        return {"ok": False, "stage": "run", "error": str(exc)}
+
+
+def _reset_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
+    engine = str(body.get("engine") or _memory_backend_config()["backend"])
+    if engine == "mem0":
+        engine = "mem0_hosted"
+    try:
+        config = config_for_demo_user(_mem0_config())
+        client = _mem0_client_for_backend(engine, config)
+        return reset_demo_memory(client)
+    except Exception as exc:
+        return {"ok": False, "stage": "reset", "error": str(exc)}
 
 
 def _mem0_client_for_backend(backend: str, config: Mem0Config) -> Any:

@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
-from evalharness import mem0_performance
+from evalharness import mem0_performance, server
 from evalharness.mem0_performance import (
     DEMO_USER_ID,
     config_for_demo_user,
@@ -212,3 +212,28 @@ class Mem0PerformanceIsolationTest(unittest.TestCase):
         self.assertEqual(0, result["found_count"])
         self.assertEqual(0, result["deleted_count"])
         self.assertEqual(["partial failure"], result["errors"])
+
+
+class Mem0PerformanceApiTest(unittest.TestCase):
+    def test_run_mem0_performance_demo_defaults_to_dry_run(self):
+        with patch("evalharness.server._mem0_client_for_backend") as client_factory:
+            result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "scale": 1000, "query_count": 3})
+
+        client_factory.assert_not_called()
+        self.assertTrue(result["ok"])
+        self.assertEqual("dry_run", result["mode"])
+        self.assertEqual(1000, result["scale"])
+
+    def test_reset_mem0_performance_demo_uses_demo_config(self):
+        class FakeClient:
+            def __init__(self, config):
+                self.config = config
+
+            def delete_all(self, page_size=200):
+                return {"mode": "user_scoped", "found_count": 1, "deleted_count": 1, "errors": []}
+
+        with patch("evalharness.server._mem0_client_for_backend", side_effect=lambda backend, config: FakeClient(config)):
+            result = server._reset_mem0_performance_demo({"engine": "mem0_hosted"})
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(DEMO_USER_ID, result["demo_user_id"])
