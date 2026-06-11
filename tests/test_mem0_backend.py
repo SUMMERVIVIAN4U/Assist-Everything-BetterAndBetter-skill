@@ -78,6 +78,34 @@ class Mem0BackendTest(unittest.TestCase):
         self.assertTrue(captured["payload"]["async_mode"])
         self.assertEqual("performance_demo", captured["payload"]["metadata"]["context"])
 
+    def test_request_retries_transient_url_errors(self):
+        calls = []
+
+        def fake_urlopen(request, timeout):
+            calls.append(request.full_url)
+            if len(calls) == 1:
+                raise urllib.error.URLError("transient eof")
+            return _FakeResponse()
+
+        client = Mem0Client(
+            Mem0Config(
+                enabled=True,
+                base_url="https://mem0.example",
+                api_key="test-key",
+                user_id="u1",
+            )
+        )
+
+        with (
+            patch("assist_everything_betterandbetter_skill.mem0_backend.urllib.request.urlopen", fake_urlopen),
+            patch("assist_everything_betterandbetter_skill.mem0_backend.time.sleep") as sleep,
+        ):
+            result = client.add_text("bulk demo memory", async_mode=True)
+
+        self.assertEqual({"results": [{"id": "remote_1", "event": "ADD"}]}, result)
+        self.assertEqual(2, len(calls))
+        sleep.assert_called_once()
+
     def test_delete_all_falls_back_to_individual_deletes_when_bulk_is_unavailable(self):
         calls = []
 

@@ -151,6 +151,20 @@ class Mem0PerformanceDemoTest(unittest.TestCase):
         self.assertEqual("score_time", report["examples"][0]["top_k"][0]["retrieval_rank_strategy"])
         self.assertEqual("newer", report["examples"][0]["top_k"][0]["id"])
 
+    def test_real_run_rejects_invalid_client_before_saving_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "mem0_performance_demo.json"
+            with patch.object(mem0_performance, "LATEST_PERFORMANCE_REPORT", report_path):
+                with self.assertRaisesRegex(ValueError, "demo-scoped Mem0 client"):
+                    run_performance_demo(
+                        engine="mem0_hosted",
+                        mode="real_run",
+                        scale=1000,
+                        query_count=1,
+                        client=object(),
+                    )
+                self.assertFalse(report_path.exists())
+
 
 class Mem0PerformanceIsolationTest(unittest.TestCase):
     def test_config_for_demo_user_never_reuses_chat_user_id(self):

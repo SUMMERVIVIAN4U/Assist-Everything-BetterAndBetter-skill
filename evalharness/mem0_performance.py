@@ -301,8 +301,7 @@ def _run_real_demo(
     memories: list[dict[str, Any]],
     queries: list[str],
 ) -> tuple[list[dict[str, Any]], dict[str, float], list[dict[str, Any]], dict[str, Any]]:
-    if client is None:
-        raise ValueError("real_run requires a configured Mem0 client")
+    _validate_real_client(client)
     errors: list[str] = []
     write_count = 0
     write_started = time.perf_counter()
@@ -368,6 +367,17 @@ def _run_real_demo(
     }
     reset = {**reset, "errors": reset_errors}
     return phases, metrics, examples, reset
+
+
+def _validate_real_client(client: Any | None) -> None:
+    client_user_id = getattr(getattr(client, "config", None), "user_id", None)
+    required_methods = ["add_text", "search", "delete_all"]
+    missing = [method for method in required_methods if not callable(getattr(client, method, None))]
+    if client_user_id != DEMO_USER_ID or missing:
+        missing_text = f"; missing methods: {', '.join(missing)}" if missing else ""
+        raise ValueError(
+            f"real_run requires a demo-scoped Mem0 client for {DEMO_USER_ID!r}; got user_id {client_user_id!r}{missing_text}"
+        )
 
 
 def _add_performance_memory(client: Any, content: str) -> Any:

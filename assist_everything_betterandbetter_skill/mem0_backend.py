@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -171,15 +172,20 @@ class HostedMem0Client:
                 "Content-Type": "application/json",
             },
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self.config.timeout) as response:
-                raw = response.read().decode("utf-8")
-                return json.loads(raw) if raw.strip() else {"status": response.status}
-        except urllib.error.HTTPError as exc:
-            raw = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Mem0 {method} {path} failed: HTTP {exc.code} {raw[:500]}") from exc
-        except Exception as exc:
-            raise RuntimeError(f"Mem0 {method} {path} failed: {exc}") from exc
+        attempts = _mem0_retry_attempts()
+        for attempt in range(1, attempts + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self.config.timeout) as response:
+                    raw = response.read().decode("utf-8")
+                    return json.loads(raw) if raw.strip() else {"status": response.status}
+            except urllib.error.HTTPError as exc:
+                raw = exc.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"Mem0 {method} {path} failed: HTTP {exc.code} {raw[:500]}") from exc
+            except Exception as exc:
+                if attempt >= attempts:
+                    raise RuntimeError(f"Mem0 {method} {path} failed: {exc}") from exc
+                time.sleep(_mem0_retry_delay(attempt))
+        raise RuntimeError(f"Mem0 {method} {path} failed")
 
     def _request_first(self, method: str, paths: list[str], payload: dict[str, Any] | None) -> dict[str, Any] | list[Any]:
         errors = []
@@ -313,6 +319,21 @@ def _mem0_sdk_config_from_env() -> dict[str, Any] | None:
         },
         "history_db_path": history_db_path,
     }
+
+
+def _mem0_retry_attempts() -> int:
+    try:
+        return max(1, min(int(os.getenv("MEM0_HTTP_RETRIES", "3") or 3), 8))
+    except ValueError:
+        return 3
+
+
+def _mem0_retry_delay(attempt: int) -> float:
+    try:
+        base = max(0.0, float(os.getenv("MEM0_HTTP_RETRY_DELAY", "0.2") or 0.2))
+    except ValueError:
+        base = 0.2
+    return min(base * (2 ** max(0, attempt - 1)), 3.0)
 
 
 def _item_from_mem0_result(result: dict[str, Any]) -> MemoryItem:
