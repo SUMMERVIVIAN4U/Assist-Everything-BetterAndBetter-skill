@@ -19,6 +19,7 @@ from .evaluation import build_report, evaluate_case_run, save_report, with_histo
 from .judge import score_with_fallback
 from .llm import MimoConfig
 from .mem0_performance import (
+    DEMO_USER_ID,
     config_for_demo_user,
     latest_report as latest_performance_report,
     reset_demo_memory,
@@ -385,14 +386,14 @@ def _reset_mem0_memory() -> dict[str, Any]:
 def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
     raw_engine = body["engine"] if "engine" in body else _memory_backend_config()["backend"]
     engine = _normalize_mem0_performance_engine(raw_engine)
-    if engine not in {"mem0_hosted", "mem0_sdk"}:
+    if engine not in {"local", "mem0_hosted", "mem0_sdk"}:
         return {"ok": False, "stage": "run", "error": f"unsupported engine: {raw_engine}"}
     mode = str(body.get("mode") or "dry_run")
     try:
         scale = _body_int(body, "scale", 1000)
         query_count = _body_int(body, "query_count", 20)
         client = None
-        if mode == "real_run":
+        if mode == "real_run" and engine != "local":
             config = config_for_demo_user(_mem0_config())
             client = _mem0_client_for_backend(engine, config)
         return run_performance_demo(engine=engine, mode=mode, scale=scale, query_count=query_count, client=client)
@@ -403,8 +404,10 @@ def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
 def _reset_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
     raw_engine = body["engine"] if "engine" in body else _memory_backend_config()["backend"]
     engine = _normalize_mem0_performance_engine(raw_engine)
-    if engine not in {"mem0_hosted", "mem0_sdk"}:
+    if engine not in {"local", "mem0_hosted", "mem0_sdk"}:
         return {"ok": False, "stage": "config", "error": f"unsupported engine: {raw_engine}"}
+    if engine == "local":
+        return {"ok": True, "stage": "local_reset", "demo_user_id": DEMO_USER_ID, "found_count": 0, "deleted_count": 0, "errors": []}
     try:
         config = config_for_demo_user(_mem0_config())
         client = _mem0_client_for_backend(engine, config)

@@ -16,7 +16,7 @@ DEMO_USER_ID = "workbench-demo-large-memory"
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 LATEST_PERFORMANCE_REPORT = _REPO_ROOT / "eval/output/latest/mem0_performance_demo.json"
 
-ALLOWED_ENGINES = {"mem0_hosted", "mem0_sdk"}
+ALLOWED_ENGINES = {"local", "mem0_hosted", "mem0_sdk"}
 ALLOWED_MODES = {"dry_run", "real_run"}
 ALLOWED_RUN_SCALES = {1000, 10000, 50000}
 
@@ -183,7 +183,9 @@ def run_performance_demo(
     run_id = _run_id(engine, mode, scale, query_count)
     started_at = datetime.now(timezone.utc).isoformat() if mode == "real_run" else _BASE_TIME
 
-    if mode == "real_run":
+    if mode == "real_run" and engine == "local":
+        phases, metrics, examples, reset = _run_local_demo(memories, queries)
+    elif mode == "real_run":
         phases, metrics, examples, reset = _run_real_demo(client, memories, queries)
     else:
         phases, metrics, examples, reset = _run_dry_demo(memories, queries)
@@ -251,6 +253,46 @@ def _run_dry_demo(
         "query_count": float(len(queries)),
     }
     reset = {"found_count": len(memories), "deleted_count": len(memories), "errors": []}
+    return phases, metrics, examples, reset
+
+
+def _run_local_demo(
+    memories: list[dict[str, Any]],
+    queries: list[str],
+) -> tuple[list[dict[str, Any]], dict[str, float], list[dict[str, Any]], dict[str, Any]]:
+    write_started = time.perf_counter()
+    local_index = [dict(memory) for memory in memories]
+    write_ms = round((time.perf_counter() - write_started) * 1000, 3)
+
+    examples: list[dict[str, Any]] = []
+    search_latencies: list[float] = []
+    for query in queries:
+        search_started = time.perf_counter()
+        top_k = _local_top_k(query, local_index)
+        latency = round((time.perf_counter() - search_started) * 1000, 3)
+        search_latencies.append(latency)
+        examples.append({"query": query, "latency_ms": latency, "top_k": top_k})
+
+    reset_started = time.perf_counter()
+    found_count = len(local_index)
+    local_index.clear()
+    reset_ms = round((time.perf_counter() - reset_started) * 1000, 3)
+    phases = [
+        {"name": "generate", "ok": True, "count": len(memories), "elapsed_ms": 0.0},
+        {"name": "write", "ok": True, "count": found_count, "elapsed_ms": write_ms, "errors": []},
+        {"name": "search", "ok": True, "count": len(queries), "elapsed_ms": round(sum(search_latencies), 3), "errors": []},
+        {"name": "reset", "ok": True, "count": found_count, "elapsed_ms": reset_ms, "errors": []},
+    ]
+    metrics = {
+        "write_qps": round(found_count / max(write_ms / 1000.0, 0.001), 3),
+        "search_qps": round(len(queries) / max(sum(search_latencies) / 1000.0, 0.001), 3),
+        "search_p50_ms": round(_percentile(search_latencies, 50), 3),
+        "search_p95_ms": round(_percentile(search_latencies, 95), 3),
+        "error_rate": 0.0,
+        "memory_count": float(found_count),
+        "query_count": float(len(queries)),
+    }
+    reset = {"stage": "local_reset", "found_count": found_count, "deleted_count": found_count, "errors": []}
     return phases, metrics, examples, reset
 
 
@@ -384,6 +426,45 @@ def _dry_top_k(query: str, memories: list[dict[str, Any]], limit: int = 5) -> li
         }
         for score, _, memory in ranked[:limit]
     ]
+
+
+def _local_top_k(query: str, memories: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:
+    ranked = []
+    for memory in memories:
+        score = _local_retrieval_score(query, memory)
+        if score <= 0:
+            continue
+        ranked.append((score, memory["updated_at"], memory))
+    if not ranked:
+        ranked = [(_stable_score(query, memory["id"]) * 0.1, memory["updated_at"], memory) for memory in memories[:limit]]
+    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [
+        {
+            "id": memory["id"],
+            "content": memory["content"],
+            "scope": memory["scope"],
+            "score": round(score, 6),
+            "retrieval_score": round(score, 6),
+            "updated_at": memory["updated_at"],
+            "retrieval_rank_strategy": "score_time",
+        }
+        for score, _, memory in ranked[:limit]
+    ]
+
+
+def _local_retrieval_score(query: str, memory: dict[str, Any]) -> float:
+    terms = [term for term in _tokenize(query) if len(term) > 2]
+    haystack = " ".join([memory["content"], memory["scope"], *memory.get("tags", [])]).lower()
+    hits = sum(1 for term in terms if term in haystack)
+    if not terms:
+        return 0.0
+    lexical = hits / len(terms)
+    recency_tiebreaker = _stable_score(query, memory["id"]) * 0.01
+    return min(1.0, lexical + recency_tiebreaker)
+
+
+def _tokenize(text: str) -> list[str]:
+    return [part.strip(".,!?;:()[]{}\"'").lower() for part in text.split() if part.strip()]
 
 
 def _search_latency_ms(query: str, scale: int) -> float:

@@ -229,13 +229,14 @@ let report = null;
       const btn = document.getElementById('performanceRunBtn');
       const status = document.getElementById('performanceStatus');
       const mode = document.getElementById('performanceMode').value;
-      if (mode === 'real_run' && !window.confirm('Real Run 会向隔离 demo 用户写入大量 Mem0 记忆，完成后会尝试清理。确认继续？')) return;
+      const engine = document.getElementById('performanceEngine').value;
+      if (mode === 'real_run' && engine !== 'local' && !window.confirm('Real Run 会向隔离 demo 用户写入大量 Mem0 记忆，完成后会尝试清理。确认继续？')) return;
       btn.disabled = true;
       btn.textContent = 'Running...';
       status.innerHTML = '<span class="loading-row"><span class="spinner"></span><span>正在运行性能演示...</span></span>';
       try {
         const payload = {
-          engine: document.getElementById('performanceEngine').value,
+          engine,
           mode,
           scale: Number(document.getElementById('performanceScale').value),
           query_count: Number(document.getElementById('performanceQueries').value)

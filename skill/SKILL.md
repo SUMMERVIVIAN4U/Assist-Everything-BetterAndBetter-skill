@@ -103,7 +103,7 @@ Workbench tabs:
 - `Agent Chat`: live conversation through the same `process_message(...)` path as evals.
 - `History Evals`: saved preset and chat eval runs.
 - `统计`: summary metrics across historical runs.
-- `Performance Demo`: Mem0 超大记忆端到端性能演示，展示写入、检索、score+time 排序、样例 TopK、阶段耗时和 reset 结果。
+- `Performance Demo`: 本地 JSON、Mem0 Hosted、Mem0 SDK 的超大记忆端到端性能演示，展示写入、检索、score+time 排序、样例 TopK、阶段耗时和 reset 结果。
 - `设置`: Agent 配置, Workbench Memory, Mem0 Memory, 隐私设置.
 
 Agent Chat must keep the right-side `当前 Memory` panel intuitive:
@@ -123,6 +123,7 @@ Settings rules:
 Performance Demo rules:
 
 - 默认使用 `Dry Run`，只生成确定性数据和模拟指标，不访问远端 Mem0。
+- 本地 JSON 引擎的 `Real Run` 使用临时内存索引模拟本地记忆库写入、检索和清理，不写入 Workbench 当前记忆文件。
 - `Real Run` 只允许使用隔离用户 `workbench-demo-large-memory`，不得复用 Agent Chat 当前用户。
 - 演示结果必须展示 `demo_user_id`、记忆规模、写入 QPS、检索 P50/P95、错误率、阶段时间线和检索样例。
 - 检索样例使用与运行时一致的统一策略：按 `retrieval_score` 降序，再按更新时间降序，并标记 `retrieval_rank_strategy=score_time`。

@@ -73,14 +73,15 @@
         <div class="panel">
           <div class="case-head">
             <div>
-              <h2>Mem0 超大记忆性能演示</h2>
-              <div id="performanceStatus" class="muted">Dry Run 不访问远端；Real Run 使用隔离用户 workbench-demo-large-memory。</div>
+              <h2>超大记忆性能演示</h2>
+              <div id="performanceStatus" class="muted">Dry Run 不访问远端；Real Run 使用隔离 demo 数据，不影响 Agent Chat 记忆。</div>
             </div>
             <button onclick="fetchPerformanceLatest()">刷新</button>
           </div>
           <div class="demo-controls">
             <label for="performanceEngine">记忆引擎</label>
             <select id="performanceEngine">
+              <option value="local">本地JSON</option>
               <option value="mem0_hosted">Mem0 Hosted</option>
               <option value="mem0_sdk">Mem0 SDK</option>
             </select>
@@ -100,7 +101,7 @@
             <div class="wide privacy-actions">
               <button id="performanceRunBtn" class="primary" onclick="runPerformanceDemo()">Run Demo</button>
               <button onclick="resetPerformanceDemo()">Reset Demo Memory</button>
-              <span class="status-line">Real Run 会写入并清理隔离 demo 用户，不影响 Agent Chat 用户。</span>
+              <span class="status-line">本地引擎使用临时索引；Mem0 Real Run 使用隔离 demo 用户并在结束后清理。</span>
             </div>
           </div>
           <div id="performanceMetrics" class="metrics performance-metrics"></div>
