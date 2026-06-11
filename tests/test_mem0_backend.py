@@ -132,6 +132,8 @@ class Mem0BackendTest(unittest.TestCase):
         self.assertEqual(result["found_count"], 2)
         self.assertEqual(result["deleted_count"], 2)
         self.assertEqual(result["errors"], [])
+        self.assertNotIn("bulk_error", result)
+        self.assertEqual(1, len(result["warnings"]))
         self.assertEqual(calls[0][0], "GET")
         self.assertIn("/v1/memories/?user_id=u1", calls[0][1])
         self.assertEqual(result["mode"], "individual")
