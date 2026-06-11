@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .venv/
+.superpowers/
 eval/output/verify_run_*/
 .env
 .env.local
