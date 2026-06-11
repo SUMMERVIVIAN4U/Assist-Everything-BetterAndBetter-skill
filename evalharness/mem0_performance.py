@@ -308,7 +308,7 @@ def _run_real_demo(
     write_started = time.perf_counter()
     for memory in memories:
         try:
-            client.add_text(memory["content"], context="mem0_large_memory_performance_demo")
+            _add_performance_memory(client, memory["content"])
             write_count += 1
         except Exception as exc:
             errors.append(f"{memory['id']}: {exc}")
@@ -368,6 +368,13 @@ def _run_real_demo(
     }
     reset = {**reset, "errors": reset_errors}
     return phases, metrics, examples, reset
+
+
+def _add_performance_memory(client: Any, content: str) -> Any:
+    try:
+        return client.add_text(content, context="mem0_large_memory_performance_demo", async_mode=True)
+    except TypeError:
+        return client.add_text(content, context="mem0_large_memory_performance_demo")
 
 
 def _normalize_real_results(results: Any) -> list[dict[str, Any]]:

@@ -66,7 +66,7 @@ class HostedMem0Client:
         }
         return self._request_first("POST", ["/v1/memories/", "/v3/memories/add/"], payload)
 
-    def add_text(self, text: str, context: str = "") -> dict[str, Any]:
+    def add_text(self, text: str, context: str = "", async_mode: bool = False) -> dict[str, Any]:
         payload = {
             "user_id": self.config.user_id,
             "app_id": self.config.app_id,
@@ -77,7 +77,7 @@ class HostedMem0Client:
                 "project_id": self.config.project_id,
             },
             "infer": True,
-            "async_mode": False,
+            "async_mode": bool(async_mode),
         }
         return self._request_first("POST", ["/v1/memories/", "/v3/memories/add/"], payload)
 
@@ -208,9 +208,11 @@ class Mem0SdkClient:
             sdk_config = _mem0_sdk_config_from_env()
             self.memory = Memory.from_config(sdk_config) if sdk_config else Memory()
 
-    def add_text(self, text: str, context: str = "") -> dict[str, Any]:
+    def add_text(self, text: str, context: str = "", async_mode: bool = False) -> dict[str, Any]:
         messages = [{"role": "user", "content": text}]
         kwargs = {"metadata": {"source": "agent_chat", "context": context, "app_id": self.config.app_id}}
+        if async_mode:
+            kwargs["async_mode"] = True
         try:
             return self.memory.add(messages, user_id=self.config.user_id, **kwargs)
         except TypeError:

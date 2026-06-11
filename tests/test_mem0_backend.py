@@ -55,6 +55,29 @@ class Mem0BackendTest(unittest.TestCase):
         self.assertEqual(captured["payload"]["user_id"], "u1")
         self.assertEqual(captured["payload"]["metadata"]["project_id"], "project1")
 
+    def test_add_text_can_enable_async_mode_for_hosted_bulk_runs(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return _FakeResponse()
+
+        client = Mem0Client(
+            Mem0Config(
+                enabled=True,
+                base_url="https://mem0.example",
+                api_key="test-key",
+                user_id="u1",
+            )
+        )
+
+        with patch("assist_everything_betterandbetter_skill.mem0_backend.urllib.request.urlopen", fake_urlopen):
+            client.add_text("bulk demo memory", context="performance_demo", async_mode=True)
+
+        self.assertTrue(captured["payload"]["infer"])
+        self.assertTrue(captured["payload"]["async_mode"])
+        self.assertEqual("performance_demo", captured["payload"]["metadata"]["context"])
+
     def test_delete_all_falls_back_to_individual_deletes_when_bulk_is_unavailable(self):
         calls = []
 

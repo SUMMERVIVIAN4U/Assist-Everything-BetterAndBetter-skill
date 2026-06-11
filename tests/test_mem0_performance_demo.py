@@ -99,8 +99,8 @@ class Mem0PerformanceDemoTest(unittest.TestCase):
                 self.searches = []
                 self.deleted = False
 
-            def add_text(self, text, context=""):
-                self.writes.append({"text": text, "context": context})
+            def add_text(self, text, context="", async_mode=False):
+                self.writes.append({"text": text, "context": context, "async_mode": async_mode})
                 return {"id": f"mem0_{len(self.writes)}"}
 
             def search(self, query, top_k=10):
@@ -143,6 +143,7 @@ class Mem0PerformanceDemoTest(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual("real_run", report["mode"])
         self.assertEqual(1000, len(client.writes))
+        self.assertTrue(client.writes[0]["async_mode"])
         self.assertEqual(2, len(client.searches))
         self.assertTrue(client.deleted)
         self.assertEqual(DEMO_USER_ID, report["demo_user_id"])
