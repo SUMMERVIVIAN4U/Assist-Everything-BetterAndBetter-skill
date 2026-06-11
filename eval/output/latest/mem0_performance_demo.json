@@ -1,0 +1,282 @@
+{
+  "demo_user_id": "workbench-demo-large-memory",
+  "engine": "mem0_hosted",
+  "examples": [
+    {
+      "latency_ms": 28.86,
+      "query": "What should I remember about Shanghai family trip?",
+      "top_k": [
+        {
+          "content": "Remember that monthly spending review preference #668 favors option 1.",
+          "id": "demo_mem_000668",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "learning_research",
+          "score": 0.998362,
+          "updated_at": "2026-06-11T20:00:00+00:00"
+        },
+        {
+          "content": "Remember that quarterly roadmap preference #951 favors option 2.",
+          "id": "demo_mem_000951",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "life_family_travel",
+          "score": 0.99799,
+          "updated_at": "2026-06-11T15:00:00+00:00"
+        },
+        {
+          "content": "Remember that home organization preference #764 favors option 5.",
+          "id": "demo_mem_000764",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "finance_budgeting",
+          "score": 0.996704,
+          "updated_at": "2026-06-11T20:00:00+00:00"
+        },
+        {
+          "content": "Remember that Shanghai family trip preference #129 favors option 2.",
+          "id": "demo_mem_000129",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "learning_research",
+          "score": 0.996442,
+          "updated_at": "2026-06-11T09:00:00+00:00"
+        },
+        {
+          "content": "Remember that home organization preference #779 favors option 1.",
+          "id": "demo_mem_000779",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "finance_budgeting",
+          "score": 0.996388,
+          "updated_at": "2026-06-11T11:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "latency_ms": 15.376,
+      "query": "Which saved notes help with morning workout?",
+      "top_k": [
+        {
+          "content": "Remember that Shanghai family trip preference #251 favors option 2.",
+          "id": "demo_mem_000251",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "finance_budgeting",
+          "score": 0.999748,
+          "updated_at": "2026-06-11T11:00:00+00:00"
+        },
+        {
+          "content": "Remember that home organization preference #892 favors option 7.",
+          "id": "demo_mem_000892",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "finance_budgeting",
+          "score": 0.998835,
+          "updated_at": "2026-06-11T04:00:00+00:00"
+        },
+        {
+          "content": "Remember that morning workout preference #16 favors option 2.",
+          "id": "demo_mem_000016",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "finance_budgeting",
+          "score": 0.997307,
+          "updated_at": "2026-06-11T16:00:00+00:00"
+        },
+        {
+          "content": "Remember that Shanghai family trip preference #749 favors option 5.",
+          "id": "demo_mem_000749",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "work_project_planning",
+          "score": 0.996187,
+          "updated_at": "2026-06-11T05:00:00+00:00"
+        },
+        {
+          "content": "Remember that Shanghai family trip preference #157 favors option 2.",
+          "id": "demo_mem_000157",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "work_project_planning",
+          "score": 0.993946,
+          "updated_at": "2026-06-11T13:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "latency_ms": 26.649,
+      "query": "Find my latest preference for Python study plan.",
+      "top_k": [
+        {
+          "content": "Remember that monthly spending review preference #210 favors option 9.",
+          "id": "demo_mem_000210",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "finance_budgeting",
+          "score": 0.999518,
+          "updated_at": "2026-06-11T18:00:00+00:00"
+        },
+        {
+          "content": "Remember that Shanghai family trip preference #334 favors option 1.",
+          "id": "demo_mem_000334",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "learning_research",
+          "score": 0.999068,
+          "updated_at": "2026-06-11T22:00:00+00:00"
+        },
+        {
+          "content": "Remember that reading backlog preference #77 favors option 4.",
+          "id": "demo_mem_000077",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "health_routine",
+          "score": 0.998444,
+          "updated_at": "2026-06-11T05:00:00+00:00"
+        },
+        {
+          "content": "Remember that team meeting notes preference #480 favors option 8.",
+          "id": "demo_mem_000480",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "work_project_planning",
+          "score": 0.998212,
+          "updated_at": "2026-06-11T00:00:00+00:00"
+        },
+        {
+          "content": "Remember that Shanghai family trip preference #348 favors option 5.",
+          "id": "demo_mem_000348",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "health_routine",
+          "score": 0.997942,
+          "updated_at": "2026-06-11T12:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "latency_ms": 26.617,
+      "query": "What should I remember about quarterly roadmap?",
+      "top_k": [
+        {
+          "content": "Remember that Python study plan preference #242 favors option 1.",
+          "id": "demo_mem_000242",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "learning_research",
+          "score": 0.999899,
+          "updated_at": "2026-06-11T02:00:00+00:00"
+        },
+        {
+          "content": "Remember that morning workout preference #698 favors option 2.",
+          "id": "demo_mem_000698",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "work_project_planning",
+          "score": 0.996907,
+          "updated_at": "2026-06-11T02:00:00+00:00"
+        },
+        {
+          "content": "Remember that Shanghai family trip preference #427 favors option 4.",
+          "id": "demo_mem_000427",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "learning_research",
+          "score": 0.996826,
+          "updated_at": "2026-06-11T19:00:00+00:00"
+        },
+        {
+          "content": "Remember that home organization preference #304 favors option 7.",
+          "id": "demo_mem_000304",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "health_routine",
+          "score": 0.995923,
+          "updated_at": "2026-06-11T16:00:00+00:00"
+        },
+        {
+          "content": "Remember that reading backlog preference #608 favors option 5.",
+          "id": "demo_mem_000608",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "health_routine",
+          "score": 0.995015,
+          "updated_at": "2026-06-11T08:00:00+00:00"
+        }
+      ]
+    },
+    {
+      "latency_ms": 20.492,
+      "query": "Summarize relevant memory for Shanghai family trip.",
+      "top_k": [
+        {
+          "content": "Remember that quarterly roadmap preference #431 favors option 1.",
+          "id": "demo_mem_000431",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "learning_research",
+          "score": 0.99703,
+          "updated_at": "2026-06-11T23:00:00+00:00"
+        },
+        {
+          "content": "Remember that monthly spending review preference #151 favors option 4.",
+          "id": "demo_mem_000151",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "work_project_planning",
+          "score": 0.996195,
+          "updated_at": "2026-06-11T07:00:00+00:00"
+        },
+        {
+          "content": "Remember that home organization preference #433 favors option 9.",
+          "id": "demo_mem_000433",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "work_project_planning",
+          "score": 0.994377,
+          "updated_at": "2026-06-11T01:00:00+00:00"
+        },
+        {
+          "content": "Remember that Python study plan preference #389 favors option 5.",
+          "id": "demo_mem_000389",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "life_family_travel",
+          "score": 0.993354,
+          "updated_at": "2026-06-11T05:00:00+00:00"
+        },
+        {
+          "content": "Remember that reading backlog preference #827 favors option 3.",
+          "id": "demo_mem_000827",
+          "retrieval_rank_strategy": "score_time",
+          "scope": "learning_research",
+          "score": 0.991601,
+          "updated_at": "2026-06-11T11:00:00+00:00"
+        }
+      ]
+    }
+  ],
+  "finished_at": "2026-06-11T00:00:01+00:00",
+  "metrics": {
+    "memory_count": 1000.0,
+    "query_count": 5.0,
+    "search_p50_ms": 26.617,
+    "search_p95_ms": 28.86,
+    "search_qps": 42.375,
+    "write_qps": 5555.556
+  },
+  "mode": "dry_run",
+  "ok": true,
+  "phases": [
+    {
+      "count": 1000,
+      "duration_ms": 30.0,
+      "name": "generate",
+      "status": "ok"
+    },
+    {
+      "count": 1000,
+      "duration_ms": 180.0,
+      "name": "write",
+      "status": "simulated"
+    },
+    {
+      "count": 5,
+      "duration_ms": 117.994,
+      "name": "search",
+      "status": "simulated"
+    },
+    {
+      "count": 1000,
+      "duration_ms": 20.0,
+      "name": "reset",
+      "status": "simulated"
+    }
+  ],
+  "reset": {
+    "attempted": true,
+    "deleted": 1000,
+    "errors": [],
+    "mode": "dry_run"
+  },
+  "run_id": "mem0-perf-5869653b64b9",
+  "scale": 1000,
+  "started_at": "2026-06-11T00:00:00+00:00"
+}
