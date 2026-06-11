@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Client, Mem0Config, Mem0SdkClient
 from assist_everything_betterandbetter_skill.skill import AssistSkill
@@ -50,6 +51,32 @@ class MemoryAdapterTest(unittest.TestCase):
         self.assertEqual("优先室内", fake.add_calls[0]["messages"][0]["content"])
         self.assertEqual([{"user_id": "u1", "kwargs": {}}], fake.delete_all_calls)
         self.assertEqual({"deleted": True}, result["result"])
+
+    def test_mem0_sdk_client_defaults_to_minimax_and_fastembed_when_mimo_is_configured(self):
+        captured = {}
+
+        class FakeMemoryFactory:
+            @classmethod
+            def from_config(cls, config):
+                captured["config"] = config
+                return "fake-memory"
+
+        env = {
+            "MIMO_API_KEY": "mimo-key",
+            "MIMO_BASE_URL": "https://api.minimaxi.com/v1",
+            "MIMO_MODEL": "MiniMax-M2.7",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            with patch.dict("sys.modules", {"mem0": type("FakeMem0Module", (), {"Memory": FakeMemoryFactory})}):
+                client = Mem0SdkClient(Mem0Config(enabled=True, user_id="u1"))
+
+        self.assertEqual("fake-memory", client.memory)
+        self.assertEqual("minimax", captured["config"]["llm"]["provider"])
+        self.assertEqual("mimo-key", captured["config"]["llm"]["config"]["api_key"])
+        self.assertEqual("https://api.minimaxi.com/v1", captured["config"]["llm"]["config"]["minimax_base_url"])
+        self.assertEqual("fastembed", captured["config"]["embedder"]["provider"])
+        self.assertEqual(1024, captured["config"]["vector_store"]["config"]["embedding_model_dims"])
+        self.assertIn("mem0_sdk_qdrant", captured["config"]["vector_store"]["config"]["path"])
 
     def test_hosted_mem0_backend_is_mutually_exclusive_with_local_extraction(self):
         with tempfile.TemporaryDirectory() as tmp:

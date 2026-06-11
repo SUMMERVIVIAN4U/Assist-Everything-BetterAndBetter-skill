@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -204,7 +205,8 @@ class Mem0SdkClient:
                 from mem0 import Memory  # type: ignore
             except Exception as exc:
                 raise RuntimeError("mem0ai is not installed. Install with `pip install mem0ai`.") from exc
-            self.memory = Memory()
+            sdk_config = _mem0_sdk_config_from_env()
+            self.memory = Memory.from_config(sdk_config) if sdk_config else Memory()
 
     def add_text(self, text: str, context: str = "") -> dict[str, Any]:
         messages = [{"role": "user", "content": text}]
@@ -272,6 +274,43 @@ def _mem0_results(data: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
         if isinstance(value, list):
             return [item for item in value if isinstance(item, dict)]
     return []
+
+
+def _mem0_sdk_config_from_env() -> dict[str, Any] | None:
+    mimo_key = os.getenv("MIMO_API_KEY") or os.getenv("MINIMAX_API_KEY")
+    if not mimo_key:
+        return None
+    vector_path = os.getenv("MEM0_SDK_VECTOR_PATH", "memories/workbench/mem0_sdk_qdrant")
+    collection_name = os.getenv("MEM0_SDK_COLLECTION", "workbench_mem0_sdk")
+    history_db_path = os.getenv("MEM0_SDK_HISTORY_DB", "memories/workbench/mem0_sdk_history.db")
+    embedding_dims = int(os.getenv("MEM0_SDK_EMBEDDING_DIMS", "1024") or 1024)
+    return {
+        "llm": {
+            "provider": "minimax",
+            "config": {
+                "api_key": mimo_key,
+                "minimax_base_url": os.getenv("MIMO_BASE_URL") or os.getenv("MINIMAX_API_BASE") or "https://api.minimax.io/v1",
+                "model": os.getenv("MIMO_MODEL") or os.getenv("MINIMAX_MODEL") or "MiniMax-M2.7",
+                "max_tokens": int(os.getenv("MIMO_MAX_TOKENS", "2000") or 2000),
+            },
+        },
+        "embedder": {
+            "provider": os.getenv("MEM0_SDK_EMBEDDER_PROVIDER", "fastembed"),
+            "config": {
+                "model": os.getenv("MEM0_SDK_EMBEDDER_MODEL", "thenlper/gte-large"),
+                "embedding_dims": embedding_dims,
+            },
+        },
+        "vector_store": {
+            "provider": "qdrant",
+            "config": {
+                "path": vector_path,
+                "collection_name": collection_name,
+                "embedding_model_dims": embedding_dims,
+            },
+        },
+        "history_db_path": history_db_path,
+    }
 
 
 def _item_from_mem0_result(result: dict[str, Any]) -> MemoryItem:

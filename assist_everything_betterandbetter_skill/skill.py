@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -304,9 +305,9 @@ class AssistSkill:
 
     def retrieve_relevant_memories(self, text: str, context: str = "") -> list[MemoryItem]:
         if self.memory_backend == "mem0_hosted":
-            return self._search_remote(self.mem0_client, text)
+            return self._search_remote(self.mem0_client, text, context)
         if self.memory_backend == "mem0_sdk":
-            return self._search_remote(self.mem0_sdk_client, text)
+            return self._search_remote(self.mem0_sdk_client, text, context)
         scope = _infer_scope(text, context)
         terms = _keywords(text)
         if "不适用" in text:
@@ -335,7 +336,7 @@ class AssistSkill:
             term_hit = any(term and term in haystack for term in terms)
             if scope_hit or term_hit:
                 relevant.append(item)
-        return relevant
+        return _rank_retrieved_memories(relevant, text, context, limit=8)
 
     def compose_response(
         self,
@@ -553,11 +554,12 @@ class AssistSkill:
             items = []
         return {"version": f"M{len(items)}", "active": items, "superseded": [], "archived": [], "deleted": []}
 
-    def _search_remote(self, client: Any, text: str) -> list[MemoryItem]:
+    def _search_remote(self, client: Any, text: str, context: str = "") -> list[MemoryItem]:
         if not client:
             return []
         try:
-            return [item for item in client.search(text, top_k=8) if item.status == ACTIVE and not _is_polluted_memory_item(item)]
+            candidates = [item for item in client.search(text, top_k=8) if item.status == ACTIVE and not _is_polluted_memory_item(item)]
+            return _rank_retrieved_memories(candidates, text, context, limit=8)
         except Exception:
             return []
 
@@ -845,6 +847,56 @@ def _retention_reason(item: dict[str, Any]) -> str:
     if item.get("source") == "assistant_output":
         return "assistant_candidate_recorded_for_current_task_trace"
     return "active_user_signal_available_for_matching_tasks"
+
+
+def _rank_retrieved_memories(items: list[MemoryItem], text: str, context: str = "", limit: int = 8) -> list[MemoryItem]:
+    scope = _infer_scope(text, context)
+    terms = _keywords(text)
+    for item in items:
+        score = _retrieval_score(item, scope, terms)
+        item.validity["retrieval_score"] = score
+        item.validity["retrieval_rank_strategy"] = "score_time"
+    return sorted(items, key=lambda item: (item.validity.get("retrieval_score", 0.0), _memory_timestamp(item), item.id), reverse=True)[:limit]
+
+
+def _retrieval_score(item: MemoryItem, scope: str, terms: list[str]) -> float:
+    raw_score = item.validity.get("mem0_score")
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError):
+        score = float(item.confidence or 0.0)
+    if score > 1:
+        score = score / 100 if score <= 100 else 1.0
+    score = max(0.0, min(1.0, score))
+    haystack = " ".join(
+        [
+            item.content,
+            item.scope,
+            item.subject,
+            item.target,
+            item.object,
+            item.predicate,
+            *item.applies_when,
+            *item.tags,
+        ]
+    )
+    if scope and (scope == item.scope or scope in item.applies_when):
+        score += 0.03
+    if terms:
+        hits = sum(1 for term in terms if term and term in haystack)
+        score += min(0.07, hits * 0.02)
+    return round(max(0.0, min(1.0, score)), 4)
+
+
+def _memory_timestamp(item: MemoryItem) -> float:
+    for value in [item.updated_at, item.created_at]:
+        if not value:
+            continue
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            continue
+    return 0.0
 
 
 def _strip_command_words(text: str, words: list[str]) -> str:

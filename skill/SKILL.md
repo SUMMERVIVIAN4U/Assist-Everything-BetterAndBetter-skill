@@ -70,6 +70,13 @@ Only one engine is active at a time. Extraction rules are mutually exclusive, an
 - Mem0 SDK mode sends raw user/context text to Mem0SdkClient and does not run local extraction
 - UI snapshots may share the same display structure, but the content must come only from the selected engine
 
+Retrieval ranking is unified across all three engines. Each adapter may produce candidates differently, but before memories are applied to a response the runtime must:
+
+- keep only `active` items and filter polluted or deleted content
+- annotate each candidate with `validity.retrieval_score` and `validity.retrieval_rank_strategy=score_time`
+- sort by retrieval score descending, then by `updated_at`/`created_at` descending
+- apply at most the top matching memories for the current turn
+
 When Mem0 is selected, do not expose endpoint URLs, project IDs, or API keys in the UI. The public UI only shows whether endpoint, API key, and user are configured.
 
 Configuration:
