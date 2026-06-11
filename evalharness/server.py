@@ -368,11 +368,11 @@ def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
     mode = str(body.get("mode") or "dry_run")
     scale = int(body.get("scale") or 1000)
     query_count = int(body.get("query_count") or 20)
-    client = None
-    if mode == "real_run":
-        config = config_for_demo_user(_mem0_config())
-        client = _mem0_client_for_backend(engine, config)
     try:
+        client = None
+        if mode == "real_run":
+            config = config_for_demo_user(_mem0_config())
+            client = _mem0_client_for_backend(engine, config)
         return run_performance_demo(engine=engine, mode=mode, scale=scale, query_count=query_count, client=client)
     except Exception as exc:
         return {"ok": False, "stage": "run", "error": str(exc)}

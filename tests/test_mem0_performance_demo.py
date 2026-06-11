@@ -224,6 +224,14 @@ class Mem0PerformanceApiTest(unittest.TestCase):
         self.assertEqual("dry_run", result["mode"])
         self.assertEqual(1000, result["scale"])
 
+    def test_run_mem0_performance_demo_catches_client_setup_errors(self):
+        with patch("evalharness.server._mem0_client_for_backend", side_effect=RuntimeError("boom")):
+            result = server._run_mem0_performance_demo({"engine": "mem0_hosted", "mode": "real_run", "scale": 1000})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("run", result["stage"])
+        self.assertIn("boom", result["error"])
+
     def test_reset_mem0_performance_demo_uses_demo_config(self):
         class FakeClient:
             def __init__(self, config):
