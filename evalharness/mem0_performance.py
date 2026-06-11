@@ -66,6 +66,16 @@ def reset_demo_memory(client: Any | None) -> dict[str, Any]:
             "deleted_count": 0,
             "errors": ["Mem0 client is not configured"],
         }
+    client_user_id = getattr(getattr(client, "config", None), "user_id", None)
+    if client_user_id is not None and client_user_id != DEMO_USER_ID:
+        return {
+            "ok": False,
+            "stage": "scope",
+            "demo_user_id": DEMO_USER_ID,
+            "found_count": 0,
+            "deleted_count": 0,
+            "errors": [f"Mem0 client user_id {client_user_id!r} is not the demo user"],
+        }
     try:
         result = client.delete_all(page_size=200)
     except Exception as exc:

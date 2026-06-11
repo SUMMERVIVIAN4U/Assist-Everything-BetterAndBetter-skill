@@ -95,6 +95,34 @@ class Mem0PerformanceIsolationTest(unittest.TestCase):
     def test_reset_demo_memory_uses_demo_scoped_client(self):
         class FakeClient:
             def __init__(self):
+                self.config = Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id=DEMO_USER_ID)
+                self.deleted = False
+                self.page_size = None
+
+            def delete_all(self, page_size=200):
+                self.page_size = page_size
+                self.deleted = True
+                return {"mode": "user_scoped", "found_count": 3, "deleted_count": 3, "errors": []}
+
+        client = FakeClient()
+
+        result = reset_demo_memory(client)
+
+        self.assertTrue(client.deleted)
+        self.assertEqual(200, client.page_size)
+        self.assertTrue(result["ok"])
+        self.assertEqual(DEMO_USER_ID, result["demo_user_id"])
+        self.assertEqual(3, result["deleted_count"])
+
+    def test_reset_demo_memory_rejects_non_demo_scoped_client(self):
+        class FakeClient:
+            def __init__(self):
+                self.config = Mem0Config(
+                    enabled=True,
+                    base_url="https://mem0.example",
+                    api_key="k",
+                    user_id="workbench-user",
+                )
                 self.deleted = False
 
             def delete_all(self, page_size=200):
@@ -105,7 +133,10 @@ class Mem0PerformanceIsolationTest(unittest.TestCase):
 
         result = reset_demo_memory(client)
 
-        self.assertTrue(client.deleted)
-        self.assertTrue(result["ok"])
+        self.assertFalse(client.deleted)
+        self.assertFalse(result["ok"])
+        self.assertEqual("scope", result["stage"])
         self.assertEqual(DEMO_USER_ID, result["demo_user_id"])
-        self.assertEqual(3, result["deleted_count"])
+        self.assertEqual(0, result["found_count"])
+        self.assertEqual(0, result["deleted_count"])
+        self.assertIn("workbench-user", result["errors"][0])
