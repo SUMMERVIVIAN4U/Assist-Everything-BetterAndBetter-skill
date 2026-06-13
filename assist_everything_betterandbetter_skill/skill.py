@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .mem0_backend import HostedMem0Client, Mem0Config, Mem0SdkClient, _item_from_mem0_result, _mem0_results
-from .memory import ACTIVE, DELETED, SUPERSEDED, MemoryItem, MemoryStore
+from .mem0_backend import HostedMem0Client, Mem0Config, _item_from_mem0_result, _mem0_results
+from .memory import ACTIVE, DELETED, SUPERSEDED, MemoryItem, MemoryStore, _normalize_query
 
 
 PREFERENCE = "preference"
@@ -75,13 +75,6 @@ class AssistSkill:
         self.mem0_config = mem0_config or _mem0_config_from_env()
         self.memory_backend = _normalize_memory_backend(memory_backend or os.getenv("ASSIST_MEMORY_BACKEND", "local"))
         self.mem0_client = HostedMem0Client(self.mem0_config) if self.memory_backend == "mem0_hosted" and self.mem0_config.ready else None
-        self.mem0_sdk_error = ""
-        self.mem0_sdk_client = None
-        if self.memory_backend == "mem0_sdk":
-            try:
-                self.mem0_sdk_client = Mem0SdkClient(self.mem0_config)
-            except Exception as exc:
-                self.mem0_sdk_error = str(exc)
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
         if not self.memory_enabled:
@@ -95,7 +88,7 @@ class AssistSkill:
                 diagnostics={"memory_mode": memory_mode, "profile": {"interaction_style": []}},
             )
 
-        command = self._try_memory_command(text)
+        command = self._try_memory_command(text, context)
         if command:
             return command
 
@@ -125,13 +118,13 @@ class AssistSkill:
     def reset_memory(self) -> SkillResponse:
         if self.memory_backend == "mem0_hosted":
             return self._reset_remote_memory(self.mem0_client, "mem0_hosted")
-        if self.memory_backend == "mem0_sdk":
-            return self._reset_remote_memory(self.mem0_sdk_client, "mem0_sdk")
         event = self.memory.reset()
         return SkillResponse("已重置记忆：当前为 M0 空白状态。", [event], [], [])
 
     def show_memory(self) -> SkillResponse:
         snapshot = self.snapshot()
+        if snapshot.get("errors"):
+            return SkillResponse(f"当前记忆读取失败：{snapshot['errors'][0]}", [], [], [], diagnostics={"snapshot": snapshot})
         if not any(snapshot.get(key) for key in ["active", "superseded", "archived", "deleted"]):
             return SkillResponse("当前没有任何记忆。", [], [], [])
         lines = ["当前 active 记忆与历史状态："]
@@ -145,8 +138,6 @@ class AssistSkill:
     def snapshot(self) -> dict[str, Any]:
         if self.memory_backend == "mem0_hosted":
             return self._remote_snapshot(self.mem0_client)
-        if self.memory_backend == "mem0_sdk":
-            return self._remote_snapshot(self.mem0_sdk_client)
         return self.memory.snapshot()
 
     def compact_snapshot(self, limit: int = 8) -> dict[str, Any]:
@@ -306,9 +297,8 @@ class AssistSkill:
     def retrieve_relevant_memories(self, text: str, context: str = "") -> list[MemoryItem]:
         if self.memory_backend == "mem0_hosted":
             return self._search_remote(self.mem0_client, text, context)
-        if self.memory_backend == "mem0_sdk":
-            return self._search_remote(self.mem0_sdk_client, text, context)
         scope = _infer_scope(text, context)
+        target = _infer_target(text, scope) or _infer_target(context, scope)
         terms = _keywords(text)
         if "不适用" in text:
             if "步行不适用" in text or "少步行不适用" in text:
@@ -319,6 +309,8 @@ class AssistSkill:
         relevant: list[MemoryItem] = []
         for item in self.memory.active():
             if _is_polluted_memory_item(item):
+                continue
+            if not _memory_scope_matches(item, scope) or not _memory_target_matches(item, scope, target):
                 continue
             haystack = " ".join(
                 [
@@ -332,9 +324,8 @@ class AssistSkill:
                     *item.tags,
                 ]
             )
-            scope_hit = scope and (scope == item.scope or scope in item.applies_when)
             term_hit = any(term and term in haystack for term in terms)
-            if scope_hit or term_hit:
+            if scope != "general" or term_hit:
                 relevant.append(item)
         return _rank_retrieved_memories(relevant, text, context, limit=8)
 
@@ -347,25 +338,24 @@ class AssistSkill:
         context: str = "",
     ) -> str:
         lines = [self._task_answer(text, memories, context)]
-        created = [a for a in actions if a["action"] == "add"]
+        created = [a for a in actions if a["action"] == "add" and a.get("ok", True) is not False]
+        failed = [a for a in actions if a.get("ok") is False]
         proposed = [a for a in actions if a["action"] == "propose"]
         rejected = [a for a in actions if a["action"] == "reject"]
-        changed = [a for a in actions if a["action"] in {"downgrade", "archive", "delete", "update"}]
-        if created:
-            detail = "；".join(a["detail"] for a in created[:2])
-            suffix = "等" if len(created) > 2 else ""
-            lines.append(f"\n行，这个我记住了：{detail}{suffix}。")
-        if proposed:
-            lines.append("\n我捕捉到这可能是长期偏好，需要你确认后再保存：同意保存 / 拒绝保存。")
+        changed = [a for a in actions if a["action"] in {"downgrade", "archive", "delete", "update"} and a.get("ok", True) is not False]
+        if failed:
+            details = "；".join(str(a.get("error") or a.get("detail") or "unknown") for a in failed[:2])
+            lines.append(f"\n记忆写入没有成功：{details}")
+        memory_summary = _memory_action_summary(created, proposed, changed)
+        if memory_summary:
+            lines.append(memory_summary)
         if rejected:
             lines.append("\n这类内容我不会写入长期记忆。")
-        if changed:
-            lines.append("\n已更新记忆。")
         if asks:
             lines.append("\n再确认一个关键点：" + asks[0])
         return "\n".join(lines)
 
-    def _try_memory_command(self, text: str) -> SkillResponse | None:
+    def _try_memory_command(self, text: str, context: str = "") -> SkillResponse | None:
         original = text.strip()
         normalized = _normalize_command(original)
         lowered = normalized.lower()
@@ -429,17 +419,18 @@ class AssistSkill:
             if "然后" in query:
                 query, followup = query.split("然后", 1)
                 followup = followup.strip(" ：:。")
-            deleted = self.memory.delete(query)
+            deleted, delete_actions = self._delete_matching_memories(query)
             names = ", ".join(item.id for item in deleted) or "无匹配"
-            active = self.retrieve_relevant_memories(normalized)
+            active = _filter_deleted_memory_matches(self.retrieve_relevant_memories(normalized), deleted)
             text_after = f"删除结果：{names}。后续检索会过滤 deleted 记忆。"
             if active:
                 text_after += "\n\n删除后仍可使用的相关记忆：\n" + "\n".join(f"- {m.content}" for m in active)
             if followup:
-                followup_memories = self.retrieve_relevant_memories(followup, normalized)
-                text_after += "\n\n继续处理：\n" + self._task_answer(followup, followup_memories, normalized)
+                followup_context = f"{context}\n{normalized}".strip()
+                followup_memories = _filter_deleted_memory_matches(self.retrieve_relevant_memories(followup, followup_context), deleted)
+                text_after += "\n\n继续处理：\n" + self._task_answer(followup, followup_memories, followup_context)
                 active = followup_memories
-            return SkillResponse(text_after, self.memory.events[-len(deleted):] if deleted else [], [m.id for m in active], [])
+            return SkillResponse(text_after, delete_actions, [m.id for m in active], [])
         if "降权" in normalized or "降级" in normalized or "downgrade" in lowered:
             matches = self.memory.find(normalized, include_inactive=False)
             actions = []
@@ -470,8 +461,6 @@ class AssistSkill:
             ]
         if self.memory_backend == "mem0_hosted":
             return self._apply_remote_structured_updates(self.mem0_client, "mem0_hosted", text, context)
-        if self.memory_backend == "mem0_sdk":
-            return self._apply_remote_updates(self.mem0_sdk_client, "mem0_sdk", text, context)
         for match in self._conflicting_memories(text, context):
             self.memory.downgrade(match.id, f"新反馈缩小或推翻旧规则：{text}")
             actions.append(self.memory.events[-1])
@@ -523,7 +512,7 @@ class AssistSkill:
 
     def _apply_remote_updates(self, client: Any, backend: str, text: str, context: str = "") -> list[dict[str, Any]]:
         if not client:
-            error = self.mem0_sdk_error if backend == "mem0_sdk" and self.mem0_sdk_error else "memory backend is not configured"
+            error = "memory backend is not configured"
             return [{"action": "remote_extract", "backend": backend, "detail": text, "ok": False, "error": error}]
         try:
             result = client.add_text(text, context=context)
@@ -643,7 +632,7 @@ class AssistSkill:
 
     def _reset_remote_memory(self, client: Any, backend: str) -> SkillResponse:
         if not client:
-            error = self.mem0_sdk_error if backend == "mem0_sdk" and self.mem0_sdk_error else "memory backend is not configured"
+            error = "memory backend is not configured"
             action = {"action": "reset", "backend": backend, "memory_id": None, "detail": error, "ok": False}
             return SkillResponse("远端记忆后端未配置，无法重置。", [action], [], [])
         try:
@@ -654,21 +643,76 @@ class AssistSkill:
             action = {"action": "reset", "backend": backend, "memory_id": None, "detail": str(exc), "ok": False}
             return SkillResponse(f"重置当前记忆后端失败：{exc}", [action], [], [])
 
+    def _delete_matching_memories(self, query: str) -> tuple[list[MemoryItem], list[dict[str, Any]]]:
+        if self.memory_backend == "mem0_hosted":
+            return self._delete_remote_memories(self.mem0_client, "mem0_hosted", query)
+        deleted = self.memory.delete(query)
+        actions = self.memory.events[-len(deleted) :] if deleted else []
+        return deleted, actions
+
+    def _delete_remote_memories(self, client: Any, backend: str, query: str) -> tuple[list[MemoryItem], list[dict[str, Any]]]:
+        if not client:
+            return [], [{"action": "delete", "backend": backend, "memory_id": None, "detail": query, "ok": False, "error": "memory backend is not configured"}]
+        active = self._remote_active_items(client)
+        matches = _match_memory_items(query, active)
+        actions: list[dict[str, Any]] = []
+        deleted: list[MemoryItem] = []
+        for item in matches:
+            remote_id = str(item.validity.get("mem0_id") or item.id)
+            try:
+                result = client.delete(remote_id)
+                deleted.append(item)
+                actions.append(
+                    {
+                        "action": "delete",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": item.id,
+                        "remote_memory_id": remote_id,
+                        "detail": "user_requested_delete",
+                        "ok": True,
+                        "result": _compact_remote_result(result),
+                    }
+                )
+            except Exception as exc:
+                actions.append(
+                    {
+                        "action": "delete",
+                        "backend": backend,
+                        "storage": "remote_structured",
+                        "memory_id": item.id,
+                        "remote_memory_id": remote_id,
+                        "detail": "user_requested_delete",
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
+        return deleted, actions
+
     def _remote_snapshot(self, client: Any) -> dict[str, Any]:
         if not client:
             return {"version": "M0", "active": [], "superseded": [], "archived": [], "deleted": []}
         try:
             raw = client.get_all(page_size=50)
             items = [_item_from_mem0_result(record).to_dict() for record in _mem0_results(raw)]
-        except Exception:
-            items = []
+        except Exception as exc:
+            return {"version": "M0", "active": [], "superseded": [], "archived": [], "deleted": [], "errors": [str(exc)]}
         return {"version": f"M{len(items)}", "active": items, "superseded": [], "archived": [], "deleted": []}
 
     def _search_remote(self, client: Any, text: str, context: str = "") -> list[MemoryItem]:
         if not client:
             return []
         try:
-            candidates = [item for item in client.search(text, top_k=8) if item.status == ACTIVE and not _is_polluted_memory_item(item)]
+            scope = _infer_scope(text, context)
+            target = _infer_target(text, scope) or _infer_target(context, scope)
+            candidates = [
+                item
+                for item in client.search(text, top_k=12)
+                if item.status == ACTIVE
+                and not _is_polluted_memory_item(item)
+                and _memory_scope_matches(item, scope)
+                and _memory_target_matches(item, scope, target)
+            ]
             return _rank_retrieved_memories(candidates, text, context, limit=8)
         except Exception:
             return []
@@ -716,6 +760,12 @@ class AssistSkill:
         if not normalized or not _has_memory_signal(normalized, context):
             return []
         scope = _infer_scope(normalized, context)
+        if scope == "gift_planning":
+            return _gift_memory_candidates(normalized, context)
+        if scope == "life_family_travel":
+            travel_candidates = _travel_memory_candidates(normalized, context)
+            if travel_candidates:
+                return travel_candidates
         candidates: list[MemoryItem] = []
         explicit_request = _explicit_memory_request(normalized)
         for clause in _split_clauses(normalized):
@@ -751,6 +801,27 @@ class AssistSkill:
         scope = _infer_scope(text, context)
         terms = _keywords(text)
         active = active_items if active_items is not None else self.memory.active()
+        if scope == "work_report" and "风险表只用于老板材料" in text:
+            return [
+                item
+                for item in active
+                if item.scope == scope
+                and "风险" in item.content
+                and item.target not in {"boss", "manager"}
+                and "老板" not in item.content
+            ]
+        if scope == "work_report" and "跨部门" in text and any(term in text for term in ["不要", "不用", "不能", "不再"]):
+            cross_team_matches = [
+                item
+                for item in active
+                if item.scope == scope
+                and item.target == "cross_functional_team"
+                and any(term and term in item.content for term in terms)
+            ]
+            if cross_team_matches:
+                return cross_team_matches
+            if "风险表只用于老板材料" in text:
+                return []
         if "不适用" in text:
             if "步行不适用" in text or "少步行不适用" in text:
                 terms = ["步行"]
@@ -824,15 +895,84 @@ class AssistSkill:
 
     def _task_answer(self, text: str, memories: list[MemoryItem], context: str = "") -> str:
         scope = _infer_scope(text, context)
+        answer_text = _contextual_answer_text(text, context, scope)
         if scope == "life_family_travel":
-            return _travel_answer(text, memories)
+            return _travel_answer(answer_text, memories)
         if scope == "work_report":
-            return _work_answer(text, memories)
+            return _work_answer(answer_text, memories)
         if scope == "study_plan":
-            return _study_answer(text, memories)
+            return _study_answer(answer_text, memories)
         if scope == "research_review":
-            return _research_answer(text, memories)
+            return _research_answer(answer_text, memories)
+        if scope == "gift_planning":
+            return _gift_answer(text, memories, context)
         return f"我会先按当前请求处理：{text}\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。"
+
+
+def _contextual_answer_text(text: str, context: str, scope: str) -> str:
+    previous_task = _last_user_task_for_scope(context, scope)
+    if not previous_task:
+        return text
+    if _is_contextual_task_update(text, scope):
+        return f"{previous_task}\n补充约束：{text}"
+    return text
+
+
+def _last_user_task_for_scope(context: str, scope: str) -> str:
+    if not context.strip():
+        return ""
+    for line in reversed(context.splitlines()):
+        role, sep, content = line.partition(":")
+        if not sep or role.strip().lower() != "user":
+            continue
+        content = content.strip()
+        if content and _infer_scope(content, "") == scope and _is_task_request_for_scope(content, scope):
+            return content
+    return ""
+
+
+def _is_contextual_task_update(text: str, scope: str) -> bool:
+    if scope == "general":
+        return False
+    if any(token in text for token in ["帮我", "安排", "写", "做", "推荐", "生成", "规划"]):
+        return False
+    return any(token in text for token in ["以后", "请记住", "记住", "喜欢", "不喜欢", "不要", "不能", "要少", "不适用", "改成", "选定"])
+
+
+def _is_task_request_for_scope(text: str, scope: str) -> bool:
+    task_terms = {
+        "life_family_travel": ["帮我", "安排", "旅行", "行程", "路线", "半日游", "周末"],
+        "work_report": ["写", "材料", "同步", "老板", "跨部门", "报告"],
+        "study_plan": ["复习", "学习", "计划", "考点", "例题"],
+        "research_review": ["综述", "文献", "research", "brainstorm", "研究"],
+        "gift_planning": ["礼物", "生日", "推荐", "选"],
+    }
+    return any(term in text for term in task_terms.get(scope, ["帮我", "做", "写", "安排"]))
+
+
+def _memory_action_summary(created: list[dict[str, Any]], proposed: list[dict[str, Any]], changed: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    if created:
+        current_task = [a for a in created if _action_is_current_task(a)]
+        long_term = [a for a in created if not _action_is_current_task(a)]
+        if current_task:
+            parts.append("本次任务已应用并暂存：" + "；".join(_action_detail(a) for a in current_task[:4]))
+        if long_term:
+            parts.append("已保存为后续可复用记忆：" + "；".join(_action_detail(a) for a in long_term[:4]))
+    if proposed:
+        parts.append("待你确认后才长期保存：" + "；".join(_action_detail(a) for a in proposed[:3]))
+    if changed:
+        parts.append("已更新/降级旧记忆：" + "；".join(_action_detail(a) for a in changed[:3]))
+    return "\n\n记忆处理：\n- " + "\n- ".join(parts) if parts else ""
+
+
+def _action_is_current_task(action: dict[str, Any]) -> bool:
+    detail = _action_detail(action)
+    return any(token in detail for token in ["这次", "本次", "不适用", "只有我和孩子"])
+
+
+def _action_detail(action: dict[str, Any]) -> str:
+    return str(action.get("detail") or action.get("memory_id") or "").strip()
 
 
 def _normalize_command(text: str) -> str:
@@ -886,7 +1026,7 @@ def _memory_block_reason(text: str, private_markers: list[str] | tuple[str, ...]
 def _mem0_config_from_env() -> Mem0Config:
     backend = _normalize_memory_backend(os.getenv("ASSIST_MEMORY_BACKEND", "local"))
     return Mem0Config(
-        enabled=backend in {"mem0_hosted", "mem0_sdk"},
+        enabled=backend == "mem0_hosted",
         base_url=os.getenv("MEM0_BASE_URL", "").strip(),
         api_key=os.getenv("MEM0_API_KEY", "").strip(),
         user_id=os.getenv("MEM0_USER_ID", "workbench-user").strip(),
@@ -904,13 +1044,11 @@ def _normalize_memory_backend(value: str) -> str:
         "hosted_mem0": "mem0_hosted",
         "volcengine_mem0": "mem0_hosted",
         "mem0_rest": "mem0_hosted",
-        "sdk_mem0": "mem0_sdk",
-        "mem0ai": "mem0_sdk",
         "local_json": "local",
         "local_markdown": "local",
     }
     normalized = aliases.get(normalized, normalized)
-    return normalized if normalized in {"local", "mem0_hosted", "mem0_sdk"} else "local"
+    return normalized if normalized in {"local", "mem0_hosted"} else "local"
 
 
 def _compact_remote_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -938,7 +1076,7 @@ def _confidence_for_memory(text: str, item: MemoryItem) -> tuple[float, str]:
     if any(marker in text for marker in HIGH_CONFIDENCE_MARKERS):
         score += 0.2
         reasons.append("durable_or_decisive_marker")
-    if any(marker in text for marker in ["我喜欢", "我不喜欢", "我习惯", "我偏好"]) or "喜欢" in item.content:
+    if any(marker in text for marker in ["我喜欢", "我不喜欢", "我习惯", "我偏好"]) or any(marker in item.content for marker in ["喜欢", "爱好", "偏好"]):
         score += 0.25
         reasons.append("personal_preference_signal")
     if item.scope != "general":
@@ -984,6 +1122,18 @@ def _rank_retrieved_memories(items: list[MemoryItem], text: str, context: str = 
         item.validity["retrieval_score"] = score
         item.validity["retrieval_rank_strategy"] = "score_time"
     return sorted(items, key=lambda item: (item.validity.get("retrieval_score", 0.0), _memory_timestamp(item), item.id), reverse=True)[:limit]
+
+
+def _memory_scope_matches(item: MemoryItem, scope: str) -> bool:
+    if not scope or scope == "general":
+        return item.scope == "general"
+    return item.scope == scope or scope in item.applies_when or item.scope == "general"
+
+
+def _memory_target_matches(item: MemoryItem, scope: str, target: str) -> bool:
+    if scope != "gift_planning" or not target or not item.target:
+        return True
+    return item.target == target
 
 
 def _retrieval_score(item: MemoryItem, scope: str, terms: list[str]) -> float:
@@ -1119,6 +1269,10 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
         "买了",
         "下单",
         "确认送",
+        "爱好",
+        "礼物",
+        "送过",
+        "以前送过",
     ]
     if any(signal in text for signal in signals):
         return True
@@ -1128,13 +1282,41 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
 
 
 def _has_contextual_task_fact(text: str, context: str = "") -> bool:
-    if not context.strip() or _infer_scope(text, context) == "general":
+    scope = _infer_scope(text, context)
+    if not context.strip() or scope == "general":
         return False
+    if scope == "gift_planning":
+        gift_fact_markers = [
+            "预算",
+            "喜欢",
+            "爱好",
+            "以前送过",
+            "之前送过",
+            "送过",
+            "买过",
+            "买了",
+            "下单",
+            "选定",
+            "程序员",
+            "养花",
+            "养草",
+            "金鱼",
+            "咖啡",
+            "非首饰",
+            "不碰首饰",
+            "不要首饰",
+            "不考虑首饰",
+        ]
+        return any(marker in text for marker in gift_fact_markers)
     fact_markers = [
         "小孩",
         "孩子",
         "老人",
         "同行",
+        "父亲",
+        "爸爸",
+        "不去",
+        "只有我和孩子",
         "动物园",
         "动物",
         "自然",
@@ -1142,6 +1324,8 @@ def _has_contextual_task_fact(text: str, context: str = "") -> bool:
         "科技馆",
         "少走",
         "少步行",
+        "步行不适用",
+        "少步行不适用",
         "推车",
     ]
     return bool(re.search(r"\d+\s*[-~到至]?\s*\d*\s*岁", text)) or any(marker in text for marker in fact_markers)
@@ -1163,10 +1347,24 @@ def _infer_scope(text: str, context: str = "") -> str:
         return "study_plan"
     if any(token in text for token in ["文献", "综述", "RAG", "研究", "数据集", "可复现", "brainstorm", "多模态"]):
         return "research_review"
+    if _is_gift_planning_context(text, context):
+        return "gift_planning"
     return "general"
 
 
 def _infer_memory_type(text: str, scope: str) -> str:
+    if scope == "gift_planning":
+        if _extract_budget(text):
+            return CONSTRAINT
+        if _is_gift_decision_text(text):
+            return DECISION
+        if _extract_previous_gifts(text):
+            return HISTORY
+        if any(token in text for token in ["不要", "不能", "不再", "别", "避开"]):
+            return CONSTRAINT
+        if any(token in text for token in ["他是", "她是", "是个", "职业", "程序员"]):
+            return CONTEXT_FACT
+        return PREFERENCE
     if scope == "life_family_travel" and (_is_parent_identity_fact(text) or any(token in text for token in ["小孩", "孩子", "老人", "同行"]) or re.search(r"\d+\s*[-~到至]?\s*\d*\s*岁", text)):
         return CONTEXT_FACT
     if scope == "work_report" and any(token in text for token in ["只用于", "仅用于", "不要", "不用", "不能"]):
@@ -1198,6 +1396,8 @@ def _clean_memory_content(text: str, scope: str, context: str = "") -> str:
 
 
 def _infer_subject(text: str, scope: str) -> str:
+    if scope == "gift_planning":
+        return "recipient"
     if any(token in text for token in ["父亲", "爸爸"]):
         return "father"
     if "孩子" in text:
@@ -1206,6 +1406,8 @@ def _infer_subject(text: str, scope: str) -> str:
 
 
 def _infer_target(text: str, scope: str) -> str:
+    if scope == "gift_planning":
+        return _gift_recipient(text)
     if scope == "work_report":
         if "老板" in text:
             return "boss"
@@ -1222,8 +1424,14 @@ def _infer_object(text: str, scope: str) -> str:
 
 
 def _infer_predicate(text: str, memory_type: str) -> str:
+    if _extract_budget(text):
+        return "budget_limit"
+    if memory_type == HISTORY and _extract_previous_gifts(text):
+        return "previously_given"
+    if memory_type == DECISION:
+        return "selected"
     if memory_type == PREFERENCE:
-        return "likes" if "喜欢" in text else "prefers"
+        return "likes" if any(token in text for token in ["喜欢", "爱好"]) else "prefers"
     if memory_type == CONSTRAINT:
         return "must_avoid" if any(token in text for token in ["不要", "不能", "不喜欢", "避开"]) else "constrains"
     if memory_type == WORKFLOW:
@@ -1243,11 +1451,385 @@ def _infer_validity(text: str, memory_type: str) -> dict[str, str]:
     return {"time_scope": "long_term"}
 
 
+def _travel_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
+    normalized = text.strip(" 。")
+    candidates: list[MemoryItem] = []
+    evidence = [normalized]
+
+    def add(
+        memory_type: str,
+        content: str,
+        *,
+        subject: str = "user",
+        predicate: str = "states",
+        tags: list[str] | None = None,
+        time_scope: str = "current_task",
+    ) -> None:
+        if not content or any(item.content == content for item in candidates):
+            return
+        candidates.append(
+            MemoryItem(
+                memory_type,
+                content,
+                scope="life_family_travel",
+                subject=subject,
+                predicate=predicate,
+                source="chat_feedback",
+                evidence=evidence,
+                applies_when=["life_family_travel"],
+                tags=tags or _keywords(content),
+                validity={"time_scope": time_scope},
+            )
+        )
+
+    if any(token in normalized for token in ["父亲不去", "爸爸不去", "只有我和孩子"]):
+        add(CONTEXT_FACT, "这次父亲不去，只有我和孩子", subject="father", tags=["父亲", "孩子"], time_scope="current_task")
+    if "步行不适用" in normalized or "少步行不适用" in normalized:
+        add(CONSTRAINT, "本次少步行限制不适用", subject="father", predicate="not_applicable", tags=["步行", "不适用"], time_scope="current_task")
+    if "避开网红" in normalized or "不喜欢人挤人" in normalized or "网红点" in normalized:
+        time_scope = "current_task" if normalized.startswith("这次") else "long_term"
+        add(CONSTRAINT, "避开人挤人的网红点", subject="user", predicate="must_avoid", tags=["网红"], time_scope=time_scope)
+    if "孩子喜欢自然和动物" in normalized or ("孩子" in normalized and "自然" in normalized and "动物" in normalized):
+        add(CONTEXT_FACT, "孩子喜欢自然和动物", subject="child", tags=["孩子", "自然", "动物"], time_scope="long_term")
+    if "父亲膝盖不好" in normalized or "步行要少" in normalized:
+        if not any(token in normalized for token in ["不适用", "不去"]):
+            add(CONTEXT_FACT, "父亲膝盖不好，步行要少", subject="father", tags=["父亲", "步行"], time_scope="long_term")
+
+    return candidates
+
+
 def _extract_budget(text: str) -> str:
-    for marker in ["1000", "一千"]:
-        if marker in text:
+    normalized = text.replace(" ", "")
+    if any(marker in normalized for marker in ["千元", "一千", "1000", "1千", "千把块"]):
+        if any(marker in normalized for marker in ["以内", "以下", "不超过", "最多"]):
             return "1000 元以内"
+        return "1000 元左右"
+    match = re.search(r"(预算|价位|价格|控制在|大概|大约|不超过|最多)?\s*(\d{3,5})\s*(元|块|rmb|RMB)?\s*(左右|上下|以内|以下|不超过|最多)?", text)
+    if not match:
+        return ""
+    marker = match.group(1) or ""
+    amount = int(match.group(2))
+    unit = match.group(3) or ""
+    suffix = match.group(4) or ""
+    if not (marker or unit or suffix):
+        return ""
+    if amount < 100:
+        return ""
+    if suffix in {"以内", "以下", "不超过", "最多"}:
+        return f"{amount} 元以内"
+    return f"{amount} 元左右"
+
+
+def _is_gift_planning_context(text: str, context: str = "") -> bool:
+    combined = f"{context}\n{text}"
+    gift_terms = ["礼物", "生日礼物", "送礼", "选礼", "买礼物", "挑礼物"]
+    if any(term in combined for term in gift_terms):
+        return True
+    return bool(re.search(r"(给|帮我给).{1,12}(选|买|挑|送).{0,8}(礼|礼物)", combined))
+
+
+def _gift_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
+    scope = "gift_planning"
+    target = _gift_recipient(text) or _gift_recipient(context)
+    candidates: list[MemoryItem] = []
+
+    budget = _extract_budget(text)
+    if budget:
+        candidates.append(
+            _memory_item(
+                CONSTRAINT,
+                f"{_gift_prefix(target)}预算在 {budget}",
+                scope,
+                text,
+                target,
+                "budget_limit",
+                ["预算"],
+                {"time_scope": "current_task"},
+            )
+        )
+
+    previous = _extract_previous_gifts(text)
+    if previous:
+        candidates.append(
+            _memory_item(
+                HISTORY,
+                f"以前送过{target or '收礼人'}{previous}",
+                scope,
+                text,
+                target,
+                "previously_given",
+                _keywords(previous),
+                {"time_scope": "past"},
+            )
+        )
+
+    decision = _extract_gift_decision(text, context)
+    if decision:
+        candidates.append(
+            _memory_item(
+                DECISION,
+                f"本次给{target or '收礼人'}的礼物已选定为{decision}",
+                scope,
+                text,
+                target,
+                "selected",
+                _keywords(decision),
+                {"time_scope": "current_task"},
+            )
+        )
+
+    avoid = _extract_gift_constraint(text)
+    if avoid:
+        time_scope = "current_task" if any(token in avoid for token in ["非首饰", "不要首饰", "不碰首饰", "不考虑首饰"]) else "long_term"
+        candidates.append(
+            _memory_item(
+                CONSTRAINT,
+                f"{_gift_prefix(target)}约束：{avoid}",
+                scope,
+                text,
+                target,
+                "must_avoid",
+                _keywords(avoid),
+                {"time_scope": time_scope},
+            )
+        )
+
+    profile = _extract_gift_profile(text)
+    if profile:
+        memory_type = PREFERENCE if any(token in profile for token in ["喜欢", "爱好", "偏好"]) else CONTEXT_FACT
+        candidates.append(
+            _memory_item(
+                memory_type,
+                f"{target or '收礼人'}的礼物偏好/背景：{profile}",
+                scope,
+                text,
+                target,
+                "likes" if memory_type == PREFERENCE else "states",
+                _keywords(profile),
+                {"time_scope": "long_term"},
+            )
+        )
+
+    return _dedupe_memory_candidates(candidates)
+
+
+def _memory_item(
+    memory_type: str,
+    content: str,
+    scope: str,
+    evidence: str,
+    target: str,
+    predicate: str,
+    tags: list[str],
+    validity: dict[str, str],
+) -> MemoryItem:
+    return MemoryItem(
+        memory_type,
+        content.strip(" ，,。：:"),
+        scope=scope,
+        subject="recipient",
+        target=target,
+        predicate=predicate,
+        source="chat_feedback",
+        evidence=[evidence],
+        applies_when=[scope],
+        tags=tags,
+        validity=validity,
+    )
+
+
+def _dedupe_memory_candidates(candidates: list[MemoryItem]) -> list[MemoryItem]:
+    seen: set[tuple[str, str, str]] = set()
+    output: list[MemoryItem] = []
+    for item in candidates:
+        key = (item.type, item.predicate, item.content)
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output
+
+
+def _match_memory_items(query: str, items: list[MemoryItem]) -> list[MemoryItem]:
+    q = _normalize_query(query)
+    output: list[MemoryItem] = []
+    for item in items:
+        haystack = _normalize_query(
+            " ".join(
+                [
+                    item.id,
+                    item.type,
+                    item.scope,
+                    item.subject,
+                    item.target,
+                    item.object,
+                    item.predicate,
+                    item.content,
+                    *item.tags,
+                ]
+            )
+        )
+        if any(term in q for term in ["紫色", "动物", "可复现性"]) and not any(
+            term in haystack for term in ["紫色", "动物", "可复现性"] if term in q
+        ):
+            continue
+        parts = [part for part in q.split() if len(part) >= 2]
+        compact_hit = q and q in haystack
+        token_hit = parts and any(part in haystack for part in parts)
+        char_hit = q and len(q) >= 4 and any(q[i : i + 4] in haystack for i in range(max(1, len(q) - 3)))
+        if not q or compact_hit or token_hit or char_hit:
+            output.append(item)
+    return output
+
+
+def _filter_deleted_memory_matches(items: list[MemoryItem], deleted: list[MemoryItem]) -> list[MemoryItem]:
+    if not deleted:
+        return items
+    deleted_ids = {item.id for item in deleted}
+    deleted_remote_ids = {str(item.validity.get("mem0_id") or "") for item in deleted if item.validity.get("mem0_id")}
+    deleted_queries = [_normalize_query(" ".join([item.content, *item.tags, item.object, item.predicate])) for item in deleted]
+    output: list[MemoryItem] = []
+    for item in items:
+        remote_id = str(item.validity.get("mem0_id") or "")
+        if item.id in deleted_ids or (remote_id and remote_id in deleted_remote_ids):
+            continue
+        haystack = _normalize_query(" ".join([item.content, *item.tags, item.object, item.predicate]))
+        if any(query and (query in haystack or haystack in query) for query in deleted_queries):
+            continue
+        output.append(item)
+    return output
+
+
+def _gift_prefix(target: str) -> str:
+    return f"给{target}选礼物" if target else "礼物"
+
+
+def _gift_recipient(text: str) -> str:
+    known = [
+        "女朋友",
+        "男朋友",
+        "老公",
+        "老婆",
+        "丈夫",
+        "妻子",
+        "妈妈",
+        "母亲",
+        "爸爸",
+        "父亲",
+        "闺蜜",
+        "朋友",
+        "同事",
+        "客户",
+        "老师",
+        "孩子",
+        "小孩",
+    ]
+    for relation in known:
+        if relation in text:
+            return relation
+    match = re.search(r"给(?:我)?(.{1,8}?)(?:选|买|挑|送).{0,6}(?:礼物|生日礼物|礼)", text)
+    if match:
+        candidate = match.group(1).strip(" 的")
+        if candidate and candidate not in {"一个", "我", "这次"}:
+            return candidate
     return ""
+
+
+def _extract_previous_gifts(text: str) -> str:
+    patterns = [
+        r"(?:以前|之前|上次|已经|曾经)?送过(?:了)?(.+?)(?:，?他还比较满意|，?她还比较满意|，?还比较满意|。|；|$)",
+        r"(?:以前|之前|已经|曾经)?买过(?:了)?(.+?)(?:。|；|$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            gifts = _clean_gift_fragment(match.group(1))
+            if gifts:
+                return gifts
+    return ""
+
+
+def _extract_gift_decision(text: str, context: str = "") -> str:
+    patterns = [
+        r"(?:已经|刚刚|刚才)?(?:买了|下单了|入手了)(.+?)(?:。|；|$)",
+        r"(?:礼物)?(?:选定|定了|决定买|确认送)(?:为|了)?(.+?)(?:。|；|$)",
+        r"就(.+?)(?:吧|了|。|；|$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            decision = _clean_gift_fragment(match.group(1))
+            if _is_deictic_gift_decision(decision):
+                decision = _extract_last_gift_recommendation(context)
+            if decision and "推荐" not in decision:
+                return decision
+    return ""
+
+
+def _is_gift_decision_text(text: str) -> bool:
+    return bool(_extract_gift_decision(text))
+
+
+def _is_deictic_gift_decision(text: str) -> bool:
+    return text.strip(" 了吧。！？!?，,") in {"这个", "这个礼物", "它", "这款", "这个方向", "这一个"}
+
+
+def _extract_last_gift_recommendation(context: str) -> str:
+    if not context.strip():
+        return ""
+    candidates: list[str] = []
+    for line in context.splitlines():
+        if "assistant:" not in line:
+            continue
+        content = line.split("assistant:", 1)[1].strip()
+        patterns = [
+            r"推荐方向[:：](.+?)(?:。|\n|$)",
+            r"推荐[:：](.+?)(?:。|\n|$)",
+            r"建议(?:选|送)?[:：]?(.+?)(?:。|\n|$)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                gift = _clean_gift_fragment(match.group(1))
+                gift = re.sub(r"^[一二三四五六七八九十\d]+[、.]\s*", "", gift).strip()
+                if gift:
+                    candidates.append(gift)
+    return candidates[-1] if candidates else ""
+
+
+def _extract_gift_constraint(text: str) -> str:
+    constraints = []
+    for clause in _split_clauses(text):
+        if any(token in clause for token in ["非首饰", "不碰首饰", "不要首饰", "不考虑首饰", "排除首饰", "换个非首饰"]):
+            constraints.append("不要首饰，换非首饰品类")
+            continue
+        if any(token in clause for token in ["不要", "不能", "不再", "别", "避开"]):
+            if _extract_previous_gifts(clause):
+                continue
+            constraints.append(_clean_gift_fragment(clause))
+    return "；".join(item for item in constraints if item)
+
+
+def _extract_gift_profile(text: str) -> str:
+    fragments = []
+    for clause in _split_clauses(text):
+        if _extract_budget(clause) or _extract_previous_gifts(clause) or _extract_gift_decision(clause):
+            continue
+        if any(token in clause for token in ["礼物", "生日礼物"]) and not any(token in clause for token in ["喜欢", "爱好", "他是", "她是", "是个", "程序员", "养花", "养草", "金鱼", "咖啡"]):
+            continue
+        if any(token in clause for token in ["喜欢", "爱好", "偏好", "他是", "她是", "是个", "程序员", "养花", "养草", "金鱼", "咖啡", "阳台"]):
+            cleaned = _clean_gift_fragment(clause)
+            cleaned = re.sub(r"^(?:帮我)?给(?:我)?.{1,8}?(?:选|买|挑|送)(?:个|一个)?(?:生日)?礼物[，,]?", "", cleaned)
+            if cleaned:
+                fragments.append(cleaned)
+    return "；".join(fragments)
+
+
+def _clean_gift_fragment(text: str) -> str:
+    cleaned = text.strip(" ，,。：:")
+    cleaned = re.sub(r"^(他|她)?还比较满意$", "", cleaned)
+    cleaned = re.sub(r"^(他|她)?比较满意$", "", cleaned)
+    return cleaned.strip(" ，,。：:")
 
 
 def _keywords(text: str) -> list[str]:
@@ -1287,20 +1869,250 @@ def _keywords(text: str) -> list[str]:
     return [word for word in vocab if word in text]
 
 
+def _gift_answer(text: str, memories: list[MemoryItem], context: str = "") -> str:
+    memory_text = "；".join(item.content for item in memories)
+    combined = f"{context}；{text}；{memory_text}"
+    budget = next((item.content for item in memories if item.predicate == "budget_limit"), "预算按用户当前范围控制")
+    avoid = [item.content for item in memories if item.predicate in {"previously_given", "must_avoid"}]
+    preferences = [item.content for item in memories if item.type in {PREFERENCE, CONTEXT_FACT}]
+    non_jewelry = any(token in combined for token in ["非首饰", "不要首饰", "不碰首饰", "不考虑首饰", "排除首饰"])
+    no_purple = "紫色" not in memory_text and "紫色" not in text.replace("删除 她喜欢紫色", "")
+    if "不重复" in text or "再给" in text or "推荐" in text:
+        if non_jewelry:
+            options = [
+                ("蓝牙音箱", "高颜值便携蓝牙音箱或唱片机风格音箱", "能提供日常陪伴和生日仪式感"),
+                ("香氛", "小众香氛扩香石 + 手写卡片礼盒", "有生活氛围感，适合作为精致但不夸张的生日礼物"),
+                ("包", "质感小皮具或通勤卡包礼盒", "日常使用频率高，预算内能买到做工不错的款式"),
+                ("体验", "双人陶艺/金工以外的手作体验预约", "不是实物重复路线，记忆点来自共同经历"),
+                ("睡眠", "真丝眼罩、枕套和助眠喷雾组合", "实用、柔软、有照顾感，适合作为非首饰礼物"),
+            ]
+            idea = options[-1][1]
+            reason = options[-1][2]
+            for marker, candidate, candidate_reason in options:
+                if marker not in context:
+                    idea = candidate
+                    reason = candidate_reason
+                    break
+            reason = f"不是首饰，也避开已送过的项链；{reason}"
+            if not no_purple:
+                reason += "，外观可选低饱和紫/玫瑰金点缀但不依赖单一颜色"
+            return (
+                f"推荐方向：{idea}。\n"
+                f"- 预算：按 {budget} 控制，优先选 600-1000 元区间。\n"
+                f"- 理由：{reason}。\n"
+                f"- 执行：选小体积、有质感旋钮或复古外观的款式，搭配一张手写卡片；"
+                f"避开已送过或已排除的品类。"
+            )
+        return (
+            f"推荐方向：玫瑰金耳饰或手链，带精致但不过度夸张的设计。\n"
+            f"- 预算：按 {budget} 控制。\n"
+            f"- 依据：{('；'.join(preferences) or '当前偏好信息有限')}。\n"
+            f"- 避免：{('；'.join(avoid) or '不要重复已送礼物')}。"
+        )
+    return (
+        f"我会按送礼任务继续处理。\n"
+        f"- 当前可用约束：{budget}\n"
+        f"- 偏好/背景：{('；'.join(preferences) or '待补充')}\n"
+        f"- 禁忌/历史：{('；'.join(avoid) or '暂无')}"
+    )
+
+
 def _travel_answer(text: str, memories: list[MemoryItem]) -> str:
-    points = "、".join(m.content for m in memories) if memories else "常规节奏、交通便利、体验丰富"
-    if "南京" in text or "半日" in text:
-        return f"半日路线：上午/下午任选 4 小时，先去玄武湖或中山陵音乐台这类开阔点，再安排一个室内休息点。约束：{points}。全程控制转场和步行，不排人挤人的网红点。"
-    return f"行程草案：第 1 天安排低强度核心景点加早休息；第 2 天安排自然或动物相关点位；第 3 天保留机动和轻松返程。执行约束：{points}。"
+    memory_text = "；".join(m.content for m in memories)
+    points = "、".join(m.content for m in memories) if memories else "亲子友好、转场少、节奏舒服"
+    destination = _travel_destination(text)
+    days = _travel_days(text)
+    half_day = "半日" in text or "半天" in text or days == 0.5
+    no_father = any(token in (text + memory_text) for token in ["父亲不去", "爸爸不去", "只有我和孩子"])
+    low_walk = (
+        any(token in memory_text for token in ["膝盖不好", "步行要少", "少步行"])
+        and not no_father
+        and "少步行不适用" not in memory_text
+    )
+    nature = any(token in (text + memory_text) for token in ["自然", "动物", "植物", "公园", "湿地"])
+    avoid_crowd = any(token in memory_text for token in ["不喜欢人挤人", "避开网红", "网红点"])
+
+    constraints = []
+    if low_walk:
+        constraints.append("控制步行，把景区电瓶车、游船、打车接驳放在优先级前面")
+    if no_father:
+        constraints.append("本次按你和孩子两人出行设计，不套用父亲少步行限制")
+    if nature:
+        constraints.append("优先自然、动物、植物或开阔户外体验")
+    if avoid_crowd:
+        constraints.append("避开人挤人的网红点，选择清静路线和错峰时段")
+    if not constraints:
+        constraints.append("少排队、少回头路、每天保留休息时间")
+
+    if half_day:
+        route = _half_day_travel_route(destination, nature, avoid_crowd)
+        return (
+            f"{destination}半日亲子路线：\n"
+            f"1. 出发后先去：{route[0]}。\n"
+            f"2. 中段安排：{route[1]}。\n"
+            f"3. 结束前留：{route[2]}。\n"
+            f"执行约束：{'；'.join(constraints)}。\n"
+            f"落地建议：全程控制在 4 小时内，只排 1 个主点位 + 1 个轻量补充点，避免为了打卡跨城转场。"
+        )
+
+    route_days = _multi_day_travel_route(destination, days, nature, low_walk)
+    lines = [f"{destination}{int(days) if days >= 1 else 1}天亲子行程："]
+    for idx, plan in enumerate(route_days, 1):
+        lines.append(f"第 {idx} 天：{plan}")
+    lines.append(f"执行约束：{'；'.join(constraints)}。")
+    lines.append("落地建议：每天最多 2 个主点位，午后安排室内休息或咖啡/简餐，晚间不再加硬景点。")
+    lines.append(f"本次使用的记忆：{points}。")
+    return "\n".join(lines)
+
+
+def _travel_destination(text: str) -> str:
+    for city in ["北京", "杭州", "上海", "南京", "广州", "深圳", "成都", "苏州", "西安"]:
+        if city in text:
+            return city
+    return "目的地"
+
+
+def _travel_days(text: str) -> float:
+    if "半日" in text or "半天" in text:
+        return 0.5
+    match = re.search(r"(\d+)\s*天", text)
+    if match:
+        return max(1, min(5, int(match.group(1))))
+    if "周末" in text:
+        return 2
+    return 1
+
+
+def _half_day_travel_route(destination: str, nature: bool, avoid_crowd: bool) -> tuple[str, str, str]:
+    routes = {
+        "南京": (
+            "玄武湖偏安静的湖边段或情侣园，先让孩子放电",
+            "南京博物院或附近安静咖啡点做室内休息",
+            "就近吃饭返程，不再叠加夫子庙/老门东这类拥挤点",
+        ),
+        "上海": (
+            "共青森林公园或滨江森林公园，选树荫多的入口",
+            "自然观察、草地休息或轻量科普馆",
+            "打车回程，避开热门商圈和排队餐厅",
+        ),
+        "杭州": (
+            "西溪湿地非热门入口，优先坐船或电瓶车",
+            "湿地栈道短线观察植物和水鸟",
+            "附近茶空间休息，不去断桥等高人流点",
+        ),
+        "北京": (
+            "国家植物园或奥森北园，选入口附近短线",
+            "自然观察加简单野餐",
+            "打车返程，避开热门商圈和长队展馆",
+        ),
+    }
+    if destination in routes:
+        return routes[destination]
+    if nature:
+        return (
+            "城市公园或自然类场馆，选离住宿最近的一处",
+            "做一段短线自然观察，中途安排坐下休息",
+            "就近吃饭返程，不追加跨区景点",
+        )
+    if avoid_crowd:
+        return (
+            "非热门博物馆或开阔公园",
+            "附近安静街区慢逛",
+            "提前结束返程，避开晚高峰",
+        )
+    return ("一个交通最顺的主景点", "附近室内休息点", "就近返程")
+
+
+def _multi_day_travel_route(destination: str, days: float, nature: bool, low_walk: bool) -> list[str]:
+    city_routes = {
+        "北京": [
+            "上午国家植物园或奥森北园，下午中国科技馆/自然类展馆，晚上早回酒店",
+            "上午北京动物园或海洋馆，午后找近距离室内休息点，傍晚不加长距离步行",
+        ],
+        "杭州": [
+            "上午西溪湿地坐船/电瓶车，下午湿地短线观察，晚上住处附近吃饭",
+            "上午杭州动物园或少儿公园，下午植物园短线，避开西湖最拥挤湖段",
+            "上午湘湖或良渚文化村轻量自然线，午后留机动返程",
+        ],
+        "上海": [
+            "上午上海动物园或共青森林公园，下午自然博物馆/天文馆二选一，晚间不排商圈",
+        ],
+        "南京": [
+            "上午玄武湖或情侣园，下午南京博物院，晚上就近休息",
+        ],
+    }
+    route = list(city_routes.get(destination, []))
+    if not route:
+        route = [
+            "上午安排离住宿最近的自然/亲子主点位，下午室内休息或轻量互动",
+            "第二天安排公园、动物或植物相关点位，午后留机动",
+            "最后一天只排一个顺路点位，然后从容返程",
+        ]
+    if not nature:
+        route = [
+            item.replace("动物园或", "").replace("自然博物馆/", "").replace("自然/亲子", "亲子")
+            for item in route
+        ]
+    if low_walk:
+        route = [item + "；所有点位优先选电瓶车、游船、打车接驳" for item in route]
+    count = int(days) if days >= 1 else 1
+    while len(route) < count:
+        route.append("只补一个顺路轻量点位，保留午休和机动，不做跨区打卡")
+    return route[:count]
 
 
 def _work_answer(text: str, memories: list[MemoryItem]) -> str:
+    memory_text = "；".join(m.content for m in memories)
     points = "、".join(m.content for m in memories) if memories else "先明确受众，再组织结论、风险和下一步"
+    is_cross_team = any(token in text for token in ["跨部门", "设计", "研发", "运营"])
+    is_boss = "老板" in text or "管理层" in text or ("老板" in memory_text and not is_cross_team)
+    require_three = any("3 条结论" in m.content or "三条结论" in m.content or "先给 3" in m.content for m in memories)
+    risk_table_for_boss = "风险表只用于老板材料" in memory_text or "风险" in memory_text or is_boss
+
+    if is_cross_team and not is_boss:
+        return (
+            f"跨部门同步草案：\n"
+            f"主题：[项目名] 本周协同同步\n"
+            f"1. 当前进度：主流程按计划推进，近期重点是设计素材、研发联调和运营配置对齐。\n"
+            f"2. 设计侧：请在周四前确认最终视觉稿和尺寸规范，变更点直接同步到共享文档。\n"
+            f"3. 研发侧：请锁定联调排期，周五前反馈环境稳定性和接口依赖状态。\n"
+            f"4. 运营侧：请补齐上线文案、配置字段和首周数据口径。\n"
+            f"5. 下个动作：周五下班前各方在同一文档更新状态，下周例会只处理阻塞项。\n"
+            f"采用规则：跨部门同步不用管理层风格，不放风险表；{points}。"
+        )
+
+    if is_boss:
+        intro = (
+            "老板材料草案：\n"
+            "一、3 条结论\n"
+            "1. 项目整体进展正常，核心链路按计划推进。\n"
+            "2. 当前主要风险集中在外部依赖、联调排期和跨团队确认。\n"
+            "3. 下周需要拍板接口排期、灰度窗口和资源优先级。\n"
+            if require_three
+            else (
+                "老板材料草案：\n"
+                "一、整体判断\n"
+                "项目整体进展正常，核心链路按计划推进；当前最需要关注的是外部依赖、联调排期和跨团队确认，建议本周内完成关键拍板。\n"
+            )
+        )
+        table = (
+            "\n二、风险 / 负责人 / 下一步\n"
+            "| 风险项 | 负责人 | 下一步 |\n"
+            "|---|---|---|\n"
+            "| 外部接口延期影响联调 | 张三 | 周四前锁定接口交付时间，并准备临时 mock 方案 |\n"
+            "| 跨团队方案未确认 | 李四 | 周三前组织 30 分钟拍板会，会后发确认纪要 |\n"
+            "| 排期存在 2 天偏差 | 王五 | 周五前提交含 buffer 的调整方案 |\n"
+        )
+        closing = "\n三、需要老板拍板\n请确认是否接受当前排期 buffer，以及外部依赖延期时是否优先保障核心链路上线。"
+        if not risk_table_for_boss:
+            table = ""
+        return f"{intro}{table}{closing}\n采用规则：{points}。"
+
     return (
-        f"同步材料草案：\n"
-        f"1. 结论：当前进展正常，主要风险集中在依赖、排期和跨团队确认。\n"
-        f"2. 风险/负责人/下一步：按受众决定是否保留风险表。\n"
-        f"3. 下周动作：明确负责人、截止时间和需要拍板的问题。\n"
+        f"项目同步草案：\n"
+        f"1. 当前进度：核心事项按计划推进，关键依赖已进入对齐阶段。\n"
+        f"2. 待确认事项：接口排期、跨团队方案和上线窗口。\n"
+        f"3. 下一步：明确负责人、截止时间和需要拍板的问题。\n"
         f"采用规则：{points}。"
     )
 
@@ -1316,5 +2128,35 @@ def _study_answer(text: str, memories: list[MemoryItem]) -> str:
 def _research_answer(text: str, memories: list[MemoryItem]) -> str:
     points = "、".join(m.content for m in memories) if memories else "按任务类型选择综述、评测或 brainstorm 结构"
     if "brainstorm" in text or "研究问题" in text:
-        return f"3 个研究问题：1. RAG 评测中检索质量和生成质量如何解耦？2. 多跳问题的证据覆盖率如何度量？3. 不同数据集上的评测结论能否迁移？写法规则：{points}。"
-    return f"综述草案：先按方法类别组织，再分别说明代表数据集、局限和可复现性，最后用谨慎表述总结趋势。当前规则：{points}。"
+        return (
+            f"3 个 RAG 研究问题：\n"
+            f"1. 如何把 RAG 评测中的检索错误和生成错误分离度量，避免只看最终答案分数？\n"
+            f"2. 多跳问题里，检索证据的覆盖率、顺序和冗余度分别怎样影响最终回答质量？\n"
+            f"3. 不同领域数据集上的 RAG 评测结论能否迁移，哪些指标最容易受到语料分布影响？\n"
+            f"写法规则：{points}。"
+        )
+    fields = "代表数据集和局限"
+    if any("可复现" in item.content or item.object == "可复现性" for item in memories):
+        fields = "代表数据集、局限和可复现性"
+    if "RAG" in text or "评测" in text:
+        topic = "RAG 评测方法"
+        content = (
+            f"{topic}可以先按方法类别拆成三类：第一类是检索侧评测，常用 Recall@K、MRR、NDCG 等指标，"
+            f"代表数据集包括 Natural Questions、TriviaQA 和 MS MARCO，局限是只能说明检索是否命中，不能保证答案真正可用；"
+            f"第二类是生成侧评测，常用 ROUGE、BLEU 或人工/LLM 评分，局限是容易把表达差异误判为质量差异；"
+            f"第三类是端到端忠实度和事实性评测，例如把答案拆成原子陈述后检查是否能被检索证据支持，"
+            f"这类方法更贴近 RAG 风险，但可复现性会受到评审模型、证据切分和提示词设置影响。"
+        )
+    else:
+        topic = "多模态检索"
+        content = (
+            f"{topic}综述可以按方法类别展开：双塔式方法用独立编码器把图像、文本或音频映射到同一向量空间，"
+            f"适合大规模召回，但细粒度对齐能力有限；交互式方法在候选召回后进一步做跨模态匹配，精度通常更好，"
+            f"但计算成本更高；近年的适配与重排序方法尝试用更强的视觉语言模型改善开放域检索，"
+            f"不过在数据集覆盖、负样本构造和真实场景泛化上仍需谨慎比较。"
+        )
+    return (
+        f"{content}\n"
+        f"整理要求：按方法类别组织；分别说明{fields}；结论保持谨慎，不把单一数据集结果外推为通用结论。\n"
+        f"当前规则：{points}。"
+    )

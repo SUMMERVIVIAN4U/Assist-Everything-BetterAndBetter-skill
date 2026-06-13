@@ -16,7 +16,7 @@ DEMO_USER_ID = "workbench-demo-large-memory"
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 LATEST_PERFORMANCE_REPORT = _REPO_ROOT / "eval/output/latest/mem0_performance_demo.json"
 
-ALLOWED_ENGINES = {"local", "mem0_hosted", "mem0_sdk"}
+ALLOWED_ENGINES = {"local", "mem0_hosted"}
 ALLOWED_MODES = {"dry_run", "real_run"}
 ALLOWED_RUN_SCALES = {1000, 10000, 50000}
 
@@ -235,7 +235,7 @@ def _run_dry_demo(
             "latency_ms": round(latency, 3),
             "top_k": _dry_top_k(query, memories),
         }
-        for query, latency in zip(queries, search_latencies, strict=True)
+        for query, latency in zip(queries, search_latencies)
     ]
     phases = [
         {"name": "generate", "ok": True, "count": len(memories), "elapsed_ms": round(len(memories) * 0.03, 3)},

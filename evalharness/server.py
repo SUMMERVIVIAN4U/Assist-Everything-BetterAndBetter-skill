@@ -1,23 +1,19 @@
 from __future__ import annotations
 
 import json
-import socket
 import time
-import urllib.error
-import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from assist_everything_betterandbetter_skill.cases import DIMENSIONS
-from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Client, Mem0Config, Mem0SdkClient, config_from_dict
+from assist_everything_betterandbetter_skill.cases import CASES, DIMENSIONS, EvalCase
+from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Client, Mem0Config, config_from_dict
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
 from .evaluation import build_report, evaluate_case_run, save_report, with_history
-from .judge import score_with_fallback
-from .llm import MimoConfig
+from .llm import DEFAULT_LLM_PROVIDER, llm_client_from_env, llm_config_from_env, llm_configured, normalize_llm_provider, supported_llm_providers
 from .mem0_performance import (
     DEMO_USER_ID,
     config_for_demo_user,
@@ -31,12 +27,13 @@ LATEST = Path("eval/output/latest/eval_report.json")
 PRIVACY_SETTINGS = Path("memories/workbench/_privacy.json")
 BACKEND_SETTINGS = Path("memories/workbench/_backend.json")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+WORKBENCH_LLM_PROVIDER = DEFAULT_LLM_PROVIDER
 
 
 class WorkbenchState:
-    def __init__(self, agent_mode: str = "auto") -> None:
-        self.agent_mode = agent_mode
-        self.chat_agent = _new_workbench_agent(agent_mode)
+    def __init__(self, agent_mode: str = WORKBENCH_LLM_PROVIDER) -> None:
+        self.agent_mode = _normalize_workbench_provider(agent_mode)
+        self.chat_agent = _new_workbench_agent(self.agent_mode)
 
 
 STATE: WorkbenchState
@@ -53,17 +50,34 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/static/"):
             self._send_static(path)
         elif path == "/api/config":
-            self._send_json({"agent_mode": STATE.agent_mode})
+            self._send_json(
+                {
+                    "llm_provider": STATE.agent_mode,
+                    "default_llm_provider": WORKBENCH_LLM_PROVIDER,
+                    "providers": supported_llm_providers(),
+                    "agent_mode": STATE.agent_mode,
+                    "judge_mode": STATE.agent_mode,
+                    "llm_required": True,
+                    "llm_configured": llm_configured(STATE.agent_mode),
+                }
+            )
         elif path == "/api/report":
             if not LATEST.exists():
-                run_all()
-            self._send_json(with_history(json.loads(LATEST.read_text(encoding="utf-8"))))
+                self._send_json(_workbench_with_history(_empty_report("暂无历史真实 LLM eval。")))
+                return
+            latest = json.loads(LATEST.read_text(encoding="utf-8"))
+            if not _report_is_real_llm(latest):
+                latest = _empty_report("latest 是旧的离线报告，Workbench 已隐藏；请运行真实 LLM eval。")
+            self._send_json(_workbench_with_history(latest))
+        elif path == "/api/scenarios":
+            self._send_json(_scenario_library_payload())
         elif path == "/api/settings":
             self._send_json(_settings_payload())
         elif path == "/api/health":
             self._send_json({"ok": True})
         elif path == "/api/llm-health":
-            self._send_json(_llm_health())
+            provider = parse_qs(parsed.query).get("provider", [STATE.agent_mode])[0]
+            self._send_json(_llm_health(provider))
         elif path == "/api/mem0-health":
             engine = parse_qs(parsed.query).get("engine", [None])[0]
             self._send_json(_mem0_health(engine))
@@ -89,24 +103,43 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         body = self._read_json()
         if path == "/api/run":
-            print("[workbench] /api/run compatibility route -> preset cases")
-            report = run_all(judge_mode=body.get("judge", "heuristic"), agent_mode=body.get("agent", "local"))
-            self._send_json(with_history(report))
+            self._send_json({"ok": False, "stage": "disabled", "error": "Run All has been removed from Workbench. Use Agent Chat manual replay or CLI eval."})
         elif path == "/api/run-preset":
-            print(f"[workbench] run preset cases agent={body.get('agent', 'local')} judge={body.get('judge', 'heuristic')}")
-            report = run_all(judge_mode=body.get("judge", "heuristic"), agent_mode=body.get("agent", "local"))
-            self._send_json(with_history(report))
+            self._send_json({"ok": False, "stage": "disabled", "error": "Run All has been removed from Workbench. Use Agent Chat manual replay or CLI eval."})
         elif path == "/api/run-chat":
-            print(f"[workbench] run chat eval judge={body.get('judge', 'heuristic')}")
-            report = _chat_report(body.get("judge", "heuristic"))
-            self._send_json(report)
+            provider = _provider_from_body(body)
+            print(f"[workbench] run chat eval judge={provider}")
+            if not llm_configured(provider):
+                self._send_json(
+                    {
+                        "ok": False,
+                        "stage": "config",
+                        "error": _provider_config_error(provider),
+                    }
+                )
+                return
+            try:
+                report = _chat_report(provider)
+                self._send_json(report)
+            except Exception as exc:
+                self._send_json({"ok": False, "stage": "llm_eval", "error": str(exc)})
         elif path == "/api/chat":
             message = str(body.get("message", "")).strip()
-            mode = str(body.get("agent", STATE.agent_mode))
-            if mode != STATE.agent_mode:
-                STATE.agent_mode = mode
-                STATE.chat_agent = _new_workbench_agent(mode)
-            print(f"[workbench] chat agent={STATE.agent_mode} message={message[:80]}")
+            provider = _provider_from_body(body)
+            if provider != STATE.agent_mode:
+                STATE.agent_mode = provider
+                STATE.chat_agent = _new_workbench_agent(provider)
+            print(f"[workbench] chat provider={STATE.agent_mode} message={message[:80]}")
+            if not llm_configured(STATE.agent_mode):
+                snapshot = STATE.chat_agent.toolbox.snapshot()
+                self._send_json(
+                    {
+                        "error": _provider_config_error(STATE.agent_mode),
+                        "memory": snapshot,
+                        "current_memory": _current_memory_payload(snapshot),
+                    }
+                )
+                return
             stage = str(body.get("stage", "chat"))
             try:
                 turn = STATE.chat_agent.reply(message, stage=stage)
@@ -123,16 +156,15 @@ class Handler(BaseHTTPRequestHandler):
                 snapshot = STATE.chat_agent.toolbox.snapshot()
                 self._send_json({"error": str(exc), "memory": snapshot, "current_memory": _current_memory_payload(snapshot)})
         elif path == "/api/reset-chat":
-            mode = str(body.get("agent", STATE.agent_mode))
-            STATE.agent_mode = mode
-            STATE.chat_agent = _new_workbench_agent(mode)
-            print(f"[workbench] reset chat session agent={STATE.agent_mode}")
+            STATE.agent_mode = _provider_from_body(body)
+            STATE.chat_agent = _new_workbench_agent(STATE.agent_mode)
+            print(f"[workbench] reset chat session provider={STATE.agent_mode}")
             self._send_json({"ok": True, "session": STATE.chat_agent.session.to_dict()})
         elif path == "/api/reset-memory":
             print("[workbench] reset chat memory")
             response, call = STATE.chat_agent.toolbox.reset_memory()
             backend = _memory_backend_config()["backend"]
-            mem0_reset = response.memory_actions[0] if backend in {"mem0_hosted", "mem0_sdk"} and response.memory_actions else _reset_mem0_memory()
+            mem0_reset = response.memory_actions[0] if backend == "mem0_hosted" and response.memory_actions else _reset_mem0_memory()
             STATE.chat_agent.mark_memory_reset_boundary()
             self._send_json(
                 {
@@ -213,25 +245,35 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = "local") -> None:
+def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = WORKBENCH_LLM_PROVIDER) -> None:
     global STATE
-    STATE = WorkbenchState(agent_mode=agent_mode)
+    STATE = WorkbenchState(agent_mode=_normalize_workbench_provider(agent_mode))
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"Eval Harness Workbench: http://{host}:{port}")
     httpd.serve_forever()
 
 
 def _new_workbench_agent(agent_mode: str) -> HarnessAgent:
+    provider = _normalize_workbench_provider(agent_mode)
     agent = HarnessAgent(
         name="workbench-chat-agent",
-        llm_mode=agent_mode,
+        llm_mode=provider,
         memory_dir="memories/workbench",
         mem0_config=_mem0_config(),
         memory_enabled=_memory_enabled(),
         memory_backend=_memory_backend_config()["backend"],
+        require_llm=True,
     )
     _apply_privacy_settings(agent)
     return agent
+
+
+def _normalize_workbench_provider(value: Any) -> str:
+    return normalize_llm_provider(str(value or WORKBENCH_LLM_PROVIDER))
+
+
+def _provider_from_body(body: dict[str, Any]) -> str:
+    return _normalize_workbench_provider(body.get("provider") or body.get("agent") or STATE.agent_mode)
 
 
 def _memory_backend_config() -> dict[str, Any]:
@@ -264,10 +306,10 @@ def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_backend_name(value: Any, default: str = "local") -> str:
     backend = str(value or default).strip().lower()
-    aliases = {"mem0": "mem0_hosted", "hosted_mem0": "mem0_hosted", "mem0ai": "mem0_sdk", "sdk_mem0": "mem0_sdk"}
+    aliases = {"mem0": "mem0_hosted", "hosted_mem0": "mem0_hosted"}
     backend = aliases.get(backend, backend)
-    if backend not in {"local", "mem0_hosted", "mem0_sdk"}:
-        return default if default in {"local", "mem0_hosted", "mem0_sdk"} else "local"
+    if backend not in {"local", "mem0_hosted"}:
+        return default if default in {"local", "mem0_hosted"} else "local"
     return backend
 
 
@@ -278,7 +320,7 @@ def _mem0_config() -> Mem0Config:
 def _mem0_config_for_backend(backend: str) -> Mem0Config:
     data = _memory_backend_config()
     mem0 = dict(data["mem0"])
-    mem0["enabled"] = backend in {"mem0_hosted", "mem0_sdk"}
+    mem0["enabled"] = backend == "mem0_hosted"
     return config_from_dict(mem0)
 
 
@@ -350,7 +392,7 @@ def _mem0_memory() -> dict[str, Any]:
 
 def _mem0_memory_for_engine(backend: str) -> dict[str, Any]:
     data = _memory_backend_config()
-    if backend not in {"mem0_hosted", "mem0_sdk"}:
+    if backend != "mem0_hosted":
         return {"ok": False, "stage": "config", "backend": _public_backend_config(backend), "error": "Mem0 is not selected"}
     mem0 = dict(data["mem0"])
     inspect_config = config_from_dict({**mem0, "enabled": True})
@@ -386,7 +428,7 @@ def _reset_mem0_memory() -> dict[str, Any]:
 def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
     raw_engine = body["engine"] if "engine" in body else _memory_backend_config()["backend"]
     engine = _normalize_mem0_performance_engine(raw_engine)
-    if engine not in {"local", "mem0_hosted", "mem0_sdk"}:
+    if engine not in {"local", "mem0_hosted"}:
         return {"ok": False, "stage": "run", "error": f"unsupported engine: {raw_engine}"}
     mode = str(body.get("mode") or "dry_run")
     try:
@@ -404,7 +446,7 @@ def _run_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
 def _reset_mem0_performance_demo(body: dict[str, Any]) -> dict[str, Any]:
     raw_engine = body["engine"] if "engine" in body else _memory_backend_config()["backend"]
     engine = _normalize_mem0_performance_engine(raw_engine)
-    if engine not in {"local", "mem0_hosted", "mem0_sdk"}:
+    if engine not in {"local", "mem0_hosted"}:
         return {"ok": False, "stage": "config", "error": f"unsupported engine: {raw_engine}"}
     if engine == "local":
         return {"ok": True, "stage": "local_reset", "demo_user_id": DEMO_USER_ID, "found_count": 0, "deleted_count": 0, "errors": []}
@@ -421,8 +463,6 @@ def _normalize_mem0_performance_engine(engine: Any) -> str:
     aliases = {
         "mem0": "mem0_hosted",
         "hosted_mem0": "mem0_hosted",
-        "mem0ai": "mem0_sdk",
-        "sdk_mem0": "mem0_sdk",
     }
     return aliases.get(normalized, normalized)
 
@@ -434,8 +474,6 @@ def _body_int(body: dict[str, Any], key: str, default: int) -> int:
 
 
 def _mem0_client_for_backend(backend: str, config: Mem0Config) -> Any:
-    if backend == "mem0_sdk":
-        return Mem0SdkClient(config)
     return HostedMem0Client(config)
 
 
@@ -499,14 +537,67 @@ def _normalize_privacy_items(items: list[str]) -> list[str]:
     return normalized[:80]
 
 
-def _chat_report(judge_mode: str) -> dict[str, Any]:
+def _provider_config_error(provider: str) -> str:
+    if provider in {"deepseek_pro", "deepseek_flash"}:
+        return "Workbench 需要真实 LLM provider。请在 .env 中配置 DEEPSEEK_API_KEY/DEEPSEEK_BASE_URL/DEEPSEEK_PRO_MODEL/DEEPSEEK_FLASH_MODEL 后重试。"
+    return "Workbench 需要真实 LLM provider。请在 .env 中配置 MIMO_API_KEY/MIMO_BASE_URL/MIMO_MODEL 后重试。"
+
+
+def _run_workbench_scenarios(provider: str) -> dict[str, Any]:
+    if not llm_configured(provider):
+        return {
+            "ok": False,
+            "stage": "config",
+            "error": _provider_config_error(provider),
+        }
+    try:
+        report = run_all(
+            judge_mode=provider,
+            agent_mode=provider,
+            require_llm=True,
+            allow_judge_fallback=False,
+        )
+        return _workbench_with_history(report)
+    except Exception as exc:
+        return {"ok": False, "stage": "scenario_eval", "error": str(exc)}
+
+
+def _chat_report(provider: str) -> dict[str, Any]:
     turns = [turn.to_dict() for turn in STATE.chat_agent.session.turns]
+    if not turns:
+        return _workbench_with_history(_empty_report("当前对话为空，无法执行真实 LLM eval。", provider))
     events = STATE.chat_agent.toolbox.skill.memory.events
     snapshots = [turn["memory_snapshot"] for turn in turns]
-    case = _chat_case(turns, events, snapshots, judge_mode)
-    report = build_report([case], judge_mode=judge_mode, agent_mode=STATE.agent_mode, source="agent_chat_session")
+    case = _chat_case(turns, events, snapshots, provider)
+    report = build_report([case], judge_mode=provider, agent_mode=STATE.agent_mode, source="agent_chat_session")
     save_report("eval/output/latest", report, save_history=True)
-    return with_history(report)
+    return _workbench_with_history(report)
+
+
+def _empty_report(reason: str, provider: str | None = None) -> dict[str, Any]:
+    fallback = STATE.agent_mode if "STATE" in globals() else WORKBENCH_LLM_PROVIDER
+    selected = _normalize_workbench_provider(provider or fallback)
+    report = build_report([], judge_mode=selected, agent_mode=selected, source="empty")
+    report["summary"]["reason"] = reason
+    return report
+
+
+def _workbench_with_history(report: dict[str, Any]) -> dict[str, Any]:
+    enriched = with_history(report)
+    enriched["history"] = [_compact for _compact in enriched.get("history", []) if _history_item_is_real_llm(_compact)]
+    return enriched
+
+
+def _report_is_real_llm(report: dict[str, Any]) -> bool:
+    cases = report.get("cases", [])
+    return bool(cases) and any(str(case.get("judge", {}).get("mode", "")).endswith("_llm") for case in cases)
+
+
+def _history_item_is_real_llm(item: dict[str, Any]) -> bool:
+    cases = item.get("cases", [])
+    if not cases:
+        return item.get("source") in {"empty", "agent_chat_session", "scenario_library"}
+    return any(str(case.get("judge", {}).get("mode", "")).endswith("_llm") for case in cases)
 
 
 def _settings_payload() -> dict[str, Any]:
@@ -514,6 +605,12 @@ def _settings_payload() -> dict[str, Any]:
     privacy_report = STATE.chat_agent.toolbox.skill.privacy_report()
     return {
         "agent_mode": STATE.agent_mode,
+        "llm_provider": STATE.agent_mode,
+        "default_llm_provider": WORKBENCH_LLM_PROVIDER,
+        "providers": supported_llm_providers(),
+        "judge_mode": STATE.agent_mode,
+        "llm_required": True,
+        "llm_configured": llm_configured(STATE.agent_mode),
         "workbench_memory": snapshot,
         "privacy_items": _privacy_items(),
         "default_privacy_items": list(PRIVATE_MARKERS),
@@ -523,11 +620,64 @@ def _settings_payload() -> dict[str, Any]:
     }
 
 
+def _scenario_library_payload() -> dict[str, Any]:
+    return {
+        "items": [_scenario_from_case(case) for case in CASES] + [_gift_scenario()],
+        "run_hint": "Run All 会用当前 Provider 运行真实 LLM chat + 真实 LLM eval；History Evals 只保存结果。",
+    }
+
+
+def _scenario_from_case(case: EvalCase) -> dict[str, Any]:
+    optimized = {
+        "C01": ["旅行输出从框架草案增强为可执行路线", "删除后续答会过滤已删偏好"],
+        "C02": ["跨部门适用范围不会误删老板材料规则", "老板材料和跨部门同步分流生成"],
+        "C04": ["研究场景空回复重试", "综述/brainstorm 草稿可直接交付"],
+    }
+    return {
+        "id": case.id,
+        "title": case.title,
+        "domain": case.domain,
+        "module": case.module,
+        "optimized": case.id in optimized,
+        "optimization_notes": optimized.get(case.id, []),
+        "steps": [
+            {"label": "Round 1 任务", "text": case.initial_task},
+            {"label": "形成记忆", "text": case.feedback},
+            {"label": "展示记忆", "text": case.memory_query},
+            {"label": "Round 2 应用", "text": case.second_task},
+            {"label": "更新/条件化", "text": case.preference_change},
+            {"label": "Round 3 复用", "text": case.third_task},
+            {"label": "删除后复测", "text": f"{case.delete_query}。然后：{case.delete_retest_task}"},
+        ],
+    }
+
+
+def _gift_scenario() -> dict[str, Any]:
+    return {
+        "id": "GIFT",
+        "title": "女朋友生日礼物",
+        "domain": "gift_planning",
+        "module": "复杂送礼协作记忆",
+        "optimized": True,
+        "optimization_notes": ["预算、颜色、材质、已送历史分开记录", "非首饰临时约束和删除颜色偏好后不再污染推荐"],
+        "steps": [
+            {"label": "Round 1 任务", "text": "帮我给女朋友选个生日礼物。"},
+            {"label": "形成记忆", "text": "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"},
+            {"label": "授权保存", "text": "同意保存。"},
+            {"label": "展示记忆", "text": "展示当前记忆。"},
+            {"label": "Round 2 推荐", "text": "给我一个礼物推荐。"},
+            {"label": "更新约束", "text": "不是，我想换个非首饰品类。"},
+            {"label": "Round 3 推荐", "text": "那再给一个推荐。"},
+            {"label": "删除后复测", "text": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。"},
+        ],
+    }
+
+
 def _current_memory_payload(local_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     config = _memory_backend_config()
     selected = config["backend"]
-    labels = {"local": "本地JSON", "mem0": "Mem0 Hosted", "mem0_hosted": "Mem0 Hosted", "mem0_sdk": "Mem0 SDK"}
-    content = _mem0_memory() if selected in {"mem0", "mem0_hosted", "mem0_sdk"} else (local_snapshot or {})
+    labels = {"local": "本地JSON", "mem0": "Mem0 Hosted", "mem0_hosted": "Mem0 Hosted"}
+    content = _mem0_memory() if selected in {"mem0", "mem0_hosted"} else (local_snapshot or {})
     return {
         "memory_enabled": bool(config.get("memory_enabled", True)),
         "selected_engine": selected,
@@ -539,9 +689,9 @@ def _current_memory_payload(local_snapshot: dict[str, Any] | None = None) -> dic
 def _memory_store_payload(engine: str, local_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     config = _memory_backend_config()
     inspected = str(engine or "local").strip().lower()
-    if inspected not in {"local", "mem0_hosted", "mem0_sdk"}:
-        raise ValueError("engine must be one of: local, mem0_hosted, mem0_sdk")
-    labels = {"local": "本地Memory", "mem0_hosted": "Mem0 Hosted", "mem0_sdk": "Mem0 SDK"}
+    if inspected not in {"local", "mem0_hosted"}:
+        raise ValueError("engine must be one of: local, mem0_hosted")
+    labels = {"local": "本地Memory", "mem0_hosted": "Mem0 Hosted"}
     content = local_snapshot or {} if inspected == "local" else _mem0_memory_for_engine(inspected)
     return {
         "ok": True,
@@ -553,55 +703,47 @@ def _memory_store_payload(engine: str, local_snapshot: dict[str, Any] | None = N
     }
 
 
-def _llm_health() -> dict[str, Any]:
+def _llm_health(provider: str | None = None) -> dict[str, Any]:
     started = time.perf_counter()
+    selected = _normalize_workbench_provider(provider)
     try:
-        config = MimoConfig.from_env()
+        config = llm_config_from_env(selected)
     except Exception as exc:
-        return {"ok": False, "stage": "config", "error": str(exc)}
+        return {"ok": False, "provider": selected, "stage": "config", "error": str(exc)}
     parsed = urlparse(config.base_url)
     host = parsed.hostname or ""
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     result: dict[str, Any] = {
         "ok": False,
+        "provider": selected,
+        "label": config.label,
         "base_url": config.base_url,
         "model": config.model,
         "host": host,
         "port": port,
-        "timeout": min(config.timeout, 8),
+        "timeout": min(config.timeout, 15),
     }
     try:
-        dns_started = time.perf_counter()
-        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
-        result["dns_ms"] = round((time.perf_counter() - dns_started) * 1000)
-        result["addresses"] = sorted({info[4][0] for info in infos})[:8]
-    except Exception as exc:
-        result.update({"stage": "dns", "error": str(exc), "elapsed_ms": round((time.perf_counter() - started) * 1000)})
-        return result
-    try:
-        tcp_started = time.perf_counter()
-        with socket.create_connection((host, port), timeout=min(config.timeout, 5)):
-            pass
-        result["tcp_ms"] = round((time.perf_counter() - tcp_started) * 1000)
-    except Exception as exc:
-        result.update({"stage": "tcp", "error": str(exc), "elapsed_ms": round((time.perf_counter() - started) * 1000)})
-        return result
-    try:
-        http_started = time.perf_counter()
-        request = urllib.request.Request(config.base_url, method="HEAD")
-        with urllib.request.urlopen(request, timeout=min(config.timeout, 8)) as response:
-            result["http_status"] = response.status
-        result["http_ms"] = round((time.perf_counter() - http_started) * 1000)
+        completion_started = time.perf_counter()
+        content = llm_client_from_env(selected, timeout=min(config.timeout, 15)).chat(
+            [
+                {"role": "system", "content": "You are a health check endpoint. Reply with OK only."},
+                {"role": "user", "content": "ping"},
+            ],
+            temperature=0.0,
+            max_tokens=128 if selected in {"deepseek_pro", "deepseek_flash"} else 16,
+        )
+        result["completion_ms"] = round((time.perf_counter() - completion_started) * 1000)
+        result["sample"] = content.strip()[:40]
+        if not content.strip():
+            result["stage"] = "completion_empty"
+            result["error"] = "Provider returned an empty chat completion."
+            result["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
+            return result
         result["ok"] = True
-        result["stage"] = "ok"
-    except urllib.error.HTTPError as exc:
-        result["http_status"] = exc.code
-        result["http_ms"] = round((time.perf_counter() - http_started) * 1000)
-        result["ok"] = exc.code in {401, 403, 404, 405}
-        result["stage"] = "http_auth_or_route" if result["ok"] else "http"
-        result["error"] = str(exc)
+        result["stage"] = "completion"
     except Exception as exc:
-        result.update({"stage": "http", "error": str(exc)})
+        result.update({"stage": "completion", "error": str(exc)})
     result["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
     return result
 
@@ -610,7 +752,7 @@ def _chat_case(
     turns: list[dict[str, Any]],
     events: list[dict[str, Any]],
     snapshots: list[dict[str, Any]],
-    judge_mode: str,
+    provider: str,
 ) -> dict[str, Any]:
     if not turns:
         empty = {
@@ -626,7 +768,7 @@ def _chat_case(
             "checks": _chat_checks([], [], []),
             "ablation": {"module": "自由对话记忆评估", "off": [], "on": []},
         }
-        return evaluate_case_run(empty, "heuristic")
+        return evaluate_case_run(empty, provider, allow_judge_fallback=False)
     domain = _infer_chat_domain(turns)
     run = {
         "id": "CHAT-SESSION",
@@ -649,7 +791,7 @@ def _chat_case(
             "on": ["跨轮提取与应用记忆", "保留主体归属", "可在 Trace 中审计每轮状态"],
         },
     }
-    return evaluate_case_run(run, judge_mode)
+    return evaluate_case_run(run, provider, allow_judge_fallback=False)
 
 
 def _infer_chat_domain(turns: list[dict[str, Any]]) -> str:

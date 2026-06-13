@@ -45,6 +45,18 @@
     .case-btn { padding:10px; text-align:left; }
     .case-btn.active { border-color:var(--accent); box-shadow:0 0 0 3px #dff4ef; }
     .case-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .scenario-list { display:grid; gap:8px; max-height:360px; overflow:auto; margin-top:10px; padding-right:2px; }
+    .scenario-card { border:1px solid var(--line); border-radius:8px; background:#fff; overflow:hidden; }
+    .scenario-card.active { border-color:#b9dfd7; box-shadow:0 0 0 3px #edf8f5; }
+    .scenario-title { width:100%; border:0; border-radius:0; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:9px 10px; text-align:left; background:#fff; }
+    .scenario-title span:first-child { display:grid; gap:3px; min-width:0; }
+    .scenario-notes { display:flex; flex-wrap:wrap; gap:5px; padding:0 10px 8px; }
+    .scenario-steps { display:grid; gap:6px; padding:0 10px 10px; }
+    .scenario-step { border:1px solid var(--line); border-radius:7px; display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px; align-items:start; padding:7px; text-align:left; background:#fbfcff; }
+    .scenario-step:hover { border-color:#a8cfc7; background:#f4fbf8; }
+    .scenario-step span:last-child { display:grid; gap:2px; min-width:0; }
+    .scenario-step span:last-child span { color:var(--muted); font-size:12px; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .step-index { width:22px; height:22px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:#edf8f5; color:var(--accent); font-size:12px; font-weight:800; }
     .turn-list { display:grid; gap:10px; margin-top:10px; }
     .turn-card { padding:10px; background:#fff; }
     .turn-meta { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }

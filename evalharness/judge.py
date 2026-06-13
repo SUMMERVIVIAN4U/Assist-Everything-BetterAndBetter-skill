@@ -7,7 +7,15 @@ from typing import Any
 
 from assist_everything_betterandbetter_skill.cases import DIMENSIONS
 
-from .llm import MimoClient, MimoConfig, mimo_configured
+from .llm import (
+    LLM_PROVIDER_LABELS,
+    OpenAICompatibleClient,
+    any_llm_configured,
+    default_configured_provider,
+    llm_client_from_env,
+    llm_configured,
+    normalize_llm_provider,
+)
 
 
 class HeuristicJudge:
@@ -24,9 +32,10 @@ class HeuristicJudge:
         no_pollution = checks.get("polluted_memories", 0) == 0
         no_semantic_violations = checks.get("semantic_violations", 0) == 0
         effort = case_run.get("user_effort", {})
+        memory_saving_points = effort.get("memory_saving_points", effort.get("saved_score", checks.get("effort_reduction", 0)))
         low_effort = (
             effort.get("final_score", checks.get("effort_final", 100)) <= (80 if is_chat_session else 45)
-            or effort.get("saved_score", checks.get("effort_reduction", 0)) >= 25
+            or memory_saving_points >= (6 if is_chat_session else 3)
         )
         compound_ok = checks.get("compound_followup_delivered", False)
         no_unresolved_dissatisfaction = not checks.get("unresolved_dissatisfaction", False)
@@ -126,13 +135,14 @@ class ExternalCommandJudge:
         return data
 
 
-class MimoJudge:
-    """LLM judge backed by the configured Mimo chat endpoint."""
+class LLMJudge:
+    """LLM judge backed by the selected OpenAI-compatible provider."""
 
-    name = "mimo-llm-judge"
+    name = "llm-judge"
 
-    def __init__(self, client: MimoClient | None = None) -> None:
-        self.client = client or _judge_mimo_client()
+    def __init__(self, provider: str, client: OpenAICompatibleClient | None = None) -> None:
+        self.provider = normalize_llm_provider(provider)
+        self.client = client or _judge_llm_client(self.provider)
 
     def score(self, case_run: dict[str, Any]) -> dict[str, Any]:
         compact = {
@@ -156,47 +166,81 @@ class MimoJudge:
                 for turn in case_run["turns"]
             ],
         }
-        data = self.client.json_chat(
-            [
-                {
-                    "role": "system",
-                    "content": (
-                        "你是 WAISC 5 月自我进化 Skill 赛事评委。"
-                        "请按六个维度严格评分，返回 JSON。"
-                        "分值上限：reproducibility 10, memory_extraction 20, "
-                        "memory_application 25, update_and_decay 20, transparency 10, result_quality 15。"
-                        "必须包含 scores.total 和 reasons。"
-                    ),
-                },
-                {"role": "user", "content": json.dumps(compact, ensure_ascii=False)},
-            ],
-            temperature=0.0,
-        )
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是 WAISC 5 月自我进化 Skill 赛事评委。"
+                    "请按六个维度严格评分，返回 JSON。"
+                    "分值上限：reproducibility 10, memory_extraction 20, "
+                    "memory_application 25, update_and_decay 20, transparency 10, result_quality 15。"
+                    "必须包含 scores.total 和 reasons。scores 必须包含六个维度的整数分。"
+                ),
+            },
+            {"role": "user", "content": json.dumps(compact, ensure_ascii=False)},
+        ]
+        data: dict[str, Any] = {}
+        attempts = max(1, int(os.getenv("EVALHARNESS_JUDGE_RETRIES", "3")))
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                data = self.client.json_chat(messages, temperature=0.0)
+            except RuntimeError as exc:
+                last_error = exc
+                if attempt + 1 >= attempts:
+                    raise
+                continue
+            scores_payload = data.get("scores", {})
+            if isinstance(scores_payload, dict) and any(key in scores_payload for key in DIMENSIONS):
+                break
+            if attempt + 1 < attempts:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "上一次返回缺少 scores 六个维度。请只返回合法 JSON，必须包含 scores 和 reasons。",
+                    }
+                )
+        if not data and last_error:
+            raise last_error
         scores = data.get("scores", {})
+        if not isinstance(scores, dict) or not any(key in scores for key in DIMENSIONS):
+            raise ValueError(f"LLM judge returned invalid scores: {data}")
         for key, max_score in DIMENSIONS.items():
             scores[key] = max(0, min(int(scores.get(key, 0)), max_score))
         scores["total"] = sum(scores[key] for key in DIMENSIONS)
         return {
-            "judge": self.name,
-            "mode": "mimo_llm",
+            "judge": f"{self.provider}-llm-judge",
+            "mode": f"{self.provider}_llm",
             "dimensions": DIMENSIONS,
             "scores": scores,
             "reasons": data.get("reasons", {}),
         }
 
 
-def build_judge(mode: str = "auto") -> HeuristicJudge | ExternalCommandJudge | MimoJudge:
-    if mode == "mimo" or (mode == "auto" and mimo_configured()):
-        return MimoJudge()
+class MimoJudge(LLMJudge):
+    """Backward-compatible Mimo judge wrapper."""
+
+    def __init__(self, client: OpenAICompatibleClient | None = None) -> None:
+        super().__init__("mimo", client=client)
+
+
+def build_judge(mode: str = "auto") -> HeuristicJudge | ExternalCommandJudge | LLMJudge:
+    normalized = normalize_llm_provider(mode)
+    if mode not in {"auto", "heuristic", "external"} and normalized in LLM_PROVIDER_LABELS and llm_configured(normalized):
+        return LLMJudge(normalized)
+    if mode == "auto" and any_llm_configured():
+        return LLMJudge(default_configured_provider())
     if mode == "external" or (mode == "auto" and os.getenv("EVALHARNESS_JUDGE_CMD")):
         return ExternalCommandJudge()
     return HeuristicJudge()
 
 
-def score_with_fallback(case_run: dict[str, Any], mode: str = "heuristic") -> dict[str, Any]:
+def score_with_fallback(case_run: dict[str, Any], mode: str = "heuristic", *, allow_fallback: bool = True) -> dict[str, Any]:
     try:
         return build_judge(mode).score(case_run)
     except Exception as exc:
+        if not allow_fallback:
+            raise
         judgement = HeuristicJudge().score(case_run)
         judgement["fallback_from"] = mode
         judgement["fallback_error"] = str(exc)
@@ -204,7 +248,6 @@ def score_with_fallback(case_run: dict[str, Any], mode: str = "heuristic") -> di
         return judgement
 
 
-def _judge_mimo_client() -> MimoClient:
-    config = MimoConfig.from_env()
+def _judge_llm_client(provider: str) -> OpenAICompatibleClient:
     timeout = float(os.getenv("EVALHARNESS_JUDGE_TIMEOUT", os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120")))
-    return MimoClient(MimoConfig(config.api_key, config.base_url, config.model, timeout))
+    return llm_client_from_env(provider, timeout=timeout)

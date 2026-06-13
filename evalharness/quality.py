@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -52,16 +53,13 @@ def augment_case_run(case_run: dict[str, Any]) -> dict[str, Any]:
 
 
 USER_EFFORT_RULES = [
-    {"name": "用户轮数", "delta": "+8", "description": "每多一轮用户输入，说明用户多付出一次操作成本。"},
-    {"name": "输入长度", "delta": "+0~+6", "description": "用户解释越长，补充说明成本越高。"},
-    {"name": "追问成本", "delta": "+8", "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"},
-    {"name": "重复说明", "delta": "+18", "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"},
-    {"name": "纠错/不满", "delta": "+14", "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"},
-    {"name": "强情绪反馈", "delta": "+20", "description": "用户出现明显挫败、讽刺或辱骂。"},
-    {"name": "违反记忆推理", "delta": "+30", "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"},
-    {"name": "任务未交付", "delta": "+12", "description": "任务轮只解释机制，没有给出可直接使用的结果。"},
-    {"name": "正确应用记忆", "delta": "saved +12", "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"},
-    {"name": "有效记忆变化", "delta": "saved +8", "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"},
+    {"name": "用户轮次", "delta": "+1", "description": "每个非管理类用户输入计一次操作成本。"},
+    {"name": "输入长度", "delta": "每 50 字 +1", "description": "用户输入越长，说明补充信息成本越高。"},
+    {"name": "被追问", "delta": "+2", "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"},
+    {"name": "重复说明", "delta": "+3", "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"},
+    {"name": "纠错/不满", "delta": "+3", "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"},
+    {"name": "严重错误", "delta": "+5", "description": "任务未交付、记忆误用、污染记忆或明显挫败信号。"},
+    {"name": "记忆节省信息点", "delta": "每个信息点 +1", "description": "本轮由记忆提供、用户未重复说明、且被正确应用的信息点。"},
 ]
 
 
@@ -84,47 +82,35 @@ def _effort_trace(case_run: dict[str, Any]) -> dict[str, Any]:
         bad_memory = any(_contains(action.get("detail", ""), BAD_MEMORY_TERMS) for action in actions if action.get("action") == "add")
 
         management_turn = _is_management_only_turn(turn)
+        serious_error = emotion or violation or bad_memory or (task_turn and not delivered)
         if management_turn:
             delta = 0
             saving_delta = 0
             reasons = ["管理/查看/删除记忆轮不计入用户任务费力度"]
-            saving_reasons: list[str] = []
+            saving_points: list[str] = []
         else:
-            delta = 8
-            reasons = ["用户轮数 +8"]
-            input_cost = min(6, max(1, len(user) // 35)) if user else 0
+            delta = 1
+            reasons = ["用户轮次 +1"]
+            input_cost = _input_length_cost(user)
             delta += input_cost
             reasons.append(f"输入长度 +{input_cost}")
             saving_delta = 0
-            saving_reasons = []
+            saving_points = _memory_saving_points(turn, user, violation=violation)
 
         if not management_turn and asks:
-            delta += 8
-            reasons.append("需要补充信息 +8")
+            delta += 2
+            reasons.append("被追问 +2")
         if not management_turn and correction:
-            delta += 14
-            reasons.append("纠错或不满 +14")
+            delta += 3
+            reasons.append("纠错/不满 +3")
         if not management_turn and repeated:
-            delta += 18
-            reasons.append("重复说明已给信息 +18")
-        if not management_turn and emotion:
-            delta += 20
-            reasons.append("强情绪反馈 +20")
-        if not management_turn and violation:
-            delta += 30
-            reasons.append("违反记忆组合推理 +30")
-        if not management_turn and bad_memory:
-            delta += 20
-            reasons.append("污染长期记忆 +20")
-        if not management_turn and task_turn and not delivered:
-            delta += 12
-            reasons.append("任务未交付 +12")
-        if not management_turn and turn.get("applied_memories") and not violation:
-            saving_delta += 12
-            saving_reasons.append("正确应用记忆 saved +12")
-        if not management_turn and any(action.get("action") in {"add", "update", "downgrade", "delete"} for action in actions) and not bad_memory:
-            saving_delta += 8
-            saving_reasons.append("有效记忆变化 saved +8")
+            delta += 3
+            reasons.append("重复说明 +3")
+        if not management_turn and serious_error:
+            delta += 5
+            reasons.append("严重错误 +5")
+        if not management_turn and saving_points and not serious_error:
+            saving_delta = len(saving_points)
 
         before = score
         before_saved = saved
@@ -143,7 +129,8 @@ def _effort_trace(case_run: dict[str, Any]) -> dict[str, Any]:
                 "saved_delta": saving_delta,
                 "saved_after": saved,
                 "reasons": reasons,
-                "saving_reasons": saving_reasons,
+                "saving_reasons": [f"复用信息点：{point}" for point in saving_points],
+                "memory_saving_points": saving_points,
                 "signals": {
                     "correction": correction,
                     "repeated_memory": repeated,
@@ -151,17 +138,18 @@ def _effort_trace(case_run: dict[str, Any]) -> dict[str, Any]:
                     "semantic_violation": violation,
                     "delivered": delivered,
                     "bad_memory": bad_memory,
+                    "serious_error": serious_error,
                 },
                 "six_dim_gain": _six_dim_gain(turn, delivered, violation, bad_memory),
             }
         )
     return {
-        "scale": "lower is less user effort; raw additive effort points",
+        "scale": "费力度越低越省力；记忆节省信息点越多，说明用户少重复说明的信息越多。",
         "initial_score": 0,
         "final_score": score,
+        "memory_saving_points": saved,
         "saved_score": saved,
         "reduction": saved,
-        "estimated_without_memory": score + saved,
         "turns": output,
         "rules": USER_EFFORT_RULES,
     }
@@ -244,6 +232,50 @@ def _applied_memory_details(turn: dict[str, Any]) -> list[dict[str, str]]:
     return details
 
 
+def _input_length_cost(user: str) -> int:
+    length = len(re.sub(r"\s+", "", user or ""))
+    return (length + 49) // 50 if length else 0
+
+
+def _memory_saving_points(turn: dict[str, Any], user: str, *, violation: bool) -> list[str]:
+    if violation:
+        return []
+    user_norm = _normalize_info_point(user)
+    points: list[str] = []
+    seen: set[str] = set()
+    for item in _applied_memory_details(turn):
+        for point in _memory_info_points(item.get("content", "")):
+            normalized = _normalize_info_point(point)
+            if not normalized or normalized in seen:
+                continue
+            if normalized in user_norm:
+                continue
+            seen.add(normalized)
+            points.append(point)
+    return points
+
+
+def _memory_info_points(content: str) -> list[str]:
+    text = str(content or "").strip()
+    if not text:
+        return []
+    text = re.sub(r"^.+?[:：]", "", text) if any(marker in text for marker in ["偏好/背景", "约束"]) else text
+    fragments = re.split(r"[；;\n]+", text)
+    points: list[str] = []
+    for fragment in fragments:
+        point = fragment.strip(" ，,。:：-")
+        if not point:
+            continue
+        if point in {"暂无", "待补充"}:
+            continue
+        points.append(point)
+    return points or [text]
+
+
+def _normalize_info_point(text: str) -> str:
+    return re.sub(r"[\s，,。；;：:、\-—_（）()【】\[\]\"'“”]+", "", str(text or "").lower())
+
+
 def _memory_explanation(actions: list[dict[str, Any]], applied: list[dict[str, str]]) -> str:
     parts = []
     if applied:
@@ -262,7 +294,7 @@ def _turn_eval_explanation(effort: dict[str, Any], actions: list[dict[str, Any]]
     saving_reasons = effort.get("saving_reasons", [])
     text = "；".join(reasons) if reasons else "无费力度变化"
     if saving_reasons:
-        text += "。节省项：" + "；".join(saving_reasons)
+        text += "。记忆节省信息点：" + "；".join(saving_reasons)
     if actions or applied:
         text += "。记忆行为：" + _memory_explanation(actions, applied)
     return text

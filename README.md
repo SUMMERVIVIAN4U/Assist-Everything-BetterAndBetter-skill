@@ -136,9 +136,9 @@ Runs the documented cases five times and asserts every case is at least 90/100 w
 python3 scripts/verify_eval.py
 ```
 
-## Optional External LLM Judge
+## Optional External LLM Provider
 
-Both the workbench Agent Chat and eval judge can use Mimo through an OpenAI-compatible chat endpoint.
+Both the workbench Agent Chat and eval judge can use an OpenAI-compatible chat endpoint. Workbench defaults to DeepSeek V4 Pro and also supports DeepSeek V4 Flash and Mimo.
 
 ```bash
 cp .env.example .env
@@ -147,6 +147,12 @@ cp .env.example .env
 Then edit `.env`:
 
 ```dotenv
+DEEPSEEK_API_KEY=...
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_PRO_MODEL=deepseek-v4-pro
+DEEPSEEK_FLASH_MODEL=deepseek-v4-flash
+DEEPSEEK_TIMEOUT=120
+
 MIMO_API_KEY=...
 MIMO_BASE_URL=https://api.mimo.chat/v1
 MIMO_MODEL=mimo-v1
@@ -156,21 +162,21 @@ MIMO_TIMEOUT=60
 Run with the default `.env`:
 
 ```bash
-python3 -m evalharness.cli serve --port 8787 --agent mimo
-python3 -m evalharness.cli run --agent mimo --judge mimo
+python3 -m evalharness.cli serve --port 8787 --agent deepseek_pro
+python3 -m evalharness.cli run --agent deepseek_pro --judge deepseek_pro
 ```
 
 Or pass a custom env file:
 
 ```bash
-python3 -m evalharness.cli --env-file .env.local run --agent mimo --judge mimo
+python3 -m evalharness.cli --env-file .env.local run --agent deepseek_flash --judge deepseek_flash
 ```
 
 Defaults:
 
-- no Mimo env: local deterministic agent plus offline trace judge
-- `--agent mimo`: run memory tools first, then ask Mimo to produce the final assistant wording from the tool trace
-- `--judge mimo`: ask Mimo to score the case trace against the six competition dimensions
+- no LLM env in CLI run: local deterministic agent plus offline trace judge
+- `--agent deepseek_pro|deepseek_flash|mimo`: run memory tools first, then ask the selected provider to produce the final assistant wording from the tool trace
+- `--judge deepseek_pro|deepseek_flash|mimo`: ask the selected provider to score the case trace against the six competition dimensions
 
 Set `EVALHARNESS_JUDGE_CMD` to a command that reads case-run JSON from stdin and returns score JSON:
 

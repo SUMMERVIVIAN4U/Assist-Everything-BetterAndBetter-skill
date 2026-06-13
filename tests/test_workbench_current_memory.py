@@ -56,45 +56,37 @@ class WorkbenchCurrentMemoryTest(unittest.TestCase):
         self.assertEqual(payload["engine_label"], "本地Memory")
         self.assertEqual(payload["content"], snapshot)
 
-    def test_memory_store_payload_can_inspect_hosted_and_sdk_independently(self):
+    def test_memory_store_payload_can_inspect_hosted(self):
         hosted = {"ok": True, "count": 1, "memories": [{"memory": "hosted"}]}
-        sdk = {"ok": True, "count": 1, "memories": [{"memory": "sdk"}]}
 
         with patch("evalharness.server._memory_backend_config", return_value=_backend_config("local", True)):
-            with patch("evalharness.server._mem0_memory_for_engine", side_effect=[hosted, sdk]) as mem0_memory:
+            with patch("evalharness.server._mem0_memory_for_engine", return_value=hosted) as mem0_memory:
                 hosted_payload = server._memory_store_payload("mem0_hosted", {"active": []})
-                sdk_payload = server._memory_store_payload("mem0_sdk", {"active": []})
 
         self.assertEqual(hosted_payload["selected_engine"], "local")
         self.assertEqual(hosted_payload["engine"], "mem0_hosted")
         self.assertEqual(hosted_payload["engine_label"], "Mem0 Hosted")
         self.assertEqual(hosted_payload["content"], hosted)
-        self.assertEqual(sdk_payload["engine"], "mem0_sdk")
-        self.assertEqual(sdk_payload["engine_label"], "Mem0 SDK")
-        self.assertEqual(sdk_payload["content"], sdk)
-        mem0_memory.assert_any_call("mem0_hosted")
-        mem0_memory.assert_any_call("mem0_sdk")
+        mem0_memory.assert_called_once_with("mem0_hosted")
 
     def test_memory_store_payload_rejects_unknown_engine(self):
         with self.assertRaises(ValueError):
             server._memory_store_payload("mem0", {"active": []})
 
-    def test_mem0_health_can_check_selected_sdk_before_it_is_saved(self):
-        fake_health = {"ok": True, "stage": "sdk_search", "result_count": 2}
+    def test_memory_store_payload_rejects_mem0_sdk(self):
+        with self.assertRaises(ValueError):
+            server._memory_store_payload("mem0_sdk", {"active": []})
 
-        class FakeClient:
-            def health(self):
-                return dict(fake_health)
-
+    def test_mem0_health_rejects_sdk_alias_to_local(self):
         with patch("evalharness.server._memory_backend_config", return_value=_backend_config("local", True)):
-            with patch("evalharness.server._mem0_client_for_backend", return_value=FakeClient()) as client_factory:
+            with patch("evalharness.server._mem0_client_for_backend") as client_factory:
                 payload = server._mem0_health("mem0_sdk")
 
-        self.assertEqual(payload["stage"], "sdk_search")
-        self.assertEqual(payload["backend"]["backend"], "mem0_sdk")
-        backend, config = client_factory.call_args.args
-        self.assertEqual(backend, "mem0_sdk")
-        self.assertTrue(config.enabled)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["stage"], "config")
+        self.assertEqual(payload["backend"]["backend"], "local")
+        self.assertEqual(payload["error"], "Mem0 is not selected")
+        client_factory.assert_not_called()
 
 
 if __name__ == "__main__":

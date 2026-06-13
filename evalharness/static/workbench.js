@@ -3,23 +3,44 @@ let report = null;
     let selectedCaseKey = null;
     let chatEvalReport = null;
     let performanceReport = null;
+    let scenarios = [];
+    let expandedScenarioId = 'GIFT';
     const dimNames = {reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用', update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'};
     const dimMax = {reproducibility:10, memory_extraction:20, memory_application:25, update_and_decay:20, transparency:10, result_quality:15};
-    const memoryBackendLabels = {local:'本地JSON', mem0_hosted:'Mem0 Hosted', mem0_sdk:'Mem0 SDK'};
-    const memoryBackendCheckLabels = {local:'无需 Check Mem0', mem0_hosted:'Check Mem0 Hosted', mem0_sdk:'Check Mem0 SDK'};
+    const memoryBackendLabels = {local:'本地JSON', mem0_hosted:'Mem0 Hosted'};
+    const memoryBackendCheckLabels = {local:'无需 Check Mem0', mem0_hosted:'Check Mem0 Hosted'};
 
     async function fetchConfig() {
       const cfg = await (await fetch('/api/config')).json();
-      document.getElementById('agentMode').value = cfg.agent_mode || 'local';
+      const providerSelect = document.getElementById('llmProvider');
+      if (Array.isArray(cfg.providers) && cfg.providers.length) {
+        providerSelect.innerHTML = cfg.providers.map(provider => `
+          <option value="${escapeAttr(provider.value)}">${escapeHtml(provider.label)}${provider.configured ? '' : ' · 未配置'}</option>
+        `).join('');
+      }
+      providerSelect.value = cfg.llm_provider || cfg.default_llm_provider || 'deepseek_pro';
+      const health = document.getElementById('llmHealth');
+      if (cfg.llm_configured === false) {
+        health.textContent = 'Provider 未配置，Agent Chat 和 Eval 会要求真实 LLM。';
+      }
     }
     async function fetchReport() {
       report = await (await fetch('/api/report')).json();
       renderCases();
       renderStats();
     }
+    async function fetchScenarios() {
+      try {
+        const data = await (await fetch('/api/scenarios')).json();
+        scenarios = data.items || [];
+        renderScenarioLibrary(data.run_hint || '');
+      } catch (err) {
+        document.getElementById('scenarioLibrary').innerHTML = `<div class="note" style="color:var(--bad)">测试案例加载失败：${escapeHtml(err.message)}</div>`;
+      }
+    }
     async function fetchSettings() {
       settings = await (await fetch('/api/settings')).json();
-      document.getElementById('settingsAgent').textContent = `agent_mode=${settings.agent_mode || ''}`;
+      document.getElementById('settingsAgent').textContent = `llm_provider=${settings.llm_provider || settings.agent_mode || 'deepseek_pro'} · eval=real_llm_only`;
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
       renderMemoryBackendSettings();
       renderChatMemory(settings.current_memory);
@@ -38,7 +59,7 @@ let report = null;
       document.getElementById('settingsView' + id[0].toUpperCase() + id.slice(1)).classList.remove('hidden');
       document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
       el.classList.add('active');
-      const memoryStores = {localMemory:'local', mem0Hosted:'mem0_hosted', mem0Sdk:'mem0_sdk'};
+      const memoryStores = {localMemory:'local', mem0Hosted:'mem0_hosted'};
       if (memoryStores[id]) fetchMemoryStore(memoryStores[id]);
     }
     function privacyItemsFromInput() {
@@ -111,12 +132,12 @@ let report = null;
       const engine = payload.engine_label || payload.selected_engine || '本地JSON';
       const selected = payload.selected_engine || 'local';
       const content = payload.content || {};
-      const count = selected === 'mem0'
+      const count = (selected === 'mem0' || selected === 'mem0_hosted')
         ? (content.count ?? (Array.isArray(content.memories) ? content.memories.length : 0))
         : ((content.active || []).length || 0);
       const suffix = selected === 'mem0'
         ? (content.ok === false ? ` · ${content.stage || 'unavailable'}` : ` · ${count} 条`)
-        : (selected === 'mem0_hosted' || selected === 'mem0_sdk')
+        : selected === 'mem0_hosted'
         ? (content.ok === false ? ` · ${content.stage || 'unavailable'}` : ` · ${count} 条`)
         : ` · active ${count} 条`;
       document.getElementById('chatMemoryStatus').textContent = `记忆功能：${enabled ? '开启' : '关闭'} · 当前引擎：${engine}${suffix}`;
@@ -135,15 +156,13 @@ let report = null;
     function memoryStoreElements(engine) {
       return {
         local: {status:'localMemoryStatus', target:'settingsLocalMemory', label:'本地Memory'},
-        mem0_hosted: {status:'mem0HostedMemoryStatus', target:'settingsMem0HostedMemory', label:'Mem0 Hosted'},
-        mem0_sdk: {status:'mem0SdkMemoryStatus', target:'settingsMem0SdkMemory', label:'Mem0 SDK'}
+        mem0_hosted: {status:'mem0HostedMemoryStatus', target:'settingsMem0HostedMemory', label:'Mem0 Hosted'}
       }[engine];
     }
     function memoryStoreEndpoint(engine) {
       return {
         local: '/api/memory-store?engine=local',
-        mem0_hosted: '/api/memory-store?engine=mem0_hosted',
-        mem0_sdk: '/api/memory-store?engine=mem0_sdk'
+        mem0_hosted: '/api/memory-store?engine=mem0_hosted'
       }[engine];
     }
     async function fetchMemoryStore(engine) {
@@ -175,8 +194,7 @@ let report = null;
       const visible = Array.from(document.querySelectorAll('.settings-view')).find(view => !view.classList.contains('hidden'));
       const stores = {
         settingsViewLocalMemory: 'local',
-        settingsViewMem0Hosted: 'mem0_hosted',
-        settingsViewMem0Sdk: 'mem0_sdk'
+        settingsViewMem0Hosted: 'mem0_hosted'
       };
       if (visible && stores[visible.id]) fetchMemoryStore(stores[visible.id]);
     }
@@ -317,22 +335,19 @@ let report = null;
     function safeJsonParse(text, fallback = {}) {
       try { return JSON.parse(text); } catch { return fallback; }
     }
-    async function runPresetCases() {
-      const list = document.getElementById('caseList');
-      list.innerHTML = '<div class="loading-row"><span class="spinner"></span><span>正在运行 preset evals...</span></div>';
-      report = await (await fetch('/api/run-preset', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({judge:document.getElementById('judge').value, agent:document.getElementById('agentMode').value})})).json();
-      selectedCaseKey = null;
-      renderCases();
-      renderStats();
+    function selectedProvider() {
+      return document.getElementById('llmProvider').value || 'deepseek_pro';
     }
-    async function checkMimoHealth() {
+    async function checkProviderHealth() {
       const el = document.getElementById('llmHealth');
       el.textContent = 'checking...';
       try {
-        const data = await (await fetch('/api/llm-health')).json();
-        el.textContent = data.ok ? `Mimo OK · ${data.stage} · ${data.elapsed_ms}ms` : `Mimo FAIL · ${data.stage} · ${data.error}`;
+        const data = await (await fetch(`/api/llm-health?provider=${encodeURIComponent(selectedProvider())}`)).json();
+        el.textContent = data.ok
+          ? `Provider OK · ${data.label || data.provider} · ${data.model} · ${data.elapsed_ms}ms`
+          : `Provider FAIL · ${data.label || data.provider || ''} · ${data.stage} · ${data.error}`;
       } catch (err) {
-        el.textContent = `Mimo FAIL · ${err.message}`;
+        el.textContent = `Provider FAIL · ${err.message}`;
       }
     }
     async function sendChat() {
@@ -343,10 +358,10 @@ let report = null;
       appendMsg('user', text);
       const thinking = appendMsg('assistant', '正在思考...');
       try {
-        const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, agent:document.getElementById('agentMode').value})})).json();
+        const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, provider:selectedProvider()})})).json();
         updateMsg(thinking, data.error ? ('ERROR: ' + data.error) : data.turn.assistant.content, 'assistant');
         renderChatMemory(data.current_memory || {content:data.memory || {}});
-        document.getElementById('chatEvalStatus').textContent = '对话已更新，当前评分需重新 Run Eval。';
+        document.getElementById('chatEvalStatus').textContent = '对话已更新，当前评分需重新 Run LLM Eval。';
       } catch (err) {
         updateMsg(thinking, 'ERROR: ' + err.message, 'assistant');
       }
@@ -360,7 +375,10 @@ let report = null;
       status.innerHTML = '<span class="loading-row"><span class="spinner"></span><span>正在统一 eval 当前会话...</span></span>';
       panel.innerHTML = '';
       try {
-        chatEvalReport = await (await fetch('/api/run-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({judge:document.getElementById('judge').value})})).json();
+        chatEvalReport = await (await fetch('/api/run-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})})).json();
+        if (chatEvalReport.ok === false) {
+          throw new Error(chatEvalReport.error || '真实 LLM eval 失败');
+        }
         report = chatEvalReport;
         const c = chatEvalReport.cases?.[0];
         status.textContent = c ? `完成：${c.score}/100` : '没有可评估 eval。';
@@ -372,18 +390,18 @@ let report = null;
         panel.innerHTML = `<div class="note" style="color:var(--bad)">ERROR: ${escapeHtml(err.message)}</div>`;
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Run Eval';
+        btn.textContent = 'Run LLM Eval';
       }
     }
     async function resetSession() {
-      await fetch('/api/reset-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({agent:document.getElementById('agentMode').value})});
+      await fetch('/api/reset-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})});
       document.getElementById('chatlog').innerHTML = '';
       document.getElementById('chatEvalStatus').textContent = 'Session 已重置；memory 保持不变。';
       document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
       refreshChatMemory();
     }
     async function resetMemory() {
-      const data = await (await fetch('/api/reset-memory', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({agent:document.getElementById('agentMode').value})})).json();
+      const data = await (await fetch('/api/reset-memory', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})})).json();
       appendMsg('assistant', data.response?.text || '已重置 memory。');
       renderChatMemory(data.current_memory || {content:data.memory || {}});
       const remote = data.mem0_reset;
@@ -392,8 +410,49 @@ let report = null;
         : remote?.action === 'reset'
         ? `当前记忆引擎已重置${remote.ok === false ? '失败' : ''}。`
         : 'Mem0 未启用或未配置。';
-      document.getElementById('chatEvalStatus').textContent = `Memory 已重置；${remoteText} Run Eval 后刷新评分。`;
+      document.getElementById('chatEvalStatus').textContent = `Memory 已重置；${remoteText} Run LLM Eval 后刷新评分。`;
       refreshVisibleMemoryStore();
+    }
+    function renderScenarioLibrary(runHint = '') {
+      const target = document.getElementById('scenarioLibrary');
+      if (!scenarios.length) {
+        target.innerHTML = '<div class="muted">暂无测试案例。</div>';
+        return;
+      }
+      const optimizedCount = scenarios.filter(item => item.optimized).length;
+      document.getElementById('scenarioStatus').textContent = runHint || `${scenarios.length} 个测试案例，其中 ${optimizedCount} 个是近期针对性优化场景。`;
+      target.innerHTML = scenarios.map(scenario => scenarioCard(scenario)).join('');
+    }
+    function scenarioCard(scenario) {
+      const expanded = scenario.id === expandedScenarioId;
+      const notes = scenario.optimization_notes || [];
+      return `<div class="scenario-card ${expanded ? 'active' : ''}">
+        <button class="scenario-title" onclick="toggleScenario('${escapeAttr(scenario.id)}')">
+          <span>
+            <b>${escapeHtml(scenario.id)} · ${escapeHtml(scenario.title)}</b>
+            <span class="muted">${escapeHtml(scenario.module || scenario.domain || '')}</span>
+          </span>
+          <span class="chip ${scenario.optimized ? 'good' : ''}">${scenario.optimized ? '已优化' : '基线'}</span>
+        </button>
+        ${expanded ? `
+          <div class="scenario-notes">${notes.map(note => `<span class="chip good">${escapeHtml(note)}</span>`).join('') || '<span class="muted">通用 preset case。</span>'}</div>
+          <div class="scenario-steps">${(scenario.steps || []).map((step, index) => `
+            <button class="scenario-step" onclick="fillScenarioStep('${escapeAttr(step.text)}')">
+              <span class="step-index">${index + 1}</span>
+              <span><b>${escapeHtml(step.label)}</b><span>${escapeHtml(step.text)}</span></span>
+            </button>
+          `).join('')}</div>
+        ` : ''}
+      </div>`;
+    }
+    function toggleScenario(id) {
+      expandedScenarioId = expandedScenarioId === id ? '' : id;
+      renderScenarioLibrary();
+    }
+    function fillScenarioStep(text) {
+      const input = document.getElementById('chatInput');
+      input.value = text;
+      input.focus();
     }
     function appendMsg(role, content) {
       const div = document.createElement('div');
@@ -427,7 +486,7 @@ let report = null;
         <button class="case-btn ${r.key === selectedCaseKey ? 'active' : ''}" onclick="selectCase('${escapeAttr(r.key)}')">
           <div class="case-head"><b>${escapeHtml(r.c.id)} ${escapeHtml(r.c.title || '')}</b><span class="score">${r.c.score}</span></div>
           <div class="muted">${escapeHtml(r.run.source || r.run.harness?.eval_source || '')} · ${formatTime(r.run.created_at)}</div>
-          <div class="chips"><span class="chip">费力度 ${r.c.user_effort?.final_score ?? '-'}</span><span class="chip good">节省 ${r.c.user_effort?.saved_score ?? 0}</span></div>
+          <div class="chips"><span class="chip">费力度 ${r.c.user_effort?.final_score ?? '-'}</span><span class="chip good">记忆节省信息点 ${r.c.user_effort?.memory_saving_points ?? r.c.user_effort?.saved_score ?? 0}</span></div>
         </button>`).join('');
       const selected = rows.find(r => r.key === selectedCaseKey);
       document.getElementById('caseDetail').innerHTML = renderEvalCase(selected.c, {run:selected.run});
@@ -441,6 +500,7 @@ let report = null;
           <div class="metric"><span class="muted">历史 eval 数</span><b>${rows.length}</b></div>
           <div class="metric"><span class="muted">最新平均分</span><b>${latest.config_average ?? '-'}</b></div>
           <div class="metric"><span class="muted">最新平均费力度</span><b>${latest.effort_average ?? '-'}</b></div>
+          <div class="metric"><span class="muted">平均记忆节省信息点</span><b>${latest.memory_saving_points_average ?? latest.saved_effort_average ?? '-'}</b></div>
         </div>
         <div class="panel" style="margin-top:12px"><h2>历史运行</h2>
           <div class="turn-list">${(report?.history || []).map(run => `<div class="turn-card"><div class="case-head"><b>${escapeHtml(run.run_id || '')}</b><span class="score">${run.summary?.config_average ?? '-'}</span></div><div class="muted">${escapeHtml(run.source || '')} · ${formatTime(run.created_at)}</div></div>`).join('') || '<div class="muted">暂无历史运行。</div>'}</div>
@@ -454,10 +514,10 @@ let report = null;
           <div class="case-head"><div><h2>${escapeHtml(c.id || '')} ${escapeHtml(c.title || '')}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div><span class="score">${c.score ?? '-'}/100</span></div>
           <div class="metrics">
             <div class="metric"><span class="muted">六维总分</span><b>${c.score ?? '-'}</b><div class="muted">六个维度的综合质量分，越高越好。</div></div>
-            <div class="metric"><span class="muted">用户费力度</span><b>${effort.final_score ?? '-'}</b><div class="muted">累计成本点数，越低越省力。</div></div>
-            <div class="metric"><span class="muted">记忆节省</span><b>${effort.saved_score ?? effort.reduction ?? 0}</b><div class="muted">因应用/更新记忆预计少解释的成本。</div></div>
+            <div class="metric"><span class="muted">费力度</span><b>${effort.final_score ?? '-'}</b><div class="muted">每轮用户输入、补充、重复说明、纠错和严重错误累计的沟通成本。</div></div>
+            <div class="metric"><span class="muted">记忆节省信息点</span><b>${effort.memory_saving_points ?? effort.saved_score ?? effort.reduction ?? 0}</b><div class="muted">本轮回答正确复用、且用户没有重复说明的记忆信息点数量。</div></div>
           </div>
-          <div class="note">费力度按加法计算：用户轮数、输入长度、追问、重复说明、纠错、不满、语义违规都会加成本；记忆应用和记忆变化只计入“记忆节省”，不再把成本扣成负数。</div>
+          <div class="note">当前采用双账本：费力度和记忆节省信息点分别累计，不相互抵扣。节省信息点只统计被正确复用的信息，不把新增、删除或更新记忆本身当作节省。</div>
           <div class="dims">${Object.entries(c.scores || {}).filter(([k])=>k!=='total').map(([k,v]) => `<div class="dim"><span class="muted">${dimNames[k] || k}</span><b>${v} / ${dimMax[k] || '-'}</b></div>`).join('')}</div>
           <div class="chips">
             <span class="chip">任务交付 ${checks.delivered_task_turns || 0}/${checks.task_turns || 0}</span>
@@ -482,9 +542,14 @@ let report = null;
         </div>
         <div class="subgrid">
           <div class="mini"><b>Memory</b><div class="muted">${escapeHtml(memory.explanation || '')}</div>${applied.map(m => `<div class="event"><span class="chip">${escapeHtml(m.type)}</span><div class="body">${escapeHtml(m.content)}</div></div>`).join('')}${actions.map(a => `<div class="event"><span class="chip">${escapeHtml(a.action)}</span><div class="body">${escapeHtml(a.detail || '')}</div></div>`).join('')}</div>
-          <div class="mini"><b>费力度</b><div class="body">成本 ${effort.before ?? 0} → ${effort.after ?? 0}，本轮 +${effort.delta ?? 0}</div><div class="body">节省 ${effort.saved_before ?? 0} → ${effort.saved_after ?? 0}，本轮 +${effort.saved_delta ?? 0}</div><div class="muted">${escapeHtml(t.evaluation?.explanation || '')}</div></div>
+          <div class="mini"><b>费力度 / 记忆节省信息点</b><div class="body">费力度 ${effort.before ?? 0} → ${effort.after ?? 0}，本轮 +${effort.delta ?? 0}</div><div class="body">记忆节省信息点 ${effort.saved_before ?? 0} → ${effort.saved_after ?? 0}，本轮 +${effort.saved_delta ?? 0}</div>${memorySavingPointsHtml(effort)}<div class="muted">${escapeHtml(t.evaluation?.explanation || '')}</div></div>
         </div>
       </div>`;
+    }
+    function memorySavingPointsHtml(effort) {
+      const points = effort.memory_saving_points || [];
+      if (!points.length) return '';
+      return `<div class="chips">${points.map(point => `<span class="chip good">${escapeHtml(point)}</span>`).join('')}</div>`;
     }
     function brief(text, max = 180) {
       const clean = String(text || '').replace(/\n{2,}/g, '\n').trim();
@@ -496,4 +561,4 @@ let report = null;
     }
     function escapeAttr(str) { return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
     function escapeHtml(str) { return String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-    fetchConfig().then(fetchReport).then(fetchSettings);
+    fetchConfig().then(fetchScenarios).then(fetchReport).then(fetchSettings);

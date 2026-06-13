@@ -6,17 +6,42 @@ import socket
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from dataclasses import replace
 from typing import Any
 
 from .env import load_env
 
+DEFAULT_LLM_PROVIDER = "deepseek_pro"
+LLM_PROVIDER_LABELS = {
+    "deepseek_pro": "DeepSeek V4 Pro",
+    "deepseek_flash": "DeepSeek V4 Flash",
+    "mimo": "Mimo",
+}
+LLM_PROVIDER_ALIASES = {
+    "deepseek": "deepseek_pro",
+    "deepseek-pro": "deepseek_pro",
+    "deepseek_v4_pro": "deepseek_pro",
+    "deepseek-v4-pro": "deepseek_pro",
+    "deepseek-flash": "deepseek_flash",
+    "deepseek_v4_flash": "deepseek_flash",
+    "deepseek-v4-flash": "deepseek_flash",
+    "mimo": "mimo",
+}
+
 
 @dataclass(frozen=True)
-class MimoConfig:
+class LLMConfig:
     api_key: str
     base_url: str
     model: str
     timeout: float = 60.0
+    provider: str = "custom"
+    label: str = "LLM"
+
+
+@dataclass(frozen=True)
+class MimoConfig(LLMConfig):
+    """Backward-compatible Mimo config wrapper."""
 
     @classmethod
     def from_env(cls) -> "MimoConfig":
@@ -29,14 +54,16 @@ class MimoConfig:
             base_url=os.getenv("MIMO_BASE_URL", "https://api.mimo.chat/v1").rstrip("/"),
             model=os.getenv("MIMO_MODEL", "mimo-v1"),
             timeout=float(os.getenv("MIMO_TIMEOUT", "60")),
+            provider="mimo",
+            label=LLM_PROVIDER_LABELS["mimo"],
         )
 
 
-class MimoClient:
-    """Minimal OpenAI-compatible chat client for Mimo-style LLM endpoints."""
+class OpenAICompatibleClient:
+    """Minimal OpenAI-compatible chat client."""
 
-    def __init__(self, config: MimoConfig | None = None) -> None:
-        self.config = config or MimoConfig.from_env()
+    def __init__(self, config: LLMConfig) -> None:
+        self.config = config
 
     def chat(
         self,
@@ -69,15 +96,15 @@ class MimoClient:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Mimo HTTP {exc.code}: {body}") from exc
+            raise RuntimeError(f"{self.config.label} HTTP {exc.code}: {body}") from exc
         except (TimeoutError, socket.timeout, urllib.error.URLError) as exc:
             raise RuntimeError(
-                f"Mimo request timed out or failed after {self.config.timeout:g}s "
+                f"{self.config.label} request timed out or failed after {self.config.timeout:g}s "
                 f"for model {self.config.model} at {self.config.base_url}: {exc}"
             ) from exc
         content = data["choices"][0]["message"]["content"]
         if not isinstance(content, str):
-            raise RuntimeError("Mimo response content is not a string")
+            raise RuntimeError(f"{self.config.label} response content is not a string")
         return content
 
     def json_chat(self, messages: list[dict[str, str]], *, temperature: float = 0.0) -> dict[str, Any]:
@@ -89,9 +116,80 @@ class MimoClient:
         return _parse_json_object(content)
 
 
-def mimo_configured() -> bool:
+class MimoClient(OpenAICompatibleClient):
+    """Backward-compatible Mimo client wrapper."""
+
+    def __init__(self, config: MimoConfig | None = None) -> None:
+        super().__init__(config or MimoConfig.from_env())
+
+
+def normalize_llm_provider(provider: str | None) -> str:
+    value = str(provider or DEFAULT_LLM_PROVIDER).strip().lower()
+    return LLM_PROVIDER_ALIASES.get(value, value if value in LLM_PROVIDER_LABELS else DEFAULT_LLM_PROVIDER)
+
+
+def supported_llm_providers() -> list[dict[str, Any]]:
     load_env()
-    return bool(os.getenv("MIMO_API_KEY", "").strip())
+    return [
+        {"value": provider, "label": label, "configured": llm_configured(provider)}
+        for provider, label in LLM_PROVIDER_LABELS.items()
+    ]
+
+
+def llm_config_from_env(provider: str | None = None) -> LLMConfig:
+    load_env()
+    normalized = normalize_llm_provider(provider)
+    if normalized == "mimo":
+        return MimoConfig.from_env()
+    if normalized in {"deepseek_pro", "deepseek_flash"}:
+        api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY is not configured")
+        model_env = "DEEPSEEK_PRO_MODEL" if normalized == "deepseek_pro" else "DEEPSEEK_FLASH_MODEL"
+        default_model = "deepseek-v4-pro" if normalized == "deepseek_pro" else "deepseek-v4-flash"
+        return LLMConfig(
+            api_key=api_key,
+            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").rstrip("/"),
+            model=os.getenv(model_env, default_model).strip() or default_model,
+            timeout=float(os.getenv("DEEPSEEK_TIMEOUT", "60")),
+            provider=normalized,
+            label=LLM_PROVIDER_LABELS[normalized],
+        )
+    raise ValueError(f"Unsupported LLM provider: {provider}")
+
+
+def llm_client_from_env(provider: str | None = None, *, timeout: float | None = None) -> OpenAICompatibleClient:
+    config = llm_config_from_env(provider)
+    if timeout is not None:
+        config = replace(config, timeout=timeout)
+    return OpenAICompatibleClient(config)
+
+
+def llm_configured(provider: str | None = None) -> bool:
+    load_env()
+    normalized = normalize_llm_provider(provider)
+    if normalized == "mimo":
+        return bool(os.getenv("MIMO_API_KEY", "").strip())
+    if normalized in {"deepseek_pro", "deepseek_flash"}:
+        return bool(os.getenv("DEEPSEEK_API_KEY", "").strip())
+    return False
+
+
+def any_llm_configured() -> bool:
+    return any(llm_configured(provider) for provider in LLM_PROVIDER_LABELS)
+
+
+def default_configured_provider() -> str:
+    if llm_configured(DEFAULT_LLM_PROVIDER):
+        return DEFAULT_LLM_PROVIDER
+    for provider in LLM_PROVIDER_LABELS:
+        if llm_configured(provider):
+            return provider
+    return DEFAULT_LLM_PROVIDER
+
+
+def mimo_configured() -> bool:
+    return llm_configured("mimo")
 
 
 def _parse_json_object(content: str) -> dict[str, Any]:

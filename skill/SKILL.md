@@ -57,20 +57,18 @@ Statuses:
 
 Default runtime storage is local Markdown/JSON under `ASSIST_MEMORY_DIR`; Workbench uses `memories/workbench/`. `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs.
 
-The Workbench can switch the long-term memory engine between three mutually exclusive adapters:
+The Workbench can switch the long-term memory engine between two mutually exclusive adapters:
 
 - `LocalMemoryStore`: 本地 JSON/Markdown, using the skill's transparent local extraction and audit trail
-- `HostedMem0Client`: hosted or REST-compatible Mem0, letting that backend perform extraction
-- `Mem0SdkClient`: open-source `mem0ai` Python SDK in local library mode, letting the SDK perform extraction
+- `HostedMem0Client`: hosted or REST-compatible Mem0, using the skill's structured extraction and Mem0 as durable storage/search
 
 Only one engine is active at a time. Extraction rules are mutually exclusive, and memory results are mutually exclusive:
 
 - local mode never mirrors extracted memories to Mem0
-- hosted Mem0 mode sends raw user/context text to HostedMem0Client and does not run local extraction
-- Mem0 SDK mode sends raw user/context text to Mem0SdkClient and does not run local extraction
+- hosted Mem0 mode runs the same structured extraction path as local mode, then stores structured memories remotely
 - UI snapshots may share the same display structure, but the content must come only from the selected engine
 
-Retrieval ranking is unified across all three engines. Each adapter may produce candidates differently, but before memories are applied to a response the runtime must:
+Retrieval ranking is unified across both engines. Each adapter may produce candidates differently, but before memories are applied to a response the runtime must:
 
 - keep only `active` items and filter polluted or deleted content
 - annotate each candidate with `validity.retrieval_score` and `validity.retrieval_rank_strategy=score_time`
@@ -81,14 +79,14 @@ When Mem0 is selected, do not expose endpoint URLs, project IDs, or API keys in 
 
 Configuration:
 
-- `ASSIST_MEMORY_BACKEND=local|mem0_hosted|mem0_sdk`
+- `ASSIST_MEMORY_BACKEND=local|mem0_hosted`
 - `ASSIST_MEMORY_ENABLED=0|1`
 - `MEM0_BASE_URL`
 - `MEM0_API_KEY`
 - `MEM0_USER_ID`
 - `MEM0_APP_ID`
 
-Mem0 SDK mode requires `pip install mem0ai`. Its storage/model provider configuration is owned by the SDK/runtime environment; keep project paths git-ignored when storing local vectors or history.
+Keep the public path focused on local JSON for the competition demo and Hosted Mem0 for durable external memory.
 
 ## Workbench Features
 
@@ -103,7 +101,7 @@ Workbench tabs:
 - `Agent Chat`: live conversation through the same `process_message(...)` path as evals.
 - `History Evals`: saved preset and chat eval runs.
 - `统计`: summary metrics across historical runs.
-- `Performance Demo`: 本地 JSON、Mem0 Hosted、Mem0 SDK 的超大记忆端到端性能演示，展示写入、检索、score+time 排序、样例 TopK、阶段耗时和 reset 结果。
+- `Performance Demo`: 本地 JSON、Mem0 Hosted 的超大记忆端到端性能演示，展示写入、检索、score+time 排序、样例 TopK、阶段耗时和 reset 结果。
 - `设置`: Agent 配置, Workbench Memory, Mem0 Memory, 隐私设置.
 
 Agent Chat must keep the right-side `当前 Memory` panel intuitive:
@@ -129,7 +127,7 @@ Performance Demo rules:
 - 检索样例使用与运行时一致的统一策略：按 `retrieval_score` 降序，再按更新时间降序，并标记 `retrieval_rank_strategy=score_time`。
 - `Reset Demo Memory` 只清理隔离 demo 用户的记忆；不得清理当前 Agent Chat 用户或全局记忆库。
 
-Reset Memory must reset only the selected engine. For HostedMem0Client and Mem0SdkClient, deletion/reset must be scoped to the configured `user_id`; never call a global reset when user-scoped deletion is available.
+Reset Memory must reset only the selected engine. For HostedMem0Client, deletion/reset must be scoped to the configured `user_id`; never call a global reset when user-scoped deletion is available.
 
 Because Mem0 automatic extraction is less explainable than the local MemoryItem path, every remote action must still expose a trace event with backend, raw detail, success/failure, and returned result summary.
 

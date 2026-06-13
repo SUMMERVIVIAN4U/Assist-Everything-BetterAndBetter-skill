@@ -18,9 +18,7 @@ class SkillMarkdownContractTest(unittest.TestCase):
             "/api/current-memory",
             "LocalMemoryStore",
             "HostedMem0Client",
-            "Mem0SdkClient",
             "mutually exclusive",
-            "mem0_sdk",
             "user_id",
         ]
         for token in required:
@@ -34,7 +32,6 @@ class SkillMarkdownContractTest(unittest.TestCase):
             'id="checkMem0Button"',
             '<option value="local">本地JSON</option>',
             '<option value="mem0_hosted">Mem0 Hosted</option>',
-            '<option value="mem0_sdk">Mem0 SDK</option>',
         ]
         for token in required:
             with self.subTest(token=token):
@@ -46,17 +43,16 @@ class SkillMarkdownContractTest(unittest.TestCase):
         required_html = [
             "本地Memory",
             "Mem0 Hosted",
-            "Mem0 SDK",
             'id="settingsLocalMemory"',
             'id="settingsMem0HostedMemory"',
-            'id="settingsMem0SdkMemory"',
         ]
         for token in required_html:
             with self.subTest(token=token):
                 self.assertIn(token, html)
         self.assertIn("/api/memory-store?engine=local", js)
         self.assertIn("/api/memory-store?engine=mem0_hosted", js)
-        self.assertIn("/api/memory-store?engine=mem0_sdk", js)
+        self.assertNotIn("/api/memory-store?engine=mem0_sdk", js)
+        self.assertNotIn("Mem0 SDK", html)
 
     def test_memory_backend_selection_updates_preview_and_health_check(self):
         js = Path("evalharness/static/workbench.js").read_text(encoding="utf-8")
@@ -64,7 +60,6 @@ class SkillMarkdownContractTest(unittest.TestCase):
             "function previewMemoryBackendSelection()",
             "document.getElementById('checkMem0Button')",
             "Check Mem0 Hosted",
-            "Check Mem0 SDK",
             "无需 Check Mem0",
             "/api/mem0-health?engine=",
         ]

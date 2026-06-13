@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Client, Mem0Config, Mem0SdkClient
+from assist_everything_betterandbetter_skill.memory import MemoryItem
 from assist_everything_betterandbetter_skill.skill import AssistSkill
 
 
@@ -185,7 +186,30 @@ class MemoryAdapterTest(unittest.TestCase):
                     return {"event_id": "evt_new"}
 
                 def search(self, query, top_k=8):
-                    return []
+                    from assist_everything_betterandbetter_skill.mem0_backend import _item_from_mem0_result
+
+                    return [
+                        _item_from_mem0_result(
+                            {
+                                "id": "remote_purple",
+                                "memory": "女朋友的礼物偏好/背景：她喜欢紫色；如果是首饰，她喜欢玫瑰金",
+                                "score": 0.99,
+                                "metadata": {
+                                    "assist_memory": {
+                                        "id": "mem_purple",
+                                        "type": "preference",
+                                        "scope": "gift_planning",
+                                        "content": "女朋友的礼物偏好/背景：她喜欢紫色；如果是首饰，她喜欢玫瑰金",
+                                        "target": "女朋友",
+                                        "predicate": "likes",
+                                        "status": "active",
+                                        "confidence": 0.93,
+                                        "tags": ["紫色"],
+                                    }
+                                },
+                            }
+                        )
+                    ]
 
                 def get_all(self, page_size=50):
                     return {
@@ -223,6 +247,97 @@ class MemoryAdapterTest(unittest.TestCase):
             actions = response.memory_actions
             self.assertTrue(any(action["action"] == "downgrade" and action["backend"] == "mem0_hosted" for action in actions))
             self.assertTrue(any(action["action"] == "add" and action["backend"] == "mem0_hosted" for action in actions))
+
+    def test_hosted_mem0_backend_deletes_remote_matching_memory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(
+                memory_dir=tmp,
+                persist=True,
+                mem0_config=Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id="u1"),
+                memory_backend="mem0_hosted",
+            )
+
+            class FakeHosted:
+                def __init__(self):
+                    self.deleted_ids = []
+
+                def get_all(self, page_size=50):
+                    return {
+                        "results": [
+                            {
+                                "id": "remote_purple",
+                                "memory": "女朋友的礼物偏好/背景：她喜欢紫色；如果是首饰，她喜欢玫瑰金",
+                                "metadata": {
+                                    "assist_memory": {
+                                        "id": "mem_purple",
+                                        "type": "preference",
+                                        "scope": "gift_planning",
+                                        "content": "女朋友的礼物偏好/背景：她喜欢紫色；如果是首饰，她喜欢玫瑰金",
+                                        "target": "女朋友",
+                                        "predicate": "likes",
+                                        "status": "active",
+                                        "confidence": 0.93,
+                                        "tags": ["紫色"],
+                                    }
+                                },
+                            }
+                        ]
+                    }
+
+                def search(self, query, top_k=8):
+                    return []
+
+                def delete(self, memory_id):
+                    self.deleted_ids.append(memory_id)
+                    return {"deleted": memory_id}
+
+            fake = FakeHosted()
+            skill.mem0_client = fake
+
+            response = skill.process_message("删除 她喜欢紫色。然后：再给一个不重复的礼物方向。")
+
+            self.assertEqual(["remote_purple"], fake.deleted_ids)
+            self.assertTrue(any(action["action"] == "delete" and action["ok"] for action in response.memory_actions))
+            self.assertIn("推荐方向", response.text)
+            self.assertEqual([], response.applied_memories)
+
+    def test_hosted_mem0_search_filters_cross_scope_candidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(
+                memory_dir=tmp,
+                persist=True,
+                mem0_config=Mem0Config(enabled=True, base_url="https://mem0.example", api_key="k", user_id="u1"),
+                memory_backend="mem0_hosted",
+            )
+
+            class FakeHosted:
+                def search(self, query, top_k=8):
+                    return [
+                        MemoryItem(
+                            type="preference",
+                            content="学习计划请先看例题再讲知识点",
+                            scope="study_plan",
+                            subject="user",
+                            predicate="prefers",
+                        ),
+                        MemoryItem(
+                            type="constraint",
+                            content="给女朋友选礼物预算在 1000 元左右",
+                            scope="gift_planning",
+                            subject="recipient",
+                            target="女朋友",
+                            predicate="budget_limit",
+                        ),
+                    ]
+
+            skill.mem0_client = FakeHosted()
+
+            memories = skill.retrieve_relevant_memories(
+                "给我一个礼物推荐。",
+                context="user: 帮我给女朋友选个生日礼物。",
+            )
+
+            self.assertEqual(["gift_planning"], [item.scope for item in memories])
 
 
 if __name__ == "__main__":

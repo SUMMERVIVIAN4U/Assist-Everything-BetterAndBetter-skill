@@ -4,6 +4,7 @@ import argparse
 import json
 
 from .env import load_env
+from .llm import DEFAULT_LLM_PROVIDER, LLM_PROVIDER_LABELS
 from .runner import run_all
 from .server import serve
 
@@ -14,11 +15,11 @@ def main() -> None:
     sub = parser.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run")
     run.add_argument("--output", default="eval/output/latest")
-    run.add_argument("--judge", default="heuristic", choices=["auto", "heuristic", "external", "mimo"])
-    run.add_argument("--agent", default="local", choices=["local", "mimo"])
+    run.add_argument("--judge", default="heuristic", choices=["auto", "heuristic", "external", *LLM_PROVIDER_LABELS.keys()])
+    run.add_argument("--agent", default="local", choices=["local", *LLM_PROVIDER_LABELS.keys()])
     server = sub.add_parser("serve")
     server.add_argument("--port", type=int, default=8787)
-    server.add_argument("--agent", default="local", choices=["auto", "local", "mimo"])
+    server.add_argument("--agent", default=DEFAULT_LLM_PROVIDER, choices=list(LLM_PROVIDER_LABELS), help="Workbench only supports real LLM mode.")
     args = parser.parse_args()
     load_env(args.env_file)
 
