@@ -301,6 +301,8 @@ class MemoryAdvantagesTest(unittest.TestCase):
 
         followup = self.skill.process_message("帮我安排上海 1 天亲子自然路线。")
         self.assertEqual([], followup.asks)
+        self.assertFalse(any(action["action"] == "propose" for action in followup.memory_actions))
+        self.assertFalse(any("上海 1 天亲子自然路线" in action.get("detail", "") for action in followup.memory_actions))
 
     def test_current_task_memory_does_not_cross_skill_session(self):
         self.skill.process_message("这次父亲不去，只有我和孩子，少步行不适用。", context="user: 帮我安排杭州3天亲子旅行。")

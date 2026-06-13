@@ -1394,9 +1394,46 @@ def _is_polluted_memory_item(item: MemoryItem) -> bool:
 
 def _is_plain_task_request(text: str) -> bool:
     stripped = text.strip(" 。！？!?")
-    if any(token in stripped for token in ["以后", "记住", "喜欢", "不喜欢", "不要", "不能", "预算", "选定"]):
+    if any(
+        token in stripped
+        for token in [
+            "以后",
+            "记住",
+            "同意保存",
+            "确认保存",
+            "喜欢",
+            "不喜欢",
+            "不要",
+            "不用",
+            "不能",
+            "预算",
+            "这次",
+            "本次",
+            "改成",
+            "保留",
+            "不适用",
+            "选定",
+            "选了",
+            "定了",
+            "决定",
+            "就这个",
+            "就它",
+            "买了",
+            "下单",
+            "送过",
+            "以前送过",
+        ]
+    ):
         return False
-    return stripped in {"给我一个推荐"}
+    task_patterns = [
+        r"^(帮我)?安排.{0,30}(旅行|行程|路线|半日游|周末|亲子)",
+        r"^(帮我)?规划.{0,30}(旅行|行程|路线|半日游|周末|亲子|复习|学习)",
+        r"^(帮我)?做一个.{0,30}(计划|方案|复习计划)",
+        r"^(帮我)?写一份.{0,30}(材料|周报|报告|综述|方案)",
+        r"^(帮我)?整理.{0,30}(材料|周报|报告|方案)",
+        r"^(给我|帮我|再给|那再给).{0,12}(推荐|方向|方案)",
+    ]
+    return any(re.search(pattern, stripped) for pattern in task_patterns)
 
 
 def _has_memory_signal(text: str, context: str = "") -> bool:
