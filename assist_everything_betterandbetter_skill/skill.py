@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from .mem0_backend import HostedMem0Client, Mem0Config, _item_from_mem0_result, _mem0_results
 from .memory import ACTIVE, DELETED, SUPERSEDED, MemoryItem, MemoryStore, _normalize_query
@@ -23,6 +24,10 @@ PRIVATE_MARKERS = ("密码", "token", "密钥", "身份证", "银行卡", "验�
 HIGH_CONFIDENCE_MARKERS = ("以后", "下次", "一直", "总是", "必须", "绝对", "特别", "非常", "决定", "确定", "定了")
 UNCERTAIN_MARKERS = ("可能", "也许", "考虑", "随便", "算了", "不重要", "？", "?")
 STRUCTURED_MEMORY_TYPES = {CONSTRAINT, WORKFLOW, DECISION, HISTORY, CONTEXT_FACT}
+TIME_CURRENT_TASK = "current_task"
+TIME_SCENE_MEMORY = "scene_memory"
+TIME_LONG_TERM = "long_term"
+TIME_PAST = "past"
 
 
 @dataclass
@@ -75,6 +80,7 @@ class AssistSkill:
         self.mem0_config = mem0_config or _mem0_config_from_env()
         self.memory_backend = _normalize_memory_backend(memory_backend or os.getenv("ASSIST_MEMORY_BACKEND", "local"))
         self.mem0_client = HostedMem0Client(self.mem0_config) if self.memory_backend == "mem0_hosted" and self.mem0_config.ready else None
+        self.session_id = f"session_{uuid4().hex[:8]}"
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
         if not self.memory_enabled:
@@ -112,7 +118,7 @@ class AssistSkill:
             actions,
             [item.id for item in relevant],
             asks,
-            diagnostics={"memory_mode": memory_mode, "profile": self.memory_profile()},
+            diagnostics={"memory_mode": memory_mode, "profile": self.memory_profile(), "memory_pack": self.relevant_memory_pack(text, relevant, context)},
         )
 
     def reset_memory(self) -> SkillResponse:
@@ -312,6 +318,8 @@ class AssistSkill:
                 continue
             if not _memory_scope_matches(item, scope) or not _memory_target_matches(item, scope, target):
                 continue
+            if not self._memory_applies_now(item, text, context):
+                continue
             haystack = " ".join(
                 [
                     item.content,
@@ -328,6 +336,58 @@ class AssistSkill:
             if scope != "general" or term_hit:
                 relevant.append(item)
         return _rank_retrieved_memories(relevant, text, context, limit=8)
+
+    def relevant_memory_pack(self, text: str, memories: list[MemoryItem], context: str = "") -> dict[str, Any]:
+        scene = self._matching_scene_memories(text, context)
+        return {
+            "apply_now": [_memory_pack_item(item) for item in memories],
+            "confirm_first": [_memory_pack_item(item) for item in scene],
+            "suppressed": [],
+        }
+
+    def _memory_applies_now(self, item: MemoryItem, text: str, context: str = "") -> bool:
+        time_scope = _time_scope(item)
+        if time_scope == TIME_CURRENT_TASK:
+            return item.validity.get("session_id") == self.session_id
+        if time_scope == TIME_SCENE_MEMORY:
+            return _scene_memory_confirmed_by_text(item, text, context)
+        if time_scope == TIME_PAST:
+            scope = _infer_scope(text, context)
+            return scope == "gift_planning" or _contains_any(text, ["以前", "之前", "历史", "送过", "买过", "避开重复"])
+        return True
+
+    def _matching_scene_memories(self, text: str, context: str = "") -> list[MemoryItem]:
+        if _scene_memory_answered_by_current_text(text):
+            return []
+        scope = _infer_scope(text, context)
+        target = _infer_target(text, scope) or _infer_target(context, scope)
+        if self.memory_backend == "mem0_hosted":
+            active = self._remote_active_items(self.mem0_client)
+        else:
+            active = self.memory.active()
+        scene = [
+            item
+            for item in active
+            if _time_scope(item) == TIME_SCENE_MEMORY
+            and not _is_polluted_memory_item(item)
+            and _memory_scope_matches(item, scope)
+            and _memory_target_matches(item, scope, target)
+            and not _scene_memory_confirmed_by_text(item, text, context)
+            and not self._current_task_resolves_scene_memory(item, active)
+        ]
+        return _rank_retrieved_memories(scene, text, context, limit=3)
+
+    def _current_task_resolves_scene_memory(self, scene_item: MemoryItem, active_items: list[MemoryItem]) -> bool:
+        if not (scene_item.subject == "father" or "父亲" in scene_item.content or "爸爸" in scene_item.content):
+            return False
+        for item in active_items:
+            if _time_scope(item) != TIME_CURRENT_TASK:
+                continue
+            if item.validity.get("session_id") != self.session_id:
+                continue
+            if _contains_any(item.content, ["父亲不去", "爸爸不去", "只有我和孩子", "少步行限制不适用", "步行限制不适用"]):
+                return True
+        return False
 
     def compose_response(
         self,
@@ -461,10 +521,12 @@ class AssistSkill:
             ]
         if self.memory_backend == "mem0_hosted":
             return self._apply_remote_structured_updates(self.mem0_client, "mem0_hosted", text, context)
-        for match in self._conflicting_memories(text, context):
-            self.memory.downgrade(match.id, f"新反馈缩小或推翻旧规则：{text}")
-            actions.append(self.memory.events[-1])
+        if not _is_temporary_override(text):
+            for match in self._conflicting_memories(text, context):
+                self.memory.downgrade(match.id, f"新反馈缩小或推翻旧规则：{text}")
+                actions.append(self.memory.events[-1])
         for item in self.extract_memory_candidates(text, context):
+            self._prepare_memory_item(item)
             confidence, confidence_reason = _confidence_for_memory(text, item)
             item.confidence = confidence
             if confidence < 0.5:
@@ -491,11 +553,12 @@ class AssistSkill:
                     }
                 )
                 continue
-            if self._is_duplicate(item):
+            duplicate = self._duplicate_memory(item)
+            if duplicate:
                 actions.append(
                     {
                         "action": "dedupe",
-                        "memory_id": None,
+                        "memory_id": duplicate.id,
                         "detail": item.content,
                         "confidence": confidence,
                         "reason": "duplicate_active_memory",
@@ -509,6 +572,21 @@ class AssistSkill:
             event["approval"] = "auto_high_confidence" if not item.user_approved else "explicit_or_contextual"
             actions.append(event)
         return actions
+
+    def _prepare_memory_item(self, item: MemoryItem) -> MemoryItem:
+        time_scope = _time_scope(item)
+        item.validity["time_scope"] = time_scope
+        item.validity["layer"] = time_scope
+        if time_scope == TIME_CURRENT_TASK:
+            item.validity.setdefault("session_id", self.session_id)
+            item.validity.setdefault("expires", "session_end")
+        if time_scope == TIME_SCENE_MEMORY:
+            item.validity.setdefault("needs_confirmation", True)
+            item.validity.setdefault("default_application", "confirm_first")
+        if time_scope == TIME_LONG_TERM:
+            item.validity.setdefault("needs_confirmation", False)
+            item.validity.setdefault("default_application", "apply")
+        return item
 
     def _apply_remote_updates(self, client: Any, backend: str, text: str, context: str = "") -> list[dict[str, Any]]:
         if not client:
@@ -525,7 +603,7 @@ class AssistSkill:
             return [{"action": "add", "backend": backend, "storage": "remote_structured", "detail": text, "ok": False, "error": "memory backend is not configured"}]
         actions: list[dict[str, Any]] = []
         remote_active = self._remote_active_items(client)
-        for match in self._conflicting_memories(text, context, active_items=remote_active):
+        for match in ([] if _is_temporary_override(text) else self._conflicting_memories(text, context, active_items=remote_active)):
             remote_id = str(match.validity.get("mem0_id") or match.id)
             try:
                 result = client.delete(remote_id)
@@ -556,6 +634,7 @@ class AssistSkill:
                     }
                 )
         for item in self.extract_memory_candidates(text, context):
+            self._prepare_memory_item(item)
             confidence, confidence_reason = _confidence_for_memory(text, item)
             item.confidence = confidence
             if confidence < 0.5:
@@ -584,13 +663,14 @@ class AssistSkill:
                     }
                 )
                 continue
-            if self._is_duplicate(item, active_items=remote_active):
+            duplicate = self._duplicate_memory(item, active_items=remote_active)
+            if duplicate:
                 actions.append(
                     {
                         "action": "dedupe",
                         "backend": backend,
                         "storage": "remote_structured",
-                        "memory_id": None,
+                        "memory_id": duplicate.id,
                         "detail": item.content,
                         "confidence": confidence,
                         "reason": "duplicate_active_memory",
@@ -712,6 +792,7 @@ class AssistSkill:
                 and not _is_polluted_memory_item(item)
                 and _memory_scope_matches(item, scope)
                 and _memory_target_matches(item, scope, target)
+                and self._memory_applies_now(item, text, context)
             ]
             return _rank_retrieved_memories(candidates, text, context, limit=8)
         except Exception:
@@ -849,6 +930,9 @@ class AssistSkill:
         return matches
 
     def _is_duplicate(self, candidate: MemoryItem, active_items: list[MemoryItem] | None = None) -> bool:
+        return self._duplicate_memory(candidate, active_items=active_items) is not None
+
+    def _duplicate_memory(self, candidate: MemoryItem, active_items: list[MemoryItem] | None = None) -> MemoryItem | None:
         active = active_items if active_items is not None else self.memory.active()
         for item in active:
             same_content = item.content == candidate.content and item.scope == candidate.scope
@@ -860,13 +944,19 @@ class AssistSkill:
                 and item.target == candidate.target
                 and item.object == candidate.object
                 and item.predicate == candidate.predicate
+                and _time_scope(item) == _time_scope(candidate)
             )
             if same_content or same_fact:
-                return True
-        return False
+                return item
+        return None
 
     def _approve_pending(self) -> SkillResponse:
         if not self.pending_proposals:
+            active = self.memory.active()
+            if active:
+                active_ids = [item.id for item in active]
+                preview = "；".join(item.content for item in active[:4])
+                return SkillResponse(f"当前没有待授权候选；已有 {len(active)} 条 active 记忆已保存：{preview}", [], active_ids, [])
             return SkillResponse("没有待授权的记忆候选。", [], [], [])
         created = []
         for item in self.pending_proposals:
@@ -882,15 +972,12 @@ class AssistSkill:
         return SkillResponse(f"已拒绝保存 {count} 条候选记忆，不写入长期记忆库。", [], [], [])
 
     def _suggest_followups(self, text: str, memories: list[MemoryItem], context: str = "") -> list[str]:
+        if _explicit_memory_request(text):
+            return []
         scope = _infer_scope(text, context)
-        if scope == "life_family_travel" and not memories:
-            return ["同行人有没有老人、孩子或步行限制？", "偏自然、动物还是城市景点？"]
-        if scope == "work_report" and "老板" not in text and not memories:
-            return ["这份材料是给老板还是跨部门团队？"]
-        if scope == "study_plan" and not memories:
-            return ["现在是打基础、常规复习还是临考冲刺？"]
-        if scope == "research_review" and not memories:
-            return ["这是文献综述、评测整理还是研究问题 brainstorm？"]
+        scene_memories = self._matching_scene_memories(text, context)
+        if scope == "life_family_travel" and scene_memories:
+            return [_scene_confirmation_question(scene_memories[0])]
         return []
 
     def _task_answer(self, text: str, memories: list[MemoryItem], context: str = "") -> str:
@@ -1157,12 +1244,65 @@ def _retrieval_score(item: MemoryItem, scope: str, terms: list[str]) -> float:
             *item.tags,
         ]
     )
+    layer_bonus = {
+        TIME_CURRENT_TASK: 1.0,
+        TIME_LONG_TERM: 0.6,
+        TIME_SCENE_MEMORY: 0.35,
+        TIME_PAST: 0.2,
+    }.get(_time_scope(item), 0.4)
+    score = score * 0.35 + layer_bonus
     if scope and (scope == item.scope or scope in item.applies_when):
-        score += 0.03
+        score += 0.2
     if terms:
         hits = sum(1 for term in terms if term and term in haystack)
-        score += min(0.07, hits * 0.02)
-    return round(max(0.0, min(1.0, score)), 4)
+        score += min(0.15, hits * 0.04)
+    if item.user_approved:
+        score += 0.05
+    return round(max(0.0, min(1.5, score)), 4)
+
+
+def _time_scope(item: MemoryItem) -> str:
+    value = str(item.validity.get("time_scope") or TIME_LONG_TERM)
+    return value if value in {TIME_CURRENT_TASK, TIME_SCENE_MEMORY, TIME_LONG_TERM, TIME_PAST} else TIME_LONG_TERM
+
+
+def _scene_memory_confirmed_by_text(item: MemoryItem, text: str, context: str = "") -> bool:
+    signal = f"{context}\n{text}"
+    if item.subject == "father" or "父亲" in item.content or "爸爸" in item.content:
+        return _contains_any(signal, ["父亲同行", "爸爸同行", "带父亲", "带爸爸", "老人同行", "父亲也去", "爸爸也去", "父亲去"])
+    return _contains_any(text, ["确认适用", "还适用", "按之前"])
+
+
+def _scene_memory_answered_by_current_text(text: str) -> bool:
+    return _contains_any(text, ["父亲不去", "爸爸不去", "只有我和孩子", "少步行不适用", "步行不适用"])
+
+
+def _scene_confirmation_question(item: MemoryItem) -> str:
+    if item.subject == "father" or "父亲" in item.content or "爸爸" in item.content:
+        return "之前有过父亲步行限制的记录，这次父亲同行、这个限制还适用吗？"
+    return f"之前有过这条场景记忆：{item.content}。这次还适用吗？"
+
+
+def _memory_pack_item(item: MemoryItem) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "content": item.content,
+        "scope": item.scope,
+        "type": item.type,
+        "time_scope": _time_scope(item),
+        "score": item.validity.get("retrieval_score"),
+        "needs_confirmation": bool(item.validity.get("needs_confirmation")),
+    }
+
+
+def _is_temporary_override(text: str) -> bool:
+    return any(marker in text for marker in TEMPORARY_MARKERS) or any(
+        marker in text for marker in ["这次", "本次", "少步行不适用", "步行不适用", "父亲不去", "爸爸不去", "只有我和孩子"]
+    )
+
+
+def _contains_any(text: str, terms: list[str] | tuple[str, ...]) -> bool:
+    return any(term in text for term in terms)
 
 
 def _memory_timestamp(item: MemoryItem) -> float:
@@ -1445,10 +1585,10 @@ def _infer_predicate(text: str, memory_type: str) -> str:
 
 def _infer_validity(text: str, memory_type: str) -> dict[str, str]:
     if memory_type == DECISION or text.startswith("这次"):
-        return {"time_scope": "current_task"}
+        return {"time_scope": TIME_CURRENT_TASK}
     if memory_type == HISTORY:
-        return {"time_scope": "past"}
-    return {"time_scope": "long_term"}
+        return {"time_scope": TIME_PAST}
+    return {"time_scope": TIME_LONG_TERM}
 
 
 def _travel_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
@@ -1493,7 +1633,13 @@ def _travel_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
         add(CONTEXT_FACT, "孩子喜欢自然和动物", subject="child", tags=["孩子", "自然", "动物"], time_scope="long_term")
     if "父亲膝盖不好" in normalized or "步行要少" in normalized:
         if not any(token in normalized for token in ["不适用", "不去"]):
-            add(CONTEXT_FACT, "父亲膝盖不好，步行要少", subject="father", tags=["父亲", "步行"], time_scope="long_term")
+            add(
+                CONTEXT_FACT,
+                "家庭旅行曾出现父亲步行限制，下次需确认父亲是否同行及步行限制是否适用",
+                subject="father",
+                tags=["父亲", "步行"],
+                time_scope=TIME_SCENE_MEMORY,
+            )
 
     return candidates
 
@@ -1910,10 +2056,11 @@ def _gift_answer(text: str, memories: list[MemoryItem], context: str = "") -> st
             f"- 避免：{('；'.join(avoid) or '不要重复已送礼物')}。"
         )
     return (
-        f"我会按送礼任务继续处理。\n"
-        f"- 当前可用约束：{budget}\n"
-        f"- 偏好/背景：{('；'.join(preferences) or '待补充')}\n"
-        f"- 禁忌/历史：{('；'.join(avoid) or '暂无')}"
+        "推荐方向：小众香氛或扩香礼盒，优先选包装有质感、可附手写卡片的款式。\n"
+        f"- 预算：{budget}；如果用户后续给出预算，再收敛到对应价位。\n"
+        f"- 理由：在偏好信息不足时，香氛/扩香兼顾生日仪式感、日常使用和不容易撞款。\n"
+        f"- 备选：花艺体验、手作体验、质感小皮具。\n"
+        f"- 避开：{('；'.join(avoid) or '暂不重复用户后续明确说已经送过或排除的品类')}。"
     )
 
 
@@ -1924,10 +2071,11 @@ def _travel_answer(text: str, memories: list[MemoryItem]) -> str:
     days = _travel_days(text)
     half_day = "半日" in text or "半天" in text or days == 0.5
     no_father = any(token in (text + memory_text) for token in ["父亲不去", "爸爸不去", "只有我和孩子"])
+    task_signal = text + memory_text
     low_walk = (
-        any(token in memory_text for token in ["膝盖不好", "步行要少", "少步行"])
+        any(token in task_signal for token in ["膝盖不好", "步行要少", "少步行"])
         and not no_father
-        and "少步行不适用" not in memory_text
+        and "少步行不适用" not in task_signal
     )
     nature = any(token in (text + memory_text) for token in ["自然", "动物", "植物", "公园", "湿地"])
     avoid_crowd = any(token in memory_text for token in ["不喜欢人挤人", "避开网红", "网红点"])
@@ -2119,9 +2267,13 @@ def _work_answer(text: str, memories: list[MemoryItem]) -> str:
 
 def _study_answer(text: str, memories: list[MemoryItem]) -> str:
     points = "、".join(m.content for m in memories) if memories else "先判断阶段，再安排知识点、例题和练习"
+    days = "2" if "两天" in text or "2天" in text else ("5" if "5天" in text or "五天" in text else "7")
     return (
-        f"复习计划：第 1 天梳理高频考点并用例题开路；第 2 天集中做错题和自测；后续按天扩展知识点、例题和练习。\n"
-        f"采用规则：{points}。"
+        f"{days}天复习计划：\n"
+        f"第 1 天：梳理高频考点，先看 2 个代表例题，再归纳知识点。\n"
+        f"第 2 天：集中做错题和薄弱题，按考点分组复盘。\n"
+        f"第 3 天以后：按章节轮换练习、回顾错题、做小测；如果只剩 2 天，则合并为高频考点冲刺。\n"
+        f"执行规则：{points}。"
     )
 
 

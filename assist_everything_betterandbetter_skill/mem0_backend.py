@@ -59,6 +59,9 @@ class HostedMem0Client:
                 "source": item.source,
                 "confidence": item.confidence,
                 "applies_when": item.applies_when,
+                "time_scope": item.validity.get("time_scope"),
+                "session_id": item.validity.get("session_id"),
+                "needs_confirmation": item.validity.get("needs_confirmation"),
                 "project_id": self.config.project_id,
                 "assist_memory": item.to_dict(),
             },
@@ -365,6 +368,12 @@ def _item_from_mem0_result(result: dict[str, Any]) -> MemoryItem:
         updated_at=str(stored.get("updated_at") or result.get("updated_at") or ""),
         supersedes=list(stored.get("supersedes") or []),
     )
+    if metadata.get("time_scope") and "time_scope" not in item.validity:
+        item.validity["time_scope"] = metadata.get("time_scope")
+    if metadata.get("session_id") and "session_id" not in item.validity:
+        item.validity["session_id"] = metadata.get("session_id")
+    if metadata.get("needs_confirmation") is not None and "needs_confirmation" not in item.validity:
+        item.validity["needs_confirmation"] = metadata.get("needs_confirmation")
     item.validity["mem0_id"] = str(result.get("id") or "")
     item.validity["mem0_score"] = result.get("score")
     return item

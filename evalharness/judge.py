@@ -16,6 +16,7 @@ from .llm import (
     llm_configured,
     normalize_llm_provider,
 )
+from .quality import _applied_memory_details
 
 
 class HeuristicJudge:
@@ -162,6 +163,7 @@ class LLMJudge:
                     "assistant": turn["assistant"]["content"],
                     "tools": [call["name"] for call in turn["tool_calls"]],
                     "applied_memories": turn["applied_memories"],
+                    "applied_memory_details": _applied_memory_details(turn),
                 }
                 for turn in case_run["turns"]
             ],
@@ -174,6 +176,11 @@ class LLMJudge:
                     "请按六个维度严格评分，返回 JSON。"
                     "分值上限：reproducibility 10, memory_extraction 20, "
                     "memory_application 25, update_and_decay 20, transparency 10, result_quality 15。"
+                    "评分必须和 checks、quality、memory_events、turns 中的证据一致；不要因为主观偏好或未要求的能力扣分。"
+                    "如果 reset/snapshot/show_memory/round2_applied/round3_applied/updated/deleted_filtered/delete_reported/compound_followup_delivered 均为 true，"
+                    "且 polluted_memories=0、semantic_violations=0、unresolved_dissatisfaction=false、delivered_task_turns=task_turns，"
+                    "总分通常不应低于 90；除非 turns 中存在明确证据说明记忆误用、任务未交付、删除后仍被应用、或用户纠错。"
+                    "每个维度扣分必须指出具体 turn 或 memory_id；不能只说“缺少更细机制”“可以更好”就大幅扣分。"
                     "必须包含 scores.total 和 reasons。scores 必须包含六个维度的整数分。"
                 ),
             },
@@ -185,7 +192,7 @@ class LLMJudge:
         for attempt in range(attempts):
             try:
                 data = self.client.json_chat(messages, temperature=0.0)
-            except RuntimeError as exc:
+            except Exception as exc:
                 last_error = exc
                 if attempt + 1 >= attempts:
                     raise

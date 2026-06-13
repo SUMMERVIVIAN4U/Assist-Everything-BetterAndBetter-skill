@@ -192,6 +192,49 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertIn("电瓶车", response.text)
         self.assertNotIn("目的地1天亲子行程", response.text)
 
+        father_memory = next(item for item in self.skill.memory.active() if "步行限制" in item.content)
+        self.assertEqual("scene_memory", father_memory.validity.get("time_scope"))
+        self.assertTrue(father_memory.validity.get("needs_confirmation"))
+
+    def test_scene_memory_prompts_confirmation_instead_of_direct_application(self):
+        self.skill.process_message(
+            "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+        )
+
+        response = self.skill.process_message("帮我安排杭州 3 天家庭行程。")
+
+        self.assertIn("之前有过父亲步行限制", response.asks[0])
+        applied_contents = [item.content for item in self.skill.retrieve_relevant_memories("帮我安排杭州 3 天家庭行程。")]
+        self.assertNotIn("家庭旅行曾出现父亲步行限制，下次需确认父亲是否同行及步行限制是否适用", applied_contents)
+        self.assertNotIn("所有点位优先选电瓶车", response.text)
+
+    def test_plain_task_does_not_emit_generic_followup_asks(self):
+        response = self.skill.process_message("帮我安排北京周末 2 天亲子旅行。")
+
+        self.assertIn("北京2天亲子行程", response.text)
+        self.assertEqual([], response.asks)
+
+    def test_initial_gift_request_delivers_recommendation(self):
+        response = self.skill.process_message("帮我给女朋友选个生日礼物。")
+
+        self.assertIn("推荐方向", response.text)
+        self.assertIn("预算", response.text)
+
+    def test_initial_study_request_delivers_plan(self):
+        response = self.skill.process_message("帮我做一个 7 天英语复习计划。")
+
+        self.assertIn("7天复习计划", response.text)
+        self.assertIn("第 1 天", response.text)
+        self.assertIn("执行规则", response.text)
+
+    def test_approve_memory_reports_existing_auto_saved_memories(self):
+        self.skill.process_message("预算1000元左右；她喜欢紫色；以前送过玫瑰金项链，送过的不要再送。", context="user: 帮我给女朋友选个生日礼物。")
+
+        response = self.skill.process_message("同意保存。")
+
+        self.assertIn("active 记忆已保存", response.text)
+        self.assertNotIn("没有待授权的记忆候选", response.text)
+
     def test_travel_current_task_constraints_are_atomized_and_explained(self):
         self.skill.process_message(
             "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
@@ -214,6 +257,21 @@ class MemoryAdvantagesTest(unittest.TestCase):
         current_task_contents = [item.content for item in active if item.validity.get("time_scope") == "current_task"]
         self.assertIn("这次父亲不去，只有我和孩子", current_task_contents)
         self.assertIn("本次少步行限制不适用", current_task_contents)
+        self.assertTrue(any(item.validity.get("time_scope") == "scene_memory" for item in active if "步行限制" in item.content))
+        self.assertFalse(self.skill.memory.snapshot()["superseded"])
+
+        followup = self.skill.process_message("帮我安排上海 1 天亲子自然路线。")
+        self.assertEqual([], followup.asks)
+
+    def test_current_task_memory_does_not_cross_skill_session(self):
+        self.skill.process_message("这次父亲不去，只有我和孩子，少步行不适用。", context="user: 帮我安排杭州3天亲子旅行。")
+
+        same_session = self.skill.retrieve_relevant_memories("继续安排杭州亲子行程。")
+        self.assertTrue(any("父亲不去" in item.content for item in same_session))
+
+        new_session = AssistSkill(memory_dir=self.tmp.name, persist=True)
+        next_session = new_session.retrieve_relevant_memories("继续安排杭州亲子行程。")
+        self.assertFalse(any("父亲不去" in item.content for item in next_session))
 
     def test_proactively_corrects_prior_memory_from_negative_feedback(self):
         self.skill.process_message(

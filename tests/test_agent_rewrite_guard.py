@@ -46,6 +46,87 @@ def test_rewrite_guard_accepts_retry_with_concrete_plan():
     assert "国家植物园" in turn.assistant.content
 
 
+def test_rewrite_strips_thinking_blocks_from_visible_output():
+    client = _SequencedClient(
+        [
+            "<think>先判断亲子旅行约束。</think>\n"
+            "北京2天亲子行程：\n"
+            "第 1 天：上午国家植物园，下午中国科技馆。\n"
+            "第 2 天：上午北京海洋馆，下午就近休息。\n"
+            "执行约束：少排队、少回头路，每天保留休息时间。"
+        ]
+    )
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+
+    turn = agent.reply("帮我安排北京周末 2 天亲子旅行。")
+
+    assert len(client.calls) == 1
+    assert "<think>" not in turn.assistant.content
+    assert "先判断" not in turn.assistant.content
+    assert "北京2天亲子行程" in turn.assistant.content
+
+
+def test_rewrite_guard_rejects_truncated_output_and_accepts_retry():
+    client = _SequencedClient(
+        [
+            "南京半日亲子路线：上午红山森林动物园短线，下午玄武湖边休息，就",
+            "南京半日亲子路线：上午红山森林动物园短线，下午玄武湖边休息。\n"
+            "执行约束：避开网红点，控制步行量，保留打车接驳。"
+        ]
+    )
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+
+    turn = agent.reply("帮我安排南京半日亲子路线。")
+
+    assert len(client.calls) == 2
+    assert not turn.assistant.content.endswith("就")
+    assert "执行约束" in turn.assistant.content
+
+
+def test_show_memory_stage_is_not_rewritten():
+    client = _SequencedClient(["这不应该被调用"])
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+
+    turn = agent.reply("展示当前记忆。", stage="show_memory")
+
+    assert len(client.calls) == 0
+    assert "当前" in turn.assistant.content
+
+
+def test_rewrite_removes_trailing_generic_question():
+    client = _SequencedClient(
+        [
+            "上海1天亲子自然路线：\n"
+            "上午：上海动物园早场。\n"
+            "下午：共青森林公园。\n"
+            "执行约束：避开网红点，午后保留休息。\n"
+            "需要我帮你查具体门票和酒店吗？"
+        ]
+    )
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+
+    turn = agent.reply("帮我安排上海 1 天亲子自然路线。")
+
+    assert "上海1天亲子自然路线" in turn.assistant.content
+    assert "需要我帮你查" not in turn.assistant.content
+
+
+def test_rewrite_guard_rejects_unresolved_choice_plan():
+    client = _SequencedClient(
+        [
+            "上海1天亲子自然路线：\n上午：上海动物园。\n下午二选一：A自然博物馆，B滨江森林公园。\n想选下午A还是B",
+            "上海1天亲子自然路线：\n上午：上海动物园。\n下午：共青森林公园。\n执行约束：避开网红点，午后留休息时间。",
+        ]
+    )
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+
+    turn = agent.reply("帮我安排上海 1 天亲子自然路线。")
+
+    assert len(client.calls) == 2
+    assert "二选一" not in turn.assistant.content
+    assert "共青森林公园" in turn.assistant.content
+
+
 def test_rewrite_guard_rejects_offer_to_replan_without_plan():
     draft = (
         "北京2天亲子行程：\n"
