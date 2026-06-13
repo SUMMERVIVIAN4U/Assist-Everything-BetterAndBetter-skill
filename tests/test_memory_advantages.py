@@ -383,6 +383,46 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertIn("给女朋友选礼物预算在 1000 元左右", add_details)
         self.assertTrue(any("女朋友的礼物偏好/背景" in detail and "紫色" in detail for detail in add_details))
 
+    def test_gift_jewelry_facts_infer_gift_scope_without_literal_gift_word(self):
+        response = self.skill.process_message(
+            "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("礼物预算在 1000 元左右", add_details)
+        self.assertTrue(any("礼物偏好/背景" in detail and "紫色" in detail and "玫瑰金" in detail for detail in add_details))
+        self.assertTrue(any("以前送过收礼人玫瑰金项链" in detail for detail in add_details))
+        self.assertTrue(all(item.scope == "gift_planning" for item in self.skill.memory.active()))
+
+    def test_semantic_extractor_records_jewelry_selection_after_inferred_gift_scope(self):
+        def extractor(text, context, scope, active):
+            self.assertEqual("选玫瑰金耳钉", text)
+            self.assertEqual("gift_planning", scope)
+            return [
+                MemoryItem(
+                    DECISION,
+                    "本次给收礼人的礼物已选定为玫瑰金耳钉",
+                    scope="gift_planning",
+                    target="",
+                    predicate="selected",
+                    source="llm_semantic_extractor",
+                    confidence=0.92,
+                    evidence=[text],
+                    applies_when=["gift_planning"],
+                    validity={"time_scope": "current_task"},
+                )
+            ]
+
+        skill = AssistSkill(memory_dir=self.tmp.name, persist=False, semantic_extractor=extractor)
+        context = (
+            "user: 预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。\n"
+            "assistant: 推荐几个不踩雷的紫色+玫瑰金方案，避开项链。"
+        )
+        response = skill.process_message("选玫瑰金耳钉", context=context)
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("本次给收礼人的礼物已选定为玫瑰金耳钉", add_details)
+
     def test_gift_planning_does_not_treat_profile_numbers_as_budget(self):
         response = self.skill.process_message("给老公买礼物，他身高180，喜欢跑步")
 

@@ -1749,6 +1749,10 @@ def _is_gift_planning_context(text: str, context: str = "") -> bool:
     gift_terms = ["礼物", "生日礼物", "送礼", "选礼", "买礼物", "挑礼物"]
     if any(term in combined for term in gift_terms):
         return True
+    jewelry_terms = ["首饰", "耳钉", "耳环", "手链", "戒指", "项链", "玫瑰金", "紫水晶"]
+    gift_fact_terms = ["预算", "送过", "买过", "不要再送", "选", "确认送", "下单"]
+    if any(term in combined for term in jewelry_terms) and any(term in combined for term in gift_fact_terms):
+        return True
     return bool(re.search(r"(给|帮我给).{1,12}(选|买|挑|送).{0,8}(礼|礼物)", combined))
 
 
