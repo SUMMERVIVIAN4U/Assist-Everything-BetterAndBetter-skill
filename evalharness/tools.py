@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from assist_everything_betterandbetter_skill.skill import AssistSkill, SkillResponse
+from assist_everything_betterandbetter_skill.skill import AssistSkill, SemanticExtractor, SkillResponse
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
 from .schemas import ToolCall
@@ -20,8 +20,16 @@ class MemoryToolbox:
         mem0_config: Mem0Config | None = None,
         memory_enabled: bool | None = None,
         memory_backend: str | None = None,
+        semantic_extractor: SemanticExtractor | None = None,
     ) -> None:
-        self.skill = skill or AssistSkill(memory_dir=memory_dir, persist=persist, mem0_config=mem0_config, memory_enabled=memory_enabled, memory_backend=memory_backend)
+        self.skill = skill or AssistSkill(
+            memory_dir=memory_dir,
+            persist=persist,
+            mem0_config=mem0_config,
+            memory_enabled=memory_enabled,
+            memory_backend=memory_backend,
+            semantic_extractor=semantic_extractor,
+        )
 
     @property
     def memory_enabled(self) -> bool:

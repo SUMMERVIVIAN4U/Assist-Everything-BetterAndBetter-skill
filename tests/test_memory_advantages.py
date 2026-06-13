@@ -1,7 +1,8 @@
 import tempfile
 import unittest
 
-from assist_everything_betterandbetter_skill.skill import AssistSkill
+from assist_everything_betterandbetter_skill.memory import MemoryItem
+from assist_everything_betterandbetter_skill.skill import DECISION, AssistSkill
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
 
@@ -219,6 +220,44 @@ class MemoryAdvantagesTest(unittest.TestCase):
 
         self.assertIn("推荐方向", response.text)
         self.assertIn("预算", response.text)
+
+    def test_semantic_extractor_records_short_gift_selection(self):
+        def extractor(text, context, scope, active):
+            self.assertEqual("选拍立得", text)
+            self.assertEqual("gift_planning", scope)
+            return [
+                MemoryItem(
+                    DECISION,
+                    "本次给女朋友的礼物已选定为拍立得",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="selected",
+                    source="llm_semantic_extractor",
+                    confidence=0.92,
+                    evidence=[text],
+                    applies_when=["gift_planning"],
+                    validity={"time_scope": "current_task"},
+                )
+            ]
+
+        skill = AssistSkill(memory_dir=self.tmp.name, persist=False, semantic_extractor=extractor)
+        response = skill.process_message(
+            "选拍立得",
+            context="user: 帮我给女朋友选个生日礼物。\nassistant: 推荐方向：富士 Instax mini 12 拍立得相机。",
+        )
+
+        self.assertTrue(any(action["action"] == "add" for action in response.memory_actions))
+        self.assertIn("本次给女朋友的礼物已选定为拍立得", [item.content for item in skill.memory.active()])
+        self.assertEqual("llm_semantic_extractor", response.memory_actions[0].get("extractor"))
+
+    def test_rule_extraction_fast_path_does_not_call_semantic_extractor(self):
+        def extractor(text, context, scope, active):
+            raise AssertionError("semantic extractor should not run for rule-extractable budget")
+
+        skill = AssistSkill(memory_dir=self.tmp.name, persist=False, semantic_extractor=extractor)
+        response = skill.process_message("预算1000元左右", context="user: 帮我给女朋友选个生日礼物。")
+
+        self.assertTrue(any("预算在 1000 元左右" in action.get("detail", "") for action in response.memory_actions))
 
     def test_initial_study_request_delivers_plan(self):
         response = self.skill.process_message("帮我做一个 7 天英语复习计划。")

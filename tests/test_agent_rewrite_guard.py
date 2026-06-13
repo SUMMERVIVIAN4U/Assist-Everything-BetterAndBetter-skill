@@ -13,6 +13,46 @@ class _SequencedClient:
         return ""
 
 
+class _SemanticClient:
+    def __init__(self):
+        self.chat_calls = []
+        self.json_calls = []
+
+    def chat(self, messages, temperature=0.3):
+        self.chat_calls.append({"messages": messages, "temperature": temperature})
+        return "推荐方向：拍立得相机。\n- 理由：有生日仪式感。\n- 预算：按当前范围控制。\n- 避开：不要重复已送礼物。"
+
+    def json_chat(self, messages, temperature=0.0):
+        self.json_calls.append({"messages": messages, "temperature": temperature})
+        return {
+            "memories": [
+                {
+                    "type": "decision",
+                    "content": "本次给女朋友的礼物已选定为拍立得",
+                    "scope": "gift_planning",
+                    "target": "女朋友",
+                    "predicate": "selected",
+                    "time_scope": "current_task",
+                    "confidence": 0.92,
+                    "evidence": ["选拍立得"],
+                    "tags": ["拍立得"],
+                }
+            ]
+        }
+
+
+def test_harness_injects_semantic_extractor_for_short_gift_selection():
+    client = _SemanticClient()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("帮我给女朋友选个生日礼物。")
+
+    turn = agent.reply("选拍立得")
+
+    actions = turn.tool_calls[0].output["memory_actions"]
+    assert client.json_calls
+    assert any(action["action"] == "add" and "拍立得" in action["detail"] for action in actions)
+
+
 def test_rewrite_guard_falls_back_when_llm_drops_travel_plan():
     client = _SequencedClient(
         [

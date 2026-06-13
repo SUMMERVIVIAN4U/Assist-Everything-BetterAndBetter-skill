@@ -11,6 +11,8 @@ from .llm import OpenAICompatibleClient, any_llm_configured, default_configured_
 from .schemas import HarnessSession, Message, TurnTrace
 from .tools import MemoryToolbox
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
+from assist_everything_betterandbetter_skill.memory import MemoryItem
+from assist_everything_betterandbetter_skill.skill import CONSTRAINT, CONTEXT_FACT, DECISION, HISTORY, PREFERENCE, WORKFLOW
 
 
 class HarnessAgent:
@@ -30,18 +32,20 @@ class HarnessAgent:
         require_llm: bool = False,
     ) -> None:
         self.name = name
+        self.session = HarnessSession()
+        self.llm_mode = llm_mode
+        self.llm_client = llm_client
+        self.require_llm = require_llm
+        self._context_start_index = 0
+        semantic_extractor = self._semantic_extractor() if toolbox is None else None
         self.toolbox = toolbox or MemoryToolbox(
             memory_dir=memory_dir,
             persist=persist_memory,
             mem0_config=mem0_config,
             memory_enabled=memory_enabled,
             memory_backend=memory_backend,
+            semantic_extractor=semantic_extractor,
         )
-        self.session = HarnessSession()
-        self.llm_mode = llm_mode
-        self.llm_client = llm_client
-        self.require_llm = require_llm
-        self._context_start_index = 0
 
     def reply(self, user_text: str, *, stage: str = "chat") -> TurnTrace:
         context = self._recent_context(include_pre_reset=True)
@@ -169,6 +173,133 @@ class HarnessAgent:
         if self.llm_mode == "auto":
             return any_llm_configured()
         return llm_configured(self._provider())
+
+    def _semantic_extractor(self) -> "LLMSemanticMemoryExtractor | None":
+        if os.getenv("ASSIST_MEMORY_LLM_EXTRACTOR", "1").strip().lower() in {"0", "false", "off", "no"}:
+            return None
+        if not self._use_llm():
+            return None
+        if self.llm_client is not None and not hasattr(self.llm_client, "json_chat"):
+            return None
+        return LLMSemanticMemoryExtractor(lambda: self.llm_client or _workbench_llm_client(self._provider()))
+
+
+class LLMSemanticMemoryExtractor:
+    """LLM semantic candidate extractor. It proposes MemoryItem objects; the skill still validates and writes."""
+
+    def __init__(self, client_factory: Any) -> None:
+        self.client_factory = client_factory
+
+    def __call__(self, text: str, context: str, scope: str, active_items: list[MemoryItem]) -> list[MemoryItem]:
+        payload = {
+            "user_message": text,
+            "conversation_context": _compact_context(context),
+            "scope_hint": scope,
+            "active_memories": [
+                {
+                    "id": item.id,
+                    "type": item.type,
+                    "content": item.content,
+                    "scope": item.scope,
+                    "target": item.target,
+                    "predicate": item.predicate,
+                    "time_scope": item.validity.get("time_scope"),
+                }
+                for item in active_items[:8]
+            ],
+            "schema": {
+                "memories": [
+                    {
+                        "type": "preference|constraint|workflow|decision|history|context_fact",
+                        "content": "short concrete memory in Chinese",
+                        "scope": "gift_planning|life_family_travel|study_plan|work_report|research_review|general",
+                        "subject": "optional",
+                        "target": "optional recipient/object",
+                        "object": "optional",
+                        "predicate": "likes|must_avoid|selected|budget_limit|previously_given|...",
+                        "time_scope": "current_task|scene_memory|long_term|past",
+                        "confidence": 0.0,
+                        "evidence": ["quoted user evidence"],
+                        "tags": ["short keywords"],
+                    }
+                ]
+            },
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是结构化记忆提取器，只返回 JSON。"
+                    "任务：判断 user_message 是否表达了应该保存的记忆候选。"
+                    "只提取用户表达或用户明确确认的事实、偏好、约束、历史、决策；不要把 assistant 的推荐当作用户事实，"
+                    "除非用户说“就这个/选这个/选拍立得/买了/下单了”等确认语。"
+                    "如果只是考虑、询问、泛泛任务请求，不要写 decision。"
+                    "current_task 用于本次任务决策或临时约束；long_term 用于稳定偏好；"
+                    "scene_memory 用于同类场景下需下次确认的条件；past 用于历史已发生事项。"
+                    "如果用户说“选拍立得”，在送礼上下文中应提取为 decision/selected，内容写明具体礼物。"
+                ),
+            },
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ]
+        data = self.client_factory().json_chat(messages, temperature=0.0)
+        memories = data.get("memories", [])
+        if not isinstance(memories, list):
+            return []
+        output: list[MemoryItem] = []
+        for raw in memories[:5]:
+            if isinstance(raw, dict):
+                item = _memory_item_from_semantic_payload(raw, text, scope)
+                if item:
+                    output.append(item)
+        return output
+
+
+def _compact_context(context: str, *, max_chars: int = 2400) -> str:
+    lines = [line for line in str(context or "").splitlines() if line.strip()]
+    compact = "\n".join(lines[-10:])
+    return compact[-max_chars:]
+
+
+def _memory_item_from_semantic_payload(raw: dict[str, Any], user_text: str, scope_hint: str) -> MemoryItem | None:
+    content = str(raw.get("content") or "").strip()
+    if not content:
+        return None
+    memory_type = str(raw.get("type") or "").strip()
+    allowed_types = {PREFERENCE, CONSTRAINT, WORKFLOW, DECISION, HISTORY, CONTEXT_FACT}
+    if memory_type not in allowed_types:
+        memory_type = CONTEXT_FACT
+    scope = str(raw.get("scope") or scope_hint).strip() or scope_hint
+    allowed_scopes = {"gift_planning", "life_family_travel", "study_plan", "work_report", "research_review", "general"}
+    if scope not in allowed_scopes:
+        scope = scope_hint
+    confidence = _safe_float(raw.get("confidence"), 0.75)
+    evidence = raw.get("evidence")
+    tags = raw.get("tags")
+    time_scope = str(raw.get("time_scope") or "").strip()
+    if time_scope not in {"current_task", "scene_memory", "long_term", "past"}:
+        time_scope = "long_term"
+    return MemoryItem(
+        memory_type,
+        content,
+        scope=scope,
+        subject=str(raw.get("subject") or "").strip(),
+        target=str(raw.get("target") or "").strip(),
+        object=str(raw.get("object") or "").strip(),
+        predicate=str(raw.get("predicate") or "").strip(),
+        source="llm_semantic_extractor",
+        confidence=max(0.0, min(confidence, 1.0)),
+        evidence=[str(item).strip() for item in evidence if str(item).strip()] if isinstance(evidence, list) else [user_text],
+        applies_when=[scope],
+        tags=[str(item).strip() for item in tags if str(item).strip()] if isinstance(tags, list) else [],
+        validity={"time_scope": time_scope},
+    )
+
+
+def _safe_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _workbench_llm_client(provider: str) -> OpenAICompatibleClient:

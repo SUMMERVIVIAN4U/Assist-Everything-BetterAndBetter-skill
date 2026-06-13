@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from .mem0_backend import HostedMem0Client, Mem0Config, _item_from_mem0_result, _mem0_results
@@ -28,6 +28,7 @@ TIME_CURRENT_TASK = "current_task"
 TIME_SCENE_MEMORY = "scene_memory"
 TIME_LONG_TERM = "long_term"
 TIME_PAST = "past"
+SemanticExtractor = Callable[[str, str, str, list[MemoryItem]], list[MemoryItem]]
 
 
 @dataclass
@@ -66,6 +67,7 @@ class AssistSkill:
         mem0_config: Mem0Config | None = None,
         memory_enabled: bool | None = None,
         memory_backend: str | None = None,
+        semantic_extractor: SemanticExtractor | None = None,
     ) -> None:
         if persist is None:
             persist = os.getenv("ASSIST_MEMORY_PERSIST", "1") != "0"
@@ -81,6 +83,7 @@ class AssistSkill:
         self.memory_backend = _normalize_memory_backend(memory_backend or os.getenv("ASSIST_MEMORY_BACKEND", "local"))
         self.mem0_client = HostedMem0Client(self.mem0_config) if self.memory_backend == "mem0_hosted" and self.mem0_config.ready else None
         self.session_id = f"session_{uuid4().hex[:8]}"
+        self.semantic_extractor = semantic_extractor
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
         if not self.memory_enabled:
@@ -537,6 +540,7 @@ class AssistSkill:
                         "detail": item.content,
                         "confidence": confidence,
                         "reason": confidence_reason,
+                        "extractor": item.source,
                     }
                 )
                 continue
@@ -562,6 +566,7 @@ class AssistSkill:
                         "detail": item.content,
                         "confidence": confidence,
                         "reason": "duplicate_active_memory",
+                        "extractor": item.source,
                     }
                 )
                 continue
@@ -570,6 +575,7 @@ class AssistSkill:
             event["confidence"] = confidence
             event["reason"] = confidence_reason
             event["approval"] = "auto_high_confidence" if not item.user_approved else "explicit_or_contextual"
+            event["extractor"] = item.source
             actions.append(event)
         return actions
 
@@ -647,6 +653,7 @@ class AssistSkill:
                         "detail": item.content,
                         "confidence": confidence,
                         "reason": confidence_reason,
+                        "extractor": item.source,
                     }
                 )
                 continue
@@ -674,6 +681,7 @@ class AssistSkill:
                         "detail": item.content,
                         "confidence": confidence,
                         "reason": "duplicate_active_memory",
+                        "extractor": item.source,
                     }
                 )
                 continue
@@ -689,6 +697,7 @@ class AssistSkill:
                         "confidence": confidence,
                         "reason": confidence_reason,
                         "approval": "auto_high_confidence" if not item.user_approved else "explicit_or_contextual",
+                        "extractor": item.source,
                         "ok": True,
                         "result": _compact_remote_result(result),
                     }
@@ -838,9 +847,24 @@ class AssistSkill:
         normalized = text.strip()
         if _is_memory_question(normalized) or _is_acknowledgement_only(normalized) or _is_plain_task_request(normalized):
             return []
-        if not normalized or not _has_memory_signal(normalized, context):
+        if not normalized:
             return []
         scope = _infer_scope(normalized, context)
+        rule_candidates = self._rule_memory_candidates(normalized, context, scope)
+        if rule_candidates:
+            return rule_candidates
+        if self.semantic_extractor and _semantic_extraction_gate(normalized, context, scope):
+            try:
+                semantic_candidates = self.semantic_extractor(normalized, context, scope, self._active_items_for_extractor())
+            except Exception:
+                semantic_candidates = []
+            validated = [_prepare_semantic_candidate(item, normalized, scope) for item in semantic_candidates]
+            return [item for item in validated if item is not None]
+        return []
+
+    def _rule_memory_candidates(self, normalized: str, context: str, scope: str) -> list[MemoryItem]:
+        if not _has_memory_signal(normalized, context):
+            return []
         if scope == "gift_planning":
             return _gift_memory_candidates(normalized, context)
         if scope == "life_family_travel":
@@ -873,6 +897,11 @@ class AssistSkill:
                 )
             )
         return candidates
+
+    def _active_items_for_extractor(self) -> list[MemoryItem]:
+        if self.memory_backend == "mem0_hosted":
+            return self._remote_active_items(self.mem0_client)
+        return self.memory.active()
 
     def _conflicting_memories(self, text: str, context: str = "", active_items: list[MemoryItem] | None = None) -> list[MemoryItem]:
         lowered = text.lower()
@@ -1419,6 +1448,55 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
     if _has_contextual_task_fact(text, context):
         return True
     return False
+
+
+def _semantic_extraction_gate(text: str, context: str, scope: str) -> bool:
+    if scope == "general" or not context.strip():
+        return False
+    stripped = text.strip(" 。！？!?")
+    if not stripped or _is_memory_question(stripped) or _is_acknowledgement_only(stripped) or _is_plain_task_request(stripped):
+        return False
+    if _has_memory_signal(stripped, context) or _has_contextual_task_fact(stripped, context):
+        return True
+    if scope == "gift_planning":
+        return bool(re.search(r"^(?:就)?(?:选|买|送|定|下单|换)(?!礼物|一个|个)(.{1,30})$", stripped)) or stripped in {
+            "就这个",
+            "就它",
+            "这个可以",
+            "这个定了",
+        }
+    if scope in {"life_family_travel", "study_plan", "work_report", "research_review"}:
+        return any(token in stripped for token in ["就这个", "按这个", "这版", "改成", "不用", "不要", "保留", "定了", "选这个"])
+    return False
+
+
+def _prepare_semantic_candidate(item: MemoryItem, text: str, scope: str) -> MemoryItem | None:
+    if not isinstance(item, MemoryItem):
+        return None
+    item.content = str(item.content or "").strip()
+    if not item.content or _contains_any(item.content, ["这个", "这个方向", "就它", "就这个"]):
+        return None
+    if item.scope not in {"gift_planning", "life_family_travel", "study_plan", "work_report", "research_review", "general"}:
+        item.scope = scope
+    if item.scope == "general" and scope != "general":
+        item.scope = scope
+    if item.type not in {PREFERENCE, CONSTRAINT, WORKFLOW, DECISION, HISTORY, CONTEXT_FACT}:
+        item.type = _infer_memory_type(text, item.scope)
+    if not item.evidence:
+        item.evidence = [text]
+    if not item.applies_when:
+        item.applies_when = [item.scope]
+    if not item.tags:
+        item.tags = _keywords(item.content)
+    item.source = item.source or "llm_semantic_extractor"
+    item.confidence = max(0.0, min(float(item.confidence or 0.0), 1.0))
+    if item.confidence < 0.5:
+        return None
+    if not item.validity:
+        item.validity = _infer_validity(text, item.type)
+    if item.type == DECISION and item.predicate == "selected":
+        item.validity["time_scope"] = TIME_CURRENT_TASK
+    return item
 
 
 def _has_contextual_task_fact(text: str, context: str = "") -> bool:
