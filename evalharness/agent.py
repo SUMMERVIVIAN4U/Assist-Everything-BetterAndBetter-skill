@@ -12,6 +12,7 @@ from .schemas import HarnessSession, Message, TurnTrace
 from .tools import MemoryToolbox
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 from assist_everything_betterandbetter_skill.memory import MemoryItem
+from assist_everything_betterandbetter_skill.runtime_config import load_runtime_config
 from assist_everything_betterandbetter_skill.skill import CONSTRAINT, CONTEXT_FACT, DECISION, HISTORY, PREFERENCE, WORKFLOW
 
 
@@ -314,7 +315,9 @@ class HarnessAgent:
         return llm_configured(self._provider())
 
     def _semantic_extractor(self) -> "LLMSemanticMemoryExtractor | None":
-        if os.getenv("ASSIST_MEMORY_LLM_EXTRACTOR", "1").strip().lower() in {"0", "false", "off", "no"}:
+        extractor_enabled = bool(load_runtime_config()["memory"].get("llm_extractor", True))
+        env_disabled = os.getenv("ASSIST_MEMORY_LLM_EXTRACTOR", "1").strip().lower() in {"0", "false", "off", "no"}
+        if not extractor_enabled or env_disabled:
             return None
         if not self._use_llm():
             return None
@@ -861,6 +864,8 @@ def _authoritative_memory_operation(call: Any, *, stage: str = "") -> bool:
     input_text = str(raw_input.get("command") or raw_input.get("message") or "")
     if _contains_any(input_text, ["然后", "继续", "再给", "推荐", "安排", "写", "做"]):
         return False
+    if _contains_any(input_text, ["展示当前记忆", "展示记忆", "查看记忆", "show memory", "profile", "画像", "snapshot", "快照", "layers", "三层记忆", "隐私报告", "privacy"]):
+        return True
     if getattr(call, "name", "") in {"reset_memory", "show_memory"}:
         return True
     if getattr(call, "name", "") == "manage_memory":

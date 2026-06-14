@@ -9,6 +9,13 @@ from urllib.parse import parse_qs, urlparse
 
 from assist_everything_betterandbetter_skill.cases import WORKBENCH_CASES, DIMENSIONS, EvalCase
 from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Client, Mem0Config, config_from_dict
+from assist_everything_betterandbetter_skill.runtime_config import (
+    RUNTIME_CONFIG_PATH,
+    load_runtime_config,
+    normalize_backend,
+    public_runtime_config,
+    update_runtime_config,
+)
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
@@ -24,14 +31,12 @@ from .mem0_performance import (
 from .runner import run_all
 
 LATEST = Path("eval/output/latest/eval_report.json")
-PRIVACY_SETTINGS = Path("memories/workbench/_privacy.json")
-BACKEND_SETTINGS = Path("memories/workbench/_backend.json")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 WORKBENCH_LLM_PROVIDER = DEFAULT_LLM_PROVIDER
 
 
 class WorkbenchState:
-    def __init__(self, agent_mode: str = WORKBENCH_LLM_PROVIDER) -> None:
+    def __init__(self, agent_mode: str | None = None) -> None:
         self.agent_mode = _normalize_workbench_provider(agent_mode)
         self.chat_agent = _new_workbench_agent(self.agent_mode)
 
@@ -59,6 +64,7 @@ class Handler(BaseHTTPRequestHandler):
                     "judge_mode": STATE.agent_mode,
                     "llm_required": True,
                     "llm_configured": llm_configured(STATE.agent_mode),
+                    "runtime_config": public_runtime_config(),
                 }
             )
         elif path == "/api/report":
@@ -194,6 +200,13 @@ class Handler(BaseHTTPRequestHandler):
             _save_persona_files(body)
             print("[workbench] saved persona files")
             self._send_json({"ok": True, "settings": _settings_payload()})
+        elif path == "/api/settings/agent":
+            provider = _normalize_workbench_provider(body.get("provider"))
+            update_runtime_config({"agent": {"provider": provider}})
+            STATE.agent_mode = provider
+            STATE.chat_agent = _new_workbench_agent(provider)
+            print(f"[workbench] saved agent provider={provider}")
+            self._send_json({"ok": True, "settings": _settings_payload()})
         elif path == "/api/settings/memory-backend":
             current = _memory_backend_config()
             config = _config_from_backend_body(body, current)
@@ -253,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
-def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = WORKBENCH_LLM_PROVIDER) -> None:
+def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str | None = None) -> None:
     global STATE
     STATE = WorkbenchState(agent_mode=_normalize_workbench_provider(agent_mode))
     httpd = ThreadingHTTPServer((host, port), Handler)
@@ -263,21 +276,23 @@ def serve(host: str = "127.0.0.1", port: int = 8787, agent_mode: str = WORKBENCH
 
 def _new_workbench_agent(agent_mode: str) -> HarnessAgent:
     provider = _normalize_workbench_provider(agent_mode)
+    runtime = load_runtime_config()
     agent = HarnessAgent(
         name="workbench-chat-agent",
         llm_mode=provider,
-        memory_dir="memories/workbench",
+        memory_dir=runtime["memory"]["dir"],
         mem0_config=_mem0_config(),
-        memory_enabled=_memory_enabled(),
-        memory_backend=_memory_backend_config()["backend"],
+        memory_enabled=bool(runtime["memory"]["enabled"]),
+        memory_backend=runtime["memory"]["backend"],
         require_llm=True,
     )
     _apply_privacy_settings(agent)
     return agent
 
 
-def _normalize_workbench_provider(value: Any) -> str:
-    return normalize_llm_provider(str(value or WORKBENCH_LLM_PROVIDER))
+def _normalize_workbench_provider(value: Any = None) -> str:
+    runtime = load_runtime_config()
+    return normalize_llm_provider(str(value or runtime["agent"]["provider"] or WORKBENCH_LLM_PROVIDER))
 
 
 def _provider_from_body(body: dict[str, Any]) -> str:
@@ -285,21 +300,24 @@ def _provider_from_body(body: dict[str, Any]) -> str:
 
 
 def _memory_backend_config() -> dict[str, Any]:
-    if BACKEND_SETTINGS.exists():
-        try:
-            data = json.loads(BACKEND_SETTINGS.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return _normalize_backend_config(data)
-        except Exception:
-            pass
-    return _normalize_backend_config({})
+    runtime = load_runtime_config()
+    return _normalize_backend_config(
+        {
+            "backend": runtime["memory"]["backend"],
+            "memory_enabled": runtime["memory"]["enabled"],
+            "memory_dir": runtime["memory"]["dir"],
+            "mem0": runtime["mem0"],
+        }
+    )
 
 
 def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
     backend = _normalize_backend_name(data.get("backend"), "local")
+    runtime = load_runtime_config()
     return {
         "backend": backend,
         "memory_enabled": bool(data.get("memory_enabled", True)),
+        "memory_dir": str(data.get("memory_dir") or runtime["memory"]["dir"]),
         "mem0": {
             "base_url": str(data.get("mem0", {}).get("base_url") or ""),
             "api_key": str(data.get("mem0", {}).get("api_key") or ""),
@@ -313,12 +331,8 @@ def _normalize_backend_config(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_backend_name(value: Any, default: str = "local") -> str:
-    backend = str(value or default).strip().lower()
-    aliases = {"mem0": "mem0_hosted", "hosted_mem0": "mem0_hosted"}
-    backend = aliases.get(backend, backend)
-    if backend not in {"local", "mem0_hosted"}:
-        return default if default in {"local", "mem0_hosted"} else "local"
-    return backend
+    backend = normalize_backend(value or default)
+    return backend if backend in {"local", "mem0_hosted"} else normalize_backend(default)
 
 
 def _mem0_config() -> Mem0Config:
@@ -341,12 +355,19 @@ def _public_backend_config(backend: str | None = None) -> dict[str, Any]:
     mem0 = data["mem0"]
     selected = _normalize_backend_name(backend, data["backend"]) if backend is not None else data["backend"]
     return {
+        "profile": load_runtime_config()["profile"],
         "backend": selected,
         "memory_enabled": bool(data.get("memory_enabled", True)),
+        "memory_dir": data.get("memory_dir", ""),
+        "config_path": str(RUNTIME_CONFIG_PATH),
         "mem0": {
             "endpoint_configured": bool(mem0["base_url"]),
             "api_key_configured": bool(mem0["api_key"]),
             "user_configured": bool(mem0["user_id"]),
+            "app_id": mem0.get("app_id", ""),
+            "project_id_configured": bool(mem0.get("project_id")),
+            "project_name": mem0.get("project_name", ""),
+            "timeout": mem0.get("timeout", 15.0),
         },
     }
 
@@ -374,8 +395,17 @@ def _config_from_backend_body(body: dict[str, Any], current: dict[str, Any]) -> 
 
 
 def _save_memory_backend_config(config: dict[str, Any]) -> None:
-    BACKEND_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-    BACKEND_SETTINGS.write_text(json.dumps(_normalize_backend_config(config), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    normalized = _normalize_backend_config(config)
+    update_runtime_config(
+        {
+            "memory": {
+                "backend": normalized["backend"],
+                "enabled": normalized["memory_enabled"],
+                "dir": normalized["memory_dir"],
+            },
+            "mem0": normalized["mem0"],
+        }
+    )
 
 
 def _mem0_health(backend: str | None = None) -> dict[str, Any]:
@@ -517,21 +547,16 @@ def _apply_privacy_settings(agent: HarnessAgent) -> None:
 
 
 def _privacy_items() -> list[str]:
-    if PRIVACY_SETTINGS.exists():
-        try:
-            data = json.loads(PRIVACY_SETTINGS.read_text(encoding="utf-8"))
-            items = data.get("privacy_items", [])
-            if isinstance(items, list):
-                return _normalize_privacy_items([str(item) for item in items])
-        except Exception:
-            pass
+    privacy = load_runtime_config().get("privacy", {})
+    if isinstance(privacy, dict) and "items" in privacy:
+        items = privacy.get("items")
+        if isinstance(items, list):
+            return _normalize_privacy_items([str(item) for item in items])
     return list(PRIVATE_MARKERS)
 
 
 def _save_privacy_items(items: list[str]) -> None:
-    PRIVACY_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"privacy_items": _normalize_privacy_items(items)}
-    PRIVACY_SETTINGS.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    update_runtime_config({"privacy": {"items": _normalize_privacy_items(items)}})
 
 
 def _normalize_privacy_items(items: list[str]) -> list[str]:
@@ -630,6 +655,7 @@ def _history_item_is_real_llm(item: dict[str, Any]) -> bool:
 def _settings_payload() -> dict[str, Any]:
     snapshot = STATE.chat_agent.toolbox.snapshot()
     privacy_report = STATE.chat_agent.toolbox.skill.privacy_report()
+    runtime = load_runtime_config()
     return {
         "agent_mode": STATE.agent_mode,
         "llm_provider": STATE.agent_mode,
@@ -643,6 +669,7 @@ def _settings_payload() -> dict[str, Any]:
         "default_privacy_items": list(PRIVATE_MARKERS),
         "privacy_report": privacy_report,
         "memory_backend": _public_backend_config(),
+        "runtime_config": public_runtime_config(runtime),
         "current_memory": _current_memory_payload(snapshot),
         "persona": _persona_payload(),
     }
