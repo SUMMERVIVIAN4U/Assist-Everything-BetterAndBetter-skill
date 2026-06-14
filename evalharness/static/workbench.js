@@ -1,10 +1,15 @@
 let report = null;
     let settings = null;
     let selectedCaseKey = null;
+    let selectedEvalGroupKey = null;
+    let selectedEvalRoundKey = null;
+    const evalGroupPages = new Map();
     let chatEvalReport = null;
     let performanceReport = null;
     let scenarios = [];
     let expandedScenarioId = 'GIFT';
+    let currentSessionDirty = false;
+    let currentSessionEvaled = false;
     const dimNames = {reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用', update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'};
     const dimMax = {reproducibility:10, memory_extraction:20, memory_application:25, update_and_decay:20, transparency:10, result_quality:15};
     const memoryBackendLabels = {local:'本地JSON', mem0_hosted:'Mem0 Hosted'};
@@ -27,7 +32,6 @@ let report = null;
     async function fetchReport() {
       report = await (await fetch('/api/report')).json();
       renderCases();
-      renderStats();
     }
     async function fetchScenarios() {
       try {
@@ -42,6 +46,9 @@ let report = null;
       settings = await (await fetch('/api/settings')).json();
       document.getElementById('settingsAgent').textContent = `llm_provider=${settings.llm_provider || settings.agent_mode || 'deepseek_pro'} · eval=real_llm_only`;
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
+      document.getElementById('identityText').value = settings.persona?.identity || '';
+      document.getElementById('soulText').value = settings.persona?.soul || '';
+      renderConfigSummaries();
       renderMemoryBackendSettings();
       renderChatMemory(settings.current_memory);
       renderPrivacySettings();
@@ -59,8 +66,7 @@ let report = null;
       document.getElementById('settingsView' + id[0].toUpperCase() + id.slice(1)).classList.remove('hidden');
       document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
       el.classList.add('active');
-      const memoryStores = {localMemory:'local', mem0Hosted:'mem0_hosted'};
-      if (memoryStores[id]) fetchMemoryStore(memoryStores[id]);
+      if (id === 'memory') refreshVisibleMemoryStore();
     }
     function privacyItemsFromInput() {
       return document.getElementById('privacyItems').value.split(/\n+/).map(item => item.trim()).filter(Boolean);
@@ -94,11 +100,62 @@ let report = null;
         : '<span class="muted">暂无隐私项。</span>';
       document.getElementById('privacyReport').textContent = JSON.stringify(settings?.privacy_report || {}, null, 2);
     }
+    function renderConfigSummaries() {
+      const provider = settings?.llm_provider || settings?.agent_mode || 'deepseek_pro';
+      document.getElementById('agentPersonaSummary').textContent = JSON.stringify({
+        identity: '真实任务协作助手；不预设用户身份、性别或关系。',
+        soul: '短、直接、像可靠朋友；默认交付方案，不在正文解释工具动作。',
+        llm_provider: provider,
+        eval: '真实 LLM chat + 真实 LLM judge'
+      }, null, 2);
+      document.getElementById('skillConfigSummary').textContent = JSON.stringify({
+        runtime: 'Workbench Agent Chat 与 Eval 共用同一个 skill runtime',
+        applies_to: ['记忆提取', '记忆召回', '删除/降级', '隐私过滤', 'LLM 回复改写保护'],
+        config_source: '页面保存的配置会直接重建当前 Workbench agent，无需另配一套'
+      }, null, 2);
+    }
+    function renderMemoryPolicySummary() {
+      const rules = [
+        ['写入', '先用规则捕捉预算、禁忌、已送历史、删除等高置信信号；再让 LLM 判断复杂语义，例如“复述候选名=选定”。只写用户说过、确认过或明确授权的信息。'],
+        ['召回', '先按场景、主体和当前任务过滤，再分成 apply_now 和 confirm_first。apply_now 可直接使用；confirm_first 只提示“之前出现过，要不要继续适用”。'],
+        ['分层', 'current_task 只服务当前 session；scene_memory 下次同类任务先确认；long_term 才默认长期生效。比如“这次父亲不去”不会变成永久事实。'],
+        ['整理/降级', '用户否定、删除或临时覆盖时，旧记忆不会硬套。删除后的语义会进入 suppression，连近义活动也会被压住。'],
+        ['演进', '用户纠错会沉淀成 workflow 或 scene_memory，例如“我重复方案名就是选定”。下次同类场景少问、少绕、少重复。']
+      ];
+      document.getElementById('memoryPolicySummary').innerHTML = rules.map(([title, body]) => `<div class="rule"><b>${title}</b><div class="muted">${body}</div></div>`).join('');
+    }
+    function renderEvalRulesSummary() {
+      const rules = [
+        ['六维得分', '真实 LLM judge 按 100 分评分：可复测 10、提取 20、应用 25、更新淘汰 20、透明度 10、结果质量 15。'],
+        ['费力度', '每个 session 单独累计：用户每轮 +1；每 50 字 +1；被追问 +2；重复说明 +3；纠错 +3；严重错误 +5。'],
+        ['记忆节省信息点', '只数“本轮正确复用、且用户没有重复说明”的信息点。比如预算、颜色、材质、已送历史、禁忌各算一个信息点。'],
+        ['多轮比较', 'Round 1/2/3 分别新开 session 后 Eval。History Evals 聚合成一组，直接看总分、费力度、记忆节省信息点是否变好。']
+      ];
+      document.getElementById('evalRulesSummary').innerHTML = rules.map(([title, body]) => `<div class="rule"><b>${title}</b><div class="muted">${body}</div></div>`).join('');
+    }
+    async function savePersona() {
+      const status = document.getElementById('personaStatus');
+      status.textContent = 'saving...';
+      const data = await (await fetch('/api/settings/persona', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({persona:{identity:document.getElementById('identityText').value, soul:document.getElementById('soulText').value}})
+      })).json();
+      if (!data.ok) {
+        status.textContent = data.error || '保存失败';
+        return;
+      }
+      settings = data.settings;
+      renderConfigSummaries();
+      status.textContent = '已保存，下一次 Agent 回复生效。';
+    }
     function renderMemoryBackendSettings() {
       const backend = settings?.memory_backend || {};
       document.getElementById('memoryEnabled').checked = backend.memory_enabled !== false;
       document.getElementById('memoryBackend').value = backend.backend || 'local';
       previewMemoryBackendSelection();
+      renderMemoryPolicySummary();
+      renderEvalRulesSummary();
     }
     function selectedMemoryBackend() {
       return document.getElementById('memoryBackend').value || settings?.memory_backend?.backend || 'local';
@@ -191,12 +248,8 @@ let report = null;
       }
     }
     function refreshVisibleMemoryStore() {
-      const visible = Array.from(document.querySelectorAll('.settings-view')).find(view => !view.classList.contains('hidden'));
-      const stores = {
-        settingsViewLocalMemory: 'local',
-        settingsViewMem0Hosted: 'mem0_hosted'
-      };
-      if (visible && stores[visible.id]) fetchMemoryStore(stores[visible.id]);
+      fetchMemoryStore('local');
+      fetchMemoryStore('mem0_hosted');
     }
     async function saveMemoryBackend() {
       const status = document.getElementById('memoryBackendStatus');
@@ -215,6 +268,7 @@ let report = null;
         return;
       }
       settings = data.settings;
+      renderConfigSummaries();
       renderMemoryBackendSettings();
       renderChatMemory(settings.current_memory);
       refreshVisibleMemoryStore();
@@ -356,6 +410,8 @@ let report = null;
       if (!text) return;
       input.value = '';
       appendMsg('user', text);
+      currentSessionDirty = true;
+      currentSessionEvaled = false;
       const thinking = appendMsg('assistant', '正在思考...');
       try {
         const data = await (await fetch('/api/chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({message:text, provider:selectedProvider()})})).json();
@@ -383,22 +439,45 @@ let report = null;
         const c = chatEvalReport.cases?.[0];
         status.textContent = c ? `完成：${c.score}/100` : '没有可评估 eval。';
         panel.innerHTML = c ? renderEvalCase(c, {compact:true}) : '<div class="muted">当前对话为空。</div>';
+        currentSessionEvaled = !!c;
         renderCases();
-        renderStats();
+        return currentSessionEvaled;
       } catch (err) {
         status.textContent = '打分失败。';
         panel.innerHTML = `<div class="note" style="color:var(--bad)">ERROR: ${escapeHtml(err.message)}</div>`;
+        return false;
       } finally {
         btn.disabled = false;
         btn.textContent = 'Run LLM Eval';
       }
     }
-    async function resetSession() {
+    async function resetSession(opts = {}) {
+      if (!opts.force && currentSessionDirty && !currentSessionEvaled) {
+        const shouldEval = window.confirm('上一个 Session 还没有 Eval。点击“确定”先 Eval，再新开 Session；点击“取消”留在当前 Session。');
+        if (!shouldEval) return false;
+        const evalOk = await runChatEval();
+        if (!evalOk) {
+          const skipEval = window.confirm('Eval 失败或没有可评估内容。是否跳过 Eval，直接新开 Session？');
+          if (!skipEval) return false;
+        }
+      }
       await fetch('/api/reset-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})});
       document.getElementById('chatlog').innerHTML = '';
-      document.getElementById('chatEvalStatus').textContent = 'Session 已重置；memory 保持不变。';
+      document.getElementById('chatEvalStatus').textContent = opts.reason || 'Session 已重置；memory 保持不变。';
       document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
+      currentSessionDirty = false;
+      currentSessionEvaled = false;
       refreshChatMemory();
+      return true;
+    }
+    async function clearHistoryEvals() {
+      if (!window.confirm('确定清空 History Evals？这会删除本地 eval 历史和 latest 报告。')) return;
+      const data = await (await fetch('/api/history/clear', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})})).json();
+      report = data;
+      selectedEvalGroupKey = null;
+      selectedCaseKey = null;
+      renderCases();
+      document.getElementById('historyHint').textContent = 'History Evals 已清空。';
     }
     async function resetMemory() {
       const data = await (await fetch('/api/reset-memory', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})})).json();
@@ -437,9 +516,9 @@ let report = null;
         ${expanded ? `
           <div class="scenario-notes">${notes.map(note => `<span class="chip good">${escapeHtml(note)}</span>`).join('') || '<span class="muted">通用 preset case。</span>'}</div>
           <div class="scenario-steps">${(scenario.steps || []).map((step, index) => `
-            <button class="scenario-step" onclick="fillScenarioStep('${escapeAttr(step.text)}')">
+            <button class="scenario-step ${step.action === 'eval' ? 'eval-step' : ''} ${step.new_session ? 'new-session-step' : ''}" onclick="runScenarioStep('${escapeAttr(scenario.id)}', ${index})">
               <span class="step-index">${index + 1}</span>
-              <span><b>${escapeHtml(step.label)}</b><span>${escapeHtml(step.text)}</span></span>
+              <span><b>${escapeHtml(step.label)}</b><span>${escapeHtml(step.hint || step.text || (step.action === 'eval' ? '评估当前 session' : ''))}</span></span>
             </button>
           `).join('')}</div>
         ` : ''}
@@ -448,6 +527,21 @@ let report = null;
     function toggleScenario(id) {
       expandedScenarioId = expandedScenarioId === id ? '' : id;
       renderScenarioLibrary();
+    }
+    async function runScenarioStep(scenarioId, index) {
+      const scenario = scenarios.find(item => item.id === scenarioId);
+      const step = scenario?.steps?.[index];
+      if (!step) return;
+      if (step.action === 'eval') {
+        await runChatEval();
+        return;
+      }
+      if (step.new_session) {
+        const resetOk = await resetSession({reason: `${step.label} 已新开 session；上一轮请在 History Evals 查看。`});
+        if (!resetOk) return;
+        appendMsg('assistant', `新 session 已开始。现在跑：${step.label}`);
+      }
+      fillScenarioStep(step.text || '');
     }
     function fillScenarioStep(text) {
       const input = document.getElementById('chatInput');
@@ -471,44 +565,108 @@ let report = null;
       const out = [];
       const history = report?.history || (report ? [report] : []);
       history.forEach(run => (run.cases || []).forEach(c => out.push({run, c, key:`${run.run_id || 'latest'}::${c.id}`})));
-      return out;
+      return out.sort((a, b) => new Date(b.run.created_at || 0) - new Date(a.run.created_at || 0));
+    }
+    function evalGroups() {
+      const groups = new Map();
+      historyCases().forEach(row => {
+        const key = evalGroupKey(row.c);
+        if (!groups.has(key)) groups.set(key, {key, name: evalGroupName(row.c), rows: []});
+        groups.get(key).rows.push(row);
+      });
+      return Array.from(groups.values()).map(group => {
+        group.rows.sort((a, b) => new Date(b.run.created_at || 0) - new Date(a.run.created_at || 0));
+        group.latest = group.rows[0];
+        return group;
+      }).sort((a, b) => new Date(b.latest.run.created_at || 0) - new Date(a.latest.run.created_at || 0));
+    }
+    function evalGroupKey(c) {
+      const text = `${c.title || ''} ${(c.script?.messages || []).join(' ')}`;
+      if (/礼物|女朋友|首饰|生日/.test(text)) return 'gift';
+      if (/旅行|行程|亲子|南京|上海|杭州|北京/.test(text)) return 'travel';
+      if (/复习|考试|例题|番茄钟/.test(text)) return 'study';
+      if (/综述|研究|RAG|文献/.test(text)) return 'research';
+      return c.domain || c.id || 'chat';
+    }
+    function evalGroupName(c) {
+      const key = evalGroupKey(c);
+      const names = {gift:'女朋友生日礼物', travel:'家庭旅行规划', study:'考试复习计划', research:'文献综述与研究设计'};
+      return names[key] || coreTaskName(c);
+    }
+    function coreTaskName(c) {
+      const messages = c.script?.messages || [];
+      const first = messages.find(text => text && !/展示当前记忆|reset memory/i.test(text)) || c.title || c.id || '';
+      return first.length > 24 ? `${first.slice(0, 24)}...` : first;
     }
     function caseDisplayName(c) {
-      return c?.title || c?.name || c?.id || '';
+      return coreTaskName(c || {});
     }
     function renderCases() {
-      const rows = historyCases();
+      const groups = evalGroups();
       const list = document.getElementById('caseList');
-      if (!rows.length) {
+      if (!groups.length) {
         list.innerHTML = '<div class="muted">暂无历史 eval。</div>';
         document.getElementById('caseDetail').innerHTML = '暂无历史 eval。';
         return;
       }
-      if (!selectedCaseKey || !rows.find(r => r.key === selectedCaseKey)) selectedCaseKey = rows[0].key;
-      list.innerHTML = rows.map(r => `
-        <button class="case-btn ${r.key === selectedCaseKey ? 'active' : ''}" onclick="selectCase('${escapeAttr(r.key)}')">
-          <div class="case-head"><b>${escapeHtml(caseDisplayName(r.c))}</b><span class="score">${r.c.score}</span></div>
-          <div class="muted">${escapeHtml(r.run.source || r.run.harness?.eval_source || '')} · ${formatTime(r.run.created_at)}</div>
-          <div class="chips"><span class="chip">费力度 ${r.c.user_effort?.final_score ?? '-'}</span><span class="chip good">记忆节省信息点 ${r.c.user_effort?.memory_saving_points ?? r.c.user_effort?.saved_score ?? 0}</span></div>
-        </button>`).join('');
-      const selected = rows.find(r => r.key === selectedCaseKey);
-      document.getElementById('caseDetail').innerHTML = renderEvalCase(selected.c, {run:selected.run});
+      if (!selectedEvalGroupKey || !groups.find(group => group.key === selectedEvalGroupKey)) selectedEvalGroupKey = groups[0].key;
+      const activeGroup = groups.find(group => group.key === selectedEvalGroupKey);
+      if (activeGroup && (!selectedEvalRoundKey || !activeGroup.rows.find(row => row.key === selectedEvalRoundKey))) {
+        selectedEvalRoundKey = activeGroup.latest.key;
+      }
+      list.innerHTML = groups.map(group => {
+        const latest = group.latest;
+        return `
+        <button class="case-btn ${group.key === selectedEvalGroupKey ? 'active' : ''}" onclick="selectCase('${escapeAttr(group.key)}')">
+          <div class="case-head"><b>${escapeHtml(group.name)}</b><span class="score">${latest.c.score}</span></div>
+          <div class="muted">Chat ${formatTime(chatStartedAt(latest.c)) || '-'} · Eval ${formatTime(latest.run.created_at)}</div>
+          <div class="chips"><span class="chip">${group.rows.length} 轮</span><span class="chip">费力度 ${latest.c.user_effort?.final_score ?? '-'}</span><span class="chip good">记忆节省信息点 ${latest.c.user_effort?.memory_saving_points ?? latest.c.user_effort?.saved_score ?? 0}</span></div>
+        </button>`;
+      }).join('');
+      const selected = groups.find(group => group.key === selectedEvalGroupKey);
+      document.getElementById('caseDetail').innerHTML = renderEvalGroup(selected);
     }
-    function selectCase(key) { selectedCaseKey = key; renderCases(); }
-    function renderStats() {
-      const rows = historyCases();
-      const latest = report?.summary || {};
-      document.getElementById('stats').innerHTML = `
-        <div class="metrics">
-          <div class="metric"><span class="muted">历史 eval 数</span><b>${rows.length}</b></div>
-          <div class="metric"><span class="muted">最新平均分</span><b>${latest.config_average ?? '-'}</b></div>
-          <div class="metric"><span class="muted">最新平均费力度</span><b>${latest.effort_average ?? '-'}</b></div>
-          <div class="metric"><span class="muted">平均记忆节省信息点</span><b>${latest.memory_saving_points_average ?? latest.saved_effort_average ?? '-'}</b></div>
-        </div>
-        <div class="panel" style="margin-top:12px"><h2>历史运行</h2>
-          <div class="turn-list">${(report?.history || []).map(run => `<div class="turn-card"><div class="case-head"><b>${escapeHtml(run.run_id || '')}</b><span class="score">${run.summary?.config_average ?? '-'}</span></div><div class="muted">${escapeHtml(run.source || '')} · ${formatTime(run.created_at)}</div></div>`).join('') || '<div class="muted">暂无历史运行。</div>'}</div>
+    function selectCase(key) {
+      selectedEvalGroupKey = key;
+      selectedEvalRoundKey = null;
+      renderCases();
+    }
+    function renderEvalGroup(group) {
+      if (!group) return '暂无历史 eval。';
+      const selectedRound = group.rows.find(row => row.key === selectedEvalRoundKey) || group.latest;
+      const pageSize = 3;
+      const pageCount = Math.max(1, Math.ceil(group.rows.length / pageSize));
+      const page = Math.min(evalGroupPages.get(group.key) || 0, pageCount - 1);
+      const start = page * pageSize;
+      const visibleRows = group.rows.slice(start, start + pageSize);
+      return `
+        <div>
+          <div class="case-head"><div><h2>${escapeHtml(group.name)}</h2><div class="muted">最新 Eval ${formatTime(group.latest.run.created_at)} · Chat ${formatTime(chatStartedAt(group.latest.c)) || '-'}</div></div><span class="score">${group.latest.c.score ?? '-'}/100</span></div>
+          <h3>多轮变化</h3>
+          <div class="metrics eval-round-grid">${visibleRows.map((row, index) => `
+            <button class="metric eval-round-card ${row.key === selectedRound.key ? 'active' : ''}" onclick="selectEvalRound('${escapeAttr(group.key)}', '${escapeAttr(row.key)}')"><span class="muted">第 ${start + index + 1} 条 · 最新优先</span><b class="round-title">${escapeHtml(caseDisplayName(row.c))}</b><div class="muted">总分 ${row.c.score ?? '-'} · 费力度 ${row.c.user_effort?.final_score ?? '-'} · 记忆节省信息点 ${row.c.user_effort?.memory_saving_points ?? row.c.user_effort?.saved_score ?? 0}</div><div class="muted">Eval ${formatTime(row.run.created_at)}</div></button>
+          `).join('')}</div>
+          ${group.rows.length > pageSize ? `<div class="pager"><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', -1)" ${page <= 0 ? 'disabled' : ''}>上一页</button><span class="muted">第 ${page + 1} / ${pageCount} 页，每页 ${pageSize} 条</span><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', 1)" ${page >= pageCount - 1 ? 'disabled' : ''}>下一页</button></div>` : ''}
+          <h3>本轮详情</h3>
+          ${renderEvalCase(selectedRound.c, {run: selectedRound.run})}
         </div>`;
     }
+    function selectEvalRound(groupKey, rowKey) {
+      selectedEvalGroupKey = groupKey;
+      selectedEvalRoundKey = rowKey;
+      renderCases();
+    }
+    function changeEvalGroupPage(groupKey, delta) {
+      const groups = evalGroups();
+      const group = groups.find(item => item.key === groupKey);
+      const pageCount = Math.max(1, Math.ceil((group?.rows.length || 0) / 3));
+      const next = Math.max(0, Math.min((evalGroupPages.get(groupKey) || 0) + delta, pageCount - 1));
+      evalGroupPages.set(groupKey, next);
+      const firstRowOnPage = group?.rows[next * 3];
+      if (firstRowOnPage) selectedEvalRoundKey = firstRowOnPage.key;
+      renderCases();
+    }
+    function chatStartedAt(c) { return c.script?.chat_started_at || c.turns?.[0]?.user?.timestamp || ''; }
     function renderEvalCase(c, opts = {}) {
       const effort = c.user_effort || {};
       const checks = c.checks || {};

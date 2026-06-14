@@ -12,7 +12,7 @@ from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Clien
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
-from .evaluation import build_report, evaluate_case_run, save_report, with_history
+from .evaluation import HISTORY_DIR, build_report, evaluate_case_run, save_report, with_history
 from .llm import DEFAULT_LLM_PROVIDER, llm_client_from_env, llm_config_from_env, llm_configured, normalize_llm_provider, supported_llm_providers
 from .mem0_performance import (
     DEMO_USER_ID,
@@ -177,6 +177,10 @@ class Handler(BaseHTTPRequestHandler):
                     "session": STATE.chat_agent.session.to_dict(),
                 }
             )
+        elif path == "/api/history/clear":
+            deleted = _clear_history_evals()
+            print(f"[workbench] cleared history evals count={deleted}")
+            self._send_json(_workbench_with_history(_empty_report("历史 eval 已清空。", _provider_from_body(body))))
         elif path == "/api/settings/privacy":
             items = body.get("privacy_items", [])
             if not isinstance(items, list):
@@ -185,6 +189,10 @@ class Handler(BaseHTTPRequestHandler):
             _save_privacy_items([str(item) for item in items])
             _apply_privacy_settings(STATE.chat_agent)
             print(f"[workbench] saved privacy items count={len(_privacy_items())}")
+            self._send_json({"ok": True, "settings": _settings_payload()})
+        elif path == "/api/settings/persona":
+            _save_persona_files(body)
+            print("[workbench] saved persona files")
             self._send_json({"ok": True, "settings": _settings_payload()})
         elif path == "/api/settings/memory-backend":
             current = _memory_backend_config()
@@ -588,6 +596,25 @@ def _workbench_with_history(report: dict[str, Any]) -> dict[str, Any]:
     return enriched
 
 
+def _clear_history_evals() -> int:
+    deleted = 0
+    if HISTORY_DIR.exists():
+        for path in HISTORY_DIR.glob("*.json"):
+            try:
+                path.unlink()
+                deleted += 1
+            except OSError:
+                continue
+    for path in [Path("eval/output/latest/eval_report.json"), Path("eval/output/latest/eval_report.md")]:
+        try:
+            if path.exists():
+                path.unlink()
+                deleted += 1
+        except OSError:
+            continue
+    return deleted
+
+
 def _report_is_real_llm(report: dict[str, Any]) -> bool:
     cases = report.get("cases", [])
     return bool(cases) and any(str(case.get("judge", {}).get("mode", "")).endswith("_llm") for case in cases)
@@ -617,7 +644,28 @@ def _settings_payload() -> dict[str, Any]:
         "privacy_report": privacy_report,
         "memory_backend": _public_backend_config(),
         "current_memory": _current_memory_payload(snapshot),
+        "persona": _persona_payload(),
     }
+
+
+def _persona_dir() -> Path:
+    return Path(__file__).resolve().parent / "persona"
+
+
+def _persona_payload() -> dict[str, str]:
+    payload: dict[str, str] = {}
+    for name in ["identity.md", "soul.md"]:
+        path = _persona_dir() / name
+        payload[name.removesuffix(".md")] = path.read_text(encoding="utf-8") if path.exists() else ""
+    return payload
+
+
+def _save_persona_files(body: dict[str, Any]) -> None:
+    persona = body.get("persona") if isinstance(body.get("persona"), dict) else body
+    _persona_dir().mkdir(parents=True, exist_ok=True)
+    for key, filename in {"identity": "identity.md", "soul": "soul.md"}.items():
+        if key in persona:
+            (_persona_dir() / filename).write_text(str(persona.get(key) or "").strip() + "\n", encoding="utf-8")
 
 
 def _scenario_library_payload() -> dict[str, Any]:
@@ -643,10 +691,13 @@ def _scenario_from_case(case: EvalCase) -> dict[str, Any]:
             {"label": "Round 1 任务", "text": case.initial_task},
             {"label": "形成记忆", "text": case.feedback},
             {"label": "展示记忆", "text": case.memory_query},
-            {"label": "Round 2 应用", "text": case.second_task},
+            {"label": "Eval Round 1", "action": "eval", "hint": "先评估当前 session，再进入下一轮。"},
+            {"label": "Round 2 应用", "text": case.second_task, "new_session": True},
             {"label": "更新/条件化", "text": case.preference_change},
-            {"label": "Round 3 复用", "text": case.third_task},
+            {"label": "Eval Round 2", "action": "eval", "hint": "评估第二个 session 的费力度和记忆复用。"},
+            {"label": "Round 3 复用", "text": case.third_task, "new_session": True},
             {"label": "删除后复测", "text": f"{case.delete_query}。然后：{case.delete_retest_task}"},
+            {"label": "Eval Round 3", "action": "eval", "hint": "评估删除/降级后的最终表现。"},
         ],
     }
 
@@ -664,10 +715,13 @@ def _gift_scenario() -> dict[str, Any]:
             {"label": "形成记忆", "text": "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"},
             {"label": "授权保存", "text": "同意保存。"},
             {"label": "展示记忆", "text": "展示当前记忆。"},
-            {"label": "Round 2 推荐", "text": "给我一个礼物推荐。"},
+            {"label": "Eval Round 1", "action": "eval", "hint": "先评估当前 session 是否正确形成偏好、历史和决策。"},
+            {"label": "Round 2 推荐", "text": "给我一个礼物推荐。", "new_session": True},
             {"label": "更新约束", "text": "不是，我想换个非首饰品类。"},
-            {"label": "Round 3 推荐", "text": "那再给一个推荐。"},
+            {"label": "Eval Round 2", "action": "eval", "hint": "评估第二个 session 是否减少重复说明。"},
+            {"label": "Round 3 推荐", "text": "那再给一个推荐。", "new_session": True},
             {"label": "删除后复测", "text": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。"},
+            {"label": "Eval Round 3", "action": "eval", "hint": "评估删除后是否不再使用紫色。"},
         ],
     }
 
@@ -769,15 +823,18 @@ def _chat_case(
         }
         return evaluate_case_run(empty, provider, allow_judge_fallback=False)
     domain = _infer_chat_domain(turns)
+    title = _chat_case_title(turns)
     run = {
         "id": "CHAT-SESSION",
-        "title": "当前 Agent Chat",
+        "title": title,
         "domain": domain,
         "module": "自由对话记忆评估",
         "script": {
             "source": "agent_chat",
             "turn_count": len(turns),
             "messages": [turn["user"]["content"] for turn in turns],
+            "chat_started_at": turns[0].get("user", {}).get("timestamp", ""),
+            "chat_ended_at": turns[-1].get("assistant", {}).get("timestamp", ""),
         },
         "turns": turns,
         "rounds": _chat_rounds(turns),
@@ -795,6 +852,18 @@ def _chat_case(
 
 def _infer_chat_domain(turns: list[dict[str, Any]]) -> str:
     return "ad_hoc_chat"
+
+
+def _chat_case_title(turns: list[dict[str, Any]]) -> str:
+    for turn in turns:
+        text = str(turn.get("user", {}).get("content") or "").strip()
+        if not text or text.lower() in {"reset memory", "show memory"} or "展示当前记忆" in text:
+            continue
+        text = text.replace("\n", " ")
+        if len(text) > 24:
+            return text[:24] + "..."
+        return text
+    return "当前聊天评估"
 
 
 def _chat_checks(

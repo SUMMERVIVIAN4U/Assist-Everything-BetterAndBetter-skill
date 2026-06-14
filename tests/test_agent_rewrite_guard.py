@@ -4,6 +4,7 @@ from evalharness.agent import (
     HarnessAgent,
     _conversation_context_blocked_terms,
     _llm_response_is_usable,
+    _sanitize_llm_output,
     _suppression_context_from_actions,
     _violates_memory_context_constraints,
     _violates_suppression_context,
@@ -60,6 +61,16 @@ def test_harness_injects_semantic_extractor_for_short_gift_selection():
     actions = turn.tool_calls[0].output["memory_actions"]
     assert client.json_calls
     assert any(action["action"] == "add" and "拍立得" in action["detail"] for action in actions)
+
+
+def test_sanitize_llm_output_preserves_literal_double_asterisks():
+    text = "Python 里 `2 ** 3` 是 8；glob 可以写 `**/*.py`；Markdown 示例：**加粗**。"
+
+    cleaned = _sanitize_llm_output(text)
+
+    assert "`2 ** 3`" in cleaned
+    assert "`**/*.py`" in cleaned
+    assert "**加粗**" in cleaned
 
 
 def test_rewrite_payload_projects_selected_gifts_as_exclusions():
