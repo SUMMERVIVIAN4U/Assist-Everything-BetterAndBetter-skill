@@ -19,6 +19,56 @@ from .llm import (
 from .quality import _applied_memory_details
 
 
+SESSION_EFFORT_MEMORY_POLICY = {
+    "eval_unit": "一次 Agent Chat Eval 对应当前 session 的全部对话；多轮比赛展示时，用多个 session 的 eval 结果做横向比较。",
+    "effort_score": {
+        "meaning": "user_effort.final_score 是本 session 的用户实际费力度遥测，不是 LLM judge 的唯一真值。",
+        "count_as_agent_induced": [
+            "用户因为 assistant 忽略已知约束而纠错或重复说明。",
+            "用户因为 assistant 推荐了已排除/已删除/已送过的选项而纠错。",
+            "用户因为 assistant 没有交付当前任务、只追问或跑题而继续催促。",
+            "用户因为 assistant 错误理解选择意图而重复确认。",
+        ],
+        "do_not_count_as_agent_induced": [
+            "用户自然缩小范围、换品类、选择候选、补充新偏好。",
+            "用户主动探索多个方案，且 assistant 上一轮没有违反已有约束。",
+            "用户输入较长但主要是在表达新需求、新约束或最终选择。",
+        ],
+    },
+    "memory_saving_points": {
+        "meaning": "记忆节省信息点表示本 session 中用户本可以重复说明、但因系统正确复用已有记忆而省掉的信息点。",
+        "certify_only_if_all_true": [
+            "该信息点在本 session 开始前已经存在，或至少不是本 session 刚由用户重述后才创建。",
+            "用户在本 session 没有再次显式说出同一信息点。",
+            "该信息点对当前任务达成是关键约束，而不是可有可无的背景。",
+            "assistant 的回答可见地使用了该信息点。",
+            "该信息点处于 active 状态，没有被删除、压制或被当前用户指令反转。",
+            "同一语义信息点每个 session 只计一次。",
+        ],
+        "candidate_not_credit": "applied_memory_details 只是候选证据；不能因为被召回就自动算作节省。",
+    },
+}
+
+
+EFFORT_MEMORY_RUBRIC = """
+费力度与记忆节省评分规则：
+1. Eval 单位是当前 Agent Chat session 的全部对话。多个 session 的比较，才体现第一轮、第二轮、第三轮是否越来越省力。
+2. user_effort.final_score 是遥测输入，不是最终裁判。你必须根据 turns 判断这些成本来自用户主动探索，还是 agent 失误造成的额外成本。
+3. 不要把用户自然缩小范围、换品类、选择候选、补充新偏好，算成 agent-induced correction；只有 assistant 忽略已知约束、推荐已排除项、跑题、未交付、或误解选择意图时，才把后续纠错计为 agent 造成的费力度。
+4. 记忆节省信息点必须经过认证：它需要在本 session 前已经存在，用户本 session 没有重复说，且它对当前任务关键，并被 assistant 明确使用。applied_memory_details 只是候选召回，不是自动得分。
+5. 同一语义信息点每个 session 只计一次；本 session 刚写入的信息、无关召回、被删除/反转的记忆，都不能算记忆节省。
+6. 如果 final_score 偏高主要来自用户主动选择和细化，不应重扣 result_quality；如果偏高来自 assistant 违反记忆或让用户重复劳动，必须在 result_quality 或 memory_application 中扣分。
+请在 JSON 中额外返回 effort_review，用于解释费力度和记忆节省判断：
+{
+  "session_effort_judgement": "数值化解释本 session 费力度来自哪些用户动作",
+  "agent_induced_corrections": [{"turn": "turn_002", "reason": "..."}],
+  "user_driven_refinements": [{"turn": "turn_002", "reason": "..."}],
+  "certified_memory_savings": [{"memory": "...", "turn": "turn_001", "reason": "..."}],
+  "rejected_memory_savings": [{"memory": "...", "reason": "..."}]
+}
+""".strip()
+
+
 class HeuristicJudge:
     """Offline judge used when no external LLM judge is configured."""
 
@@ -154,6 +204,7 @@ class LLMJudge:
             "rounds": case_run["rounds"],
             "checks": case_run["checks"],
             "user_effort": case_run.get("user_effort", {}),
+            "session_eval_policy": SESSION_EFFORT_MEMORY_POLICY,
             "quality": case_run.get("quality", {}),
             "memory_events": case_run["memory_events"],
             "turns": [
@@ -177,11 +228,12 @@ class LLMJudge:
                     "分值上限：reproducibility 10, memory_extraction 20, "
                     "memory_application 25, update_and_decay 20, transparency 10, result_quality 15。"
                     "评分必须和 checks、quality、memory_events、turns 中的证据一致；不要因为主观偏好或未要求的能力扣分。"
+                    f"\n\n{EFFORT_MEMORY_RUBRIC}\n\n"
                     "如果 reset/snapshot/show_memory/round2_applied/round3_applied/updated/deleted_filtered/delete_reported/compound_followup_delivered 均为 true，"
                     "且 polluted_memories=0、semantic_violations=0、unresolved_dissatisfaction=false、delivered_task_turns=task_turns，"
                     "总分通常不应低于 90；除非 turns 中存在明确证据说明记忆误用、任务未交付、删除后仍被应用、或用户纠错。"
                     "每个维度扣分必须指出具体 turn 或 memory_id；不能只说“缺少更细机制”“可以更好”就大幅扣分。"
-                    "必须包含 scores.total 和 reasons。scores 必须包含六个维度的整数分。"
+                    "必须包含 scores.total、reasons 和 effort_review。scores 必须包含六个维度的整数分。"
                 ),
             },
             {"role": "user", "content": json.dumps(compact, ensure_ascii=False)},
@@ -221,6 +273,7 @@ class LLMJudge:
             "dimensions": DIMENSIONS,
             "scores": scores,
             "reasons": data.get("reasons", {}),
+            "effort_review": data.get("effort_review", {}),
         }
 
 
