@@ -101,8 +101,9 @@ class HarnessAgent:
         client = self.llm_client or _workbench_llm_client(provider)
         snapshot = self.toolbox.snapshot()
         memory_context = _rewrite_memory_context(snapshot, memory_pack or {}, applied_memories)
-        memory_actions = _compact_memory_actions(current_memory_actions or self.toolbox.skill.memory.events[-8:])
+        memory_actions = _compact_memory_actions(current_memory_actions or self.toolbox.skill.memory.events[-8:], snapshot=snapshot)
         selected_gift = _selected_gift_from_actions(memory_actions) or _gift_selection_phrase(user_text)
+        suppression_context = _suppression_context_from_actions(memory_actions)
         messages = [
             {
                 "role": "system",
@@ -118,6 +119,7 @@ class HarnessAgent:
                         "applied_memory_ids": applied_memories,
                         "memory_context": memory_context,
                         "memory_actions": memory_actions,
+                        "suppression_context": suppression_context,
                         "response_directives": _response_directives(user_text, memory_context, selected_gift=selected_gift),
                     },
                     ensure_ascii=False,
@@ -127,7 +129,12 @@ class HarnessAgent:
         try:
             rewritten = _sanitize_llm_output(client.chat(messages, temperature=0.3))
             rewritten = _remove_trailing_generic_question(rewritten)
-            if _llm_response_is_usable(rewritten, user_text=user_text, selected_gift=selected_gift):
+            if _llm_response_is_usable(
+                rewritten,
+                user_text=user_text,
+                selected_gift=selected_gift,
+                suppression_context=suppression_context,
+            ):
                 return rewritten
             retry_messages = [
                 messages[0],
@@ -141,12 +148,14 @@ class HarnessAgent:
                             "applied_memory_ids": applied_memories,
                             "memory_context": memory_context,
                             "memory_actions": memory_actions,
+                            "suppression_context": suppression_context,
                             "response_directives": _response_directives(user_text, memory_context, selected_gift=selected_gift),
                             "previous_rewrite": rewritten,
                             "instruction": (
                                 "上一次回复不可用。必须基于 user_message、conversation_context 和 memory_context 直接回答用户；"
                                 "如果用户是在确认、纠正或选择候选项，先承认并执行这个意图；"
                                 "如果 memory_actions 已经写入 selected 决策，必须确认该已选礼物，不能继续推荐其他方向；"
+                                "如果 suppression_context 标出本轮删除/降级的记忆语义，后续方案不得继续把这些语义作为推荐依据或主方案核心；"
                                 "任务请求必须给出完整可用结果，不能只追问，不能说“这个草案/上面的方案”却不展示主体。"
                             ),
                         },
@@ -156,7 +165,12 @@ class HarnessAgent:
             ]
             rewritten = _sanitize_llm_output(client.chat(retry_messages, temperature=0.1))
             rewritten = _remove_trailing_generic_question(rewritten)
-            if _llm_response_is_usable(rewritten, user_text=user_text, selected_gift=selected_gift):
+            if _llm_response_is_usable(
+                rewritten,
+                user_text=user_text,
+                selected_gift=selected_gift,
+                suppression_context=suppression_context,
+            ):
                 return rewritten
             return rewritten or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
         except Exception as exc:
@@ -329,6 +343,8 @@ def _system_prompt() -> str:
         "记忆工具已经完成提取、更新、删除和检索。"
         "必须尊重 memory_context，不要虚构或使用 deleted/superseded 记忆。"
         "如果用户本轮删除或否定了某条偏好，该删除/否定优先级高于 conversation_context 中更早的说法，后续回答不得继续使用被删除偏好。"
+        "如果 payload 里有 suppression_context，里面的 do_not_assume 是本轮刚删除/降级的语义，优先级高于历史对话和通用经验；"
+        "不得把这些语义作为推荐理由、主方案核心或默认假设。"
         "如果被删除的是颜色偏好，后续不要推荐该颜色、不要把该颜色作为搭配理由；即使历史已选礼物名称含该颜色，也只称“已选礼物/已选方巾”，不要复述该颜色词。"
         "只能默认使用 memory_context.apply_now 里的记忆；memory_context.confirm_first 只能作为需要确认的提示，不能直接当作已生效约束。"
         "你的回复不能为空；对任务请求必须直接给完整可用结果，不能只说需要更多材料。"
@@ -471,18 +487,104 @@ def _gift_category_hint(text: str) -> str:
     return ""
 
 
-def _compact_memory_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _compact_memory_actions(actions: list[dict[str, Any]], *, snapshot: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    memory_lookup = _memory_lookup(snapshot or {})
     output: list[dict[str, Any]] = []
     for action in actions:
+        memory_id = action.get("memory_id")
+        memory_item = memory_lookup.get(str(memory_id or ""))
         output.append(
             {
                 "action": action.get("action"),
                 "detail": action.get("detail") or action.get("memory_id"),
+                "memory_id": memory_id,
+                "memory_content": memory_item.get("content") if memory_item else action.get("content"),
+                "scope": memory_item.get("scope") if memory_item else action.get("scope"),
+                "predicate": memory_item.get("predicate") if memory_item else action.get("predicate"),
                 "ok": action.get("ok", True),
                 "extractor": action.get("extractor"),
             }
         )
     return output
+
+
+def _memory_lookup(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    lookup: dict[str, dict[str, Any]] = {}
+    for bucket in ["active", "superseded", "archived", "deleted"]:
+        for item in snapshot.get(bucket, []) or []:
+            if isinstance(item, dict) and item.get("id"):
+                lookup[str(item["id"])] = item
+    return lookup
+
+
+def _suppression_context_from_actions(actions: list[dict[str, Any]]) -> dict[str, Any]:
+    suppressed: list[dict[str, Any]] = []
+    for action in actions or []:
+        if action.get("ok", True) is False:
+            continue
+        if action.get("action") not in {"delete", "downgrade", "archive"}:
+            continue
+        content = str(action.get("memory_content") or action.get("detail") or "").strip()
+        if not content or content in {"user_requested_delete", "user_requested_downgrade", "user_requested_archive"}:
+            continue
+        terms = _suppression_terms(content)
+        if not terms:
+            continue
+        suppressed.append(
+            {
+                "action": action.get("action"),
+                "memory_id": action.get("memory_id"),
+                "content": content,
+                "scope": action.get("scope") or "",
+                "do_not_assume": terms,
+                "duration": "current_task",
+            }
+        )
+    return {"items": suppressed}
+
+
+def _suppression_terms(content: str) -> list[str]:
+    text = re.sub(r"[，,。；;：:（）()【】\\[\\]\"'“”‘’]", " ", str(content or ""))
+    raw_parts = re.split(r"\s+|和|与|及|、|/|或", text)
+    stopwords = {
+        "用户",
+        "收礼人",
+        "女朋友",
+        "男朋友",
+        "老公",
+        "老婆",
+        "孩子",
+        "父亲",
+        "母亲",
+        "喜欢",
+        "偏好",
+        "约束",
+        "记忆",
+        "礼物",
+        "本次",
+        "这次",
+        "家庭",
+        "旅行",
+        "出行",
+        "需要",
+        "下次",
+        "确认",
+        "同类",
+        "场景",
+    }
+    terms: list[str] = []
+    for part in raw_parts:
+        token = part.strip()
+        if len(token) < 2 or token in stopwords:
+            continue
+        if token.endswith(("偏好", "约束")) and len(token) > 2:
+            token = token[:-2]
+        if token and token not in stopwords and token not in terms:
+            terms.append(token)
+    for marker in ["紫色", "动物", "自然", "网红", "首饰", "少步行", "步行", "玫瑰金"]:
+        if marker in content and marker not in terms:
+            terms.append(marker)
+    return terms[:8]
 
 
 def _memory_actions_from_call(call: Any) -> list[dict[str, Any]]:
@@ -511,13 +613,21 @@ def _authoritative_memory_operation(call: Any, *, stage: str = "") -> bool:
     )
 
 
-def _llm_response_is_usable(rewritten: str, *, user_text: str = "", selected_gift: str = "") -> bool:
+def _llm_response_is_usable(
+    rewritten: str,
+    *,
+    user_text: str = "",
+    selected_gift: str = "",
+    suppression_context: dict[str, Any] | None = None,
+) -> bool:
     text = str(rewritten or "").strip()
     if not text:
         return False
     if _looks_truncated(text):
         return False
     if _has_unresolved_choice(text):
+        return False
+    if _violates_suppression_context(text, suppression_context or {}, user_text=user_text):
         return False
     if _contains_any(text, ["这个草案", "该草案", "上面的方案"]) and not _contains_any(text, ["第 1 天", "第1天", "上午", "下午", "推荐方向", "方案："]):
         return False
@@ -542,6 +652,75 @@ def _llm_response_is_usable(rewritten: str, *, user_text: str = "", selected_gif
         ):
             return False
     if _is_clarification_only(text):
+        return False
+    return True
+
+
+def _violates_suppression_context(text: str, suppression_context: dict[str, Any], *, user_text: str = "") -> bool:
+    items = suppression_context.get("items") if isinstance(suppression_context, dict) else None
+    if not isinstance(items, list) or not items:
+        return False
+    body = _answer_body_without_management_ack(text)
+    if not body:
+        return False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        terms = [str(term).strip() for term in item.get("do_not_assume", []) if str(term).strip()]
+        if not terms:
+            continue
+        if any(term in user_text and not _contains_any(user_text, ["删除", "删掉", "忘掉", "不再"]) for term in terms):
+            continue
+        if any(_suppressed_term_used_as_plan(body, term) for term in terms):
+            return True
+    return False
+
+
+def _answer_body_without_management_ack(text: str) -> str:
+    lines = []
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            lines.append(line)
+            continue
+        if _contains_any(stripped, ["已删除", "删除成功", "记忆已删除", "已降级", "已归档"]):
+            continue
+        if _contains_any(stripped, ["不再按", "不基于", "不把"]) and _contains_any(stripped, ["作为依据", "作为推荐理由", "偏好"]):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _suppressed_term_used_as_plan(body: str, term: str) -> bool:
+    if not term or term not in body:
+        return False
+    plan_markers = [
+        "推荐",
+        "方案",
+        "安排",
+        "路线",
+        "上午",
+        "下午",
+        "第",
+        "Day",
+        "亮点",
+        "理由",
+        "适合",
+        "优先",
+        "选择",
+        "去",
+    ]
+    if not _contains_any(body, plan_markers):
+        return False
+    negated_patterns = [
+        f"不推荐{term}",
+        f"不再推荐{term}",
+        f"不安排{term}",
+        f"避开{term}",
+        f"不去{term}",
+        f"删除{term}",
+    ]
+    if any(pattern in body for pattern in negated_patterns):
         return False
     return True
 

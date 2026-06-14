@@ -197,6 +197,32 @@ def test_rewrite_uses_current_selected_memory_action_when_user_names_scarf():
     assert any("紫色丝巾" in directive for directive in retry_payload["response_directives"])
 
 
+def test_rewrite_suppresses_deleted_travel_memory_in_followup_plan():
+    class Client(_SequencedClient):
+        def __init__(self):
+            super().__init__(
+                [
+                    "已记录：孩子喜欢自然和动物；避开人挤人的网红点。",
+                    "好的，记忆已删除。\n\n南京半日游：上午红山森林动物园，亮点是孩子能近距离看动物；下午玄武湖散步。",
+                    "好的，已删除这条偏好。南京半日游改成：上午南京博物院民国馆，午餐后去玄武湖环洲短线散步；全程避开拥挤打卡点，不再按动物主题安排。",
+                ]
+            )
+
+    client = Client()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("以后家庭出行请记住：孩子喜欢自然和动物；我不喜欢人挤人的网红点。")
+
+    turn = agent.reply("删除孩子喜欢动物这条记忆。。然后：安排南京半日游。")
+
+    assert len(client.calls) == 3
+    assert "南京博物院" in turn.assistant.content
+    assert "红山森林动物园" not in turn.assistant.content
+    retry_payload = json.loads(client.calls[-1]["messages"][1]["content"])
+    suppressed = retry_payload["suppression_context"]["items"]
+    assert any("孩子喜欢自然和动物" in item["content"] for item in suppressed)
+    assert any("动物" in item["do_not_assume"] for item in suppressed)
+
+
 def test_rewrite_never_falls_back_to_local_draft_when_llm_drops_travel_plan():
     client = _SequencedClient(
         [
