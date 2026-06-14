@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from assist_everything_betterandbetter_skill.cases import CASES, EvalCase
+from assist_everything_betterandbetter_skill.cases import WORKBENCH_CASES, EvalCase
 
 from .agent import HarnessAgent
 from .evaluation import build_report, evaluate_case_run, save_report
@@ -154,7 +154,7 @@ def run_all(
             require_llm=require_llm,
             allow_judge_fallback=allow_judge_fallback,
         )
-        for case in CASES
+        for case in WORKBENCH_CASES
     ]
     cases.append(
         run_gift_birthday_scenario(

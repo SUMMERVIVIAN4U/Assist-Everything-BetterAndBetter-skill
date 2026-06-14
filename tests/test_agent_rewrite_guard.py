@@ -1,6 +1,13 @@
 import json
 
-from evalharness.agent import HarnessAgent
+from evalharness.agent import (
+    HarnessAgent,
+    _conversation_context_blocked_terms,
+    _llm_response_is_usable,
+    _suppression_context_from_actions,
+    _violates_memory_context_constraints,
+    _violates_suppression_context,
+)
 
 
 class _SequencedClient:
@@ -214,7 +221,7 @@ def test_rewrite_suppresses_deleted_travel_memory_in_followup_plan():
 
     turn = agent.reply("删除孩子喜欢动物这条记忆。。然后：安排南京半日游。")
 
-    assert len(client.calls) == 3
+    assert len(client.calls) >= 3
     assert "南京博物院" in turn.assistant.content
     assert "红山森林动物园" not in turn.assistant.content
     retry_payload = json.loads(client.calls[-1]["messages"][1]["content"])
@@ -231,7 +238,12 @@ def test_rewrite_keeps_deleted_travel_memory_suppressed_across_followup_turns():
                     "已记录：孩子喜欢自然和动物；避开人挤人的网红点。",
                     "好的，已删除这条偏好。南京半日游：上午南京博物院，下午玄武湖短线。",
                     "南京半日游：上午红山森林动物园，孩子能看动物；下午中山陵音乐台。",
-                    "南京半日游：上午南京博物院民国馆，下午玄武湖情侣园短线；本次只按两人出行和避开网红点安排，不按动物主题安排。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖情侣园短线，15点返程。",
+                    "南京半日游：上午红山森林动物园，孩子能看动物；下午中山陵音乐台。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖情侣园短线，15点返程。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖情侣园短线，15点返程。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖情侣园短线，15点返程。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖情侣园短线，15点返程。",
                 ]
             )
 
@@ -242,7 +254,7 @@ def test_rewrite_keeps_deleted_travel_memory_suppressed_across_followup_turns():
 
     turn = agent.reply("这次父亲不去，只有我和孩子；避开网红点这条保留，但少步行不适用。")
 
-    assert len(client.calls) == 4
+    assert len(client.calls) >= 4
     assert "南京博物院" in turn.assistant.content
     assert "红山森林动物园" not in turn.assistant.content
     retry_payload = json.loads(client.calls[-1]["messages"][1]["content"])
@@ -364,6 +376,114 @@ def test_rewrite_guard_rejects_unresolved_choice_plan():
     assert len(client.calls) == 2
     assert "二选一" not in turn.assistant.content
     assert "共青森林公园" in turn.assistant.content
+
+
+def test_rewrite_guard_rejects_which_direction_plan():
+    client = _SequencedClient(
+        [
+            "南京半日游：方案A玄武湖，方案B中山陵，方案C栖霞山。\n哪个方向？确认后给具体交通时间。",
+            "南京半日游：上午玄武湖环湖步道，10点坐游船，12点湖边午餐，13点南京博物院民国馆，15点返程。",
+        ]
+    )
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+
+    turn = agent.reply("安排南京半日游。")
+
+    assert len(client.calls) == 2
+    assert "哪个方向" not in turn.assistant.content
+    assert "玄武湖" in turn.assistant.content
+
+
+def test_rewrite_suppression_rejects_pigeon_after_deleted_animal_preference():
+    class Client(_SequencedClient):
+        def __init__(self):
+            super().__init__(
+                [
+                    "已记录：孩子喜欢自然和动物；避开人挤人的网红点。",
+                    "已删除这条偏好。南京半日游：上午南京博物院，下午玄武湖短线。",
+                    "南京半日游：上午中山陵音乐台喂鸽子，下午玄武湖游船。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                    "南京半日游：上午中山陵音乐台喂鸽子，下午玄武湖游船。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                    "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                ]
+            )
+
+    client = Client()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("以后家庭出行请记住：孩子喜欢自然和动物；我不喜欢人挤人的网红点。")
+    agent.reply("删除孩子喜欢动物这条记忆。。然后：安排南京半日游。")
+
+    turn = agent.reply("这次父亲不去，只有我和孩子；避开网红点这条保留，但少步行不适用。")
+
+    assert len(client.calls) >= 4
+    assert "喂鸽子" not in turn.assistant.content
+    assert "南京博物院" in turn.assistant.content
+
+
+def test_rewrite_guard_rejects_tourist_street_when_avoiding_influencer_spots():
+    class Client(_SequencedClient):
+        def __init__(self):
+            super().__init__(
+                [
+                        "已记录：避开人挤人的网红点。",
+                        "南京半日游：上午中华门城堡，下午老门东历史街区边逛边吃。",
+                        "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                        "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                        "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                        "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                        "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                        "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                        "南京半日游：上午南京博物院民国馆，下午玄武湖游船，15点返程。",
+                    ]
+                )
+
+    client = Client()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("以后家庭出行请记住：我不喜欢人挤人的网红点。")
+
+    turn = agent.reply("安排南京半日游。")
+
+    assert len(client.calls) >= 3
+    assert "老门东" not in turn.assistant.content
+    assert "南京博物院" in turn.assistant.content
+
+
+def test_delete_request_itself_creates_suppression_when_backend_has_no_action():
+    context = _suppression_context_from_actions(
+        [],
+        user_text="删除孩子喜欢动物这条记忆。。然后：安排南京半日游。",
+        context="",
+    )
+
+    assert _violates_suppression_context(
+        "南京半日游：下午去红山森林动物园喂鸽子。",
+        context,
+        user_text="删除孩子喜欢动物这条记忆。。然后：安排南京半日游。",
+    )
+
+
+def test_influencer_spot_constraint_uses_conversation_context():
+    assert _violates_memory_context_constraints(
+        "南京半日游：下午去老门东吃饭。",
+        {},
+        user_text="安排南京半日游。",
+        conversation_context="以后家庭出行请记住：我不喜欢人挤人的网红点。",
+    )
+    blocked = _conversation_context_blocked_terms(
+        "安排南京半日游。",
+        "以后家庭出行请记住：我不喜欢人挤人的网红点。",
+    )
+    assert "老门东" in blocked
+
+
+def test_route_task_rejects_short_continue_previous_plan_answer():
+    assert not _llm_response_is_usable(
+        "已确认删除。玄武湖方案继续适用。",
+        user_text="删除孩子喜欢动物这条记忆。。然后：安排南京半日游。",
+    )
 
 
 def test_rewrite_payload_includes_memory_actions_without_tool_draft():

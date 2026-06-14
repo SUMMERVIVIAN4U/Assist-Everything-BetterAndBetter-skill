@@ -120,7 +120,12 @@ class HarnessAgent:
                         "memory_context": memory_context,
                         "memory_actions": memory_actions,
                         "suppression_context": suppression_context,
-                        "response_directives": _response_directives(user_text, memory_context, selected_gift=selected_gift),
+                        "response_directives": _response_directives(
+                            user_text,
+                            memory_context,
+                            selected_gift=selected_gift,
+                            suppression_context=suppression_context,
+                        ),
                     },
                     ensure_ascii=False,
                 ),
@@ -134,6 +139,8 @@ class HarnessAgent:
                 user_text=user_text,
                 selected_gift=selected_gift,
                 suppression_context=suppression_context,
+                memory_context=memory_context,
+                conversation_context=context,
             ):
                 return rewritten
             retry_messages = [
@@ -149,14 +156,20 @@ class HarnessAgent:
                             "memory_context": memory_context,
                             "memory_actions": memory_actions,
                             "suppression_context": suppression_context,
-                            "response_directives": _response_directives(user_text, memory_context, selected_gift=selected_gift),
+                            "response_directives": _response_directives(
+                                user_text,
+                                memory_context,
+                                selected_gift=selected_gift,
+                                suppression_context=suppression_context,
+                            ),
                             "previous_rewrite": rewritten,
                             "instruction": (
                                 "上一次回复不可用。必须基于 user_message、conversation_context 和 memory_context 直接回答用户；"
                                 "如果用户是在确认、纠正或选择候选项，先承认并执行这个意图；"
                                 "如果 memory_actions 已经写入 selected 决策，必须确认该已选礼物，不能继续推荐其他方向；"
                                 "如果 suppression_context 标出本轮删除/降级的记忆语义，后续方案不得继续把这些语义作为推荐依据或主方案核心；"
-                                "任务请求必须给出完整可用结果，不能只追问，不能说“这个草案/上面的方案”却不展示主体。"
+                                "任务请求必须给出完整可用结果，不能只追问，不能说“这个草案/上面的方案”却不展示主体；"
+                                "如果用户要求安排行程/路线，必须给一个默认主路线和时间安排，不能只给多个方向让用户选。"
                             ),
                         },
                         ensure_ascii=False,
@@ -170,8 +183,112 @@ class HarnessAgent:
                 user_text=user_text,
                 selected_gift=selected_gift,
                 suppression_context=suppression_context,
+                memory_context=memory_context,
+                conversation_context=context,
             ):
                 return rewritten
+            blocked_terms = (
+                _suppression_blocked_terms(suppression_context)
+                + _memory_context_blocked_terms(memory_context)
+                + _conversation_context_blocked_terms(user_text, context)
+            )
+            if not blocked_terms and not _has_unresolved_choice(rewritten):
+                return rewritten or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
+            final_retry_messages = [
+                messages[0],
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "stage": stage,
+                            "user_message": user_text,
+                            "conversation_context": context,
+                            "applied_memory_ids": applied_memories,
+                            "memory_context": memory_context,
+                            "memory_actions": memory_actions,
+                            "suppression_context": suppression_context,
+                            "blocked_terms": blocked_terms,
+                            "response_directives": _response_directives(
+                                user_text,
+                                memory_context,
+                                selected_gift=selected_gift,
+                                suppression_context=suppression_context,
+                            ),
+                            "previous_rewrite": rewritten,
+                            "instruction": (
+                                "上一次回复仍不可用。请重新给出最终答案，只输出可直接交付给用户的答案。"
+                                "必须遵守 blocked_terms：这些词和对应语义不能作为方案、活动、推荐理由或互动项目出现。"
+                                "如果用户要求安排行程/路线，直接选择一个默认主路线并给出时间表，不要让用户再选方向。"
+                                "如果用户要求删除记忆，先用一句话确认删除状态，再继续完成同一句里的任务。"
+                            ),
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ]
+            rewritten = _sanitize_llm_output(client.chat(final_retry_messages, temperature=0.0))
+            rewritten = _remove_trailing_generic_question(rewritten)
+            if _llm_response_is_usable(
+                rewritten,
+                user_text=user_text,
+                selected_gift=selected_gift,
+                suppression_context=suppression_context,
+                memory_context=memory_context,
+                conversation_context=context,
+            ):
+                return rewritten
+            for _ in range(2):
+                violation_terms = _blocked_terms_used_in_answer(rewritten, blocked_terms)
+                if (
+                    not violation_terms
+                    and not _has_unresolved_choice(rewritten)
+                    and _llm_response_is_usable(
+                        rewritten,
+                        user_text=user_text,
+                        selected_gift=selected_gift,
+                        suppression_context=suppression_context,
+                        memory_context=memory_context,
+                        conversation_context=context,
+                    )
+                ):
+                    break
+                repair_messages = [
+                    messages[0],
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "stage": stage,
+                                "user_message": user_text,
+                                "conversation_context": context,
+                                "memory_context": memory_context,
+                                "memory_actions": memory_actions,
+                                "suppression_context": suppression_context,
+                                "blocked_terms": blocked_terms,
+                                "previous_rewrite": rewritten,
+                                "violations": violation_terms,
+                                "instruction": (
+                                    "上一次回复违反了 blocked_terms 或仍让用户选方向。"
+                                    "请完全重写，输出最终答案。不能出现 violations 中的词，"
+                                    "也不能用近义活动替代被删除的语义。"
+                                    "如果是路线/行程请求，给一个默认主路线和时间表。"
+                                ),
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                ]
+                rewritten = _sanitize_llm_output(client.chat(repair_messages, temperature=0.0))
+                rewritten = _remove_trailing_generic_question(rewritten)
+                if _llm_response_is_usable(
+                    rewritten,
+                    user_text=user_text,
+                    selected_gift=selected_gift,
+                    suppression_context=suppression_context,
+                    memory_context=memory_context,
+                    conversation_context=context,
+                ):
+                    return rewritten
             return rewritten or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
         except Exception as exc:
             if self.require_llm:
@@ -343,6 +460,7 @@ def _system_prompt() -> str:
         "记忆工具已经完成提取、更新、删除和检索。"
         "必须尊重 memory_context，不要虚构或使用 deleted/superseded 记忆。"
         "如果用户本轮删除或否定了某条偏好，该删除/否定优先级高于 conversation_context 中更早的说法，后续回答不得继续使用被删除偏好。"
+        "如果用户显式要求删除/忘掉某条记忆，回复开头要用一句话确认删除或说明此前已删除，然后继续完成用户同一句里的任务。"
         "如果 payload 里有 suppression_context，里面的 do_not_assume 是本轮刚删除/降级的语义，优先级高于历史对话和通用经验；"
         "不得把这些语义作为推荐理由、主方案核心或默认假设。"
         "如果被删除的是颜色偏好，后续不要推荐该颜色、不要把该颜色作为搭配理由；即使历史已选礼物名称含该颜色，也只称“已选礼物/已选方巾”，不要复述该颜色词。"
@@ -361,6 +479,7 @@ def _system_prompt() -> str:
         "不要把香氛/香水/香薰/扩香/蜡烛作为默认兜底推荐，除非用户明确要求香味类礼物。"
         "不要使用“这个草案”“上面的方案”这类空指代，除非你已经把草案主体写出来。"
         "不要在已交付方案末尾追加“需要我帮你查”“选A还是B”这类泛泛追问。"
+        "如果用户要求安排行程/路线，必须直接选择一个默认主路线并给出时间安排；备选可以简短列出，但不能把主任务变成“哪个方向”的选择题。"
         "默认用中文短答，像正常人说话；不要主动解释记忆工具、记忆变更和推理链路。"
     )
     persona_dir = Path(__file__).resolve().parent / "persona"
@@ -390,6 +509,9 @@ def _remove_trailing_generic_question(text: str) -> str:
         "告诉我",
         "补充、修改或删除",
         "选A还是B",
+        "哪个方向",
+        "确认后给",
+        "具体交通",
         "两个都要",
         "具体餐厅",
         "酒店",
@@ -401,7 +523,7 @@ def _remove_trailing_generic_question(text: str) -> str:
         tail = lines[-1].strip()
         if tail and (
             (tail.endswith(("?", "？")) and _contains_any(tail, optional_terms))
-            or _contains_any(tail, ["想选下午A还是B", "选A还是B", "A还是B"])
+            or _contains_any(tail, ["想选下午A还是B", "选A还是B", "A还是B", "哪个方向", "确认后给具体"])
         ):
             lines.pop()
             continue
@@ -421,8 +543,22 @@ def _rewrite_memory_context(snapshot: dict[str, Any], memory_pack: dict[str, Any
     }
 
 
-def _response_directives(user_text: str, memory_context: dict[str, Any], *, selected_gift: str = "") -> list[str]:
+def _response_directives(
+    user_text: str,
+    memory_context: dict[str, Any],
+    *,
+    selected_gift: str = "",
+    suppression_context: dict[str, Any] | None = None,
+) -> list[str]:
     directives: list[str] = []
+    if _contains_any(user_text, ["删除", "删掉", "忘掉", "不再记"]):
+        directives.append("用户显式要求删除/忘掉记忆；如果本轮还有任务，先用一句话确认删除状态，再直接完成任务。")
+    if _contains_any(user_text, ["安排", "行程", "路线", "半日游"]):
+        directives.append("行程/路线任务必须直接给一个默认主路线和时间安排；备选只可简短列出，不能追问用户选哪个方向。")
+    if (suppression_context or {}).get("items") and _contains_any(user_text, ["安排", "行程", "路线", "半日游", "然后"]):
+        directives.append("这是删除/降级后的继续任务；必须选择保守主路线，不要把已删除语义换成近义活动重新推荐。")
+    if _memory_context_contains(memory_context, "网红"):
+        directives.append("当前约束包含避开网红点；不要推荐热门游客街区、网红打卡街区或以打卡为核心的点位，尤其避开夫子庙、老门东、新街口这类高人流街区。")
     selection = selected_gift or _gift_selection_phrase(user_text)
     if selection:
         directives.append(f"用户正在确认候选礼物“{selection}”；必须确认已选定这个礼物，不要改推其他礼物。")
@@ -449,6 +585,31 @@ def _selected_gift_from_actions(actions: list[dict[str, Any]]) -> str:
         if selected and selected not in {"这个", "这个礼物", "它", "这款"}:
             return selected
     return ""
+
+
+def _memory_context_contains(memory_context: dict[str, Any], term: str) -> bool:
+    for key in ["apply_now", "confirm_first"]:
+        for item in memory_context.get(key, []) or []:
+            if isinstance(item, dict) and term in str(item.get("content") or ""):
+                return True
+    return False
+
+
+def _memory_context_blocked_terms(memory_context: dict[str, Any]) -> list[str]:
+    terms: list[str] = []
+    if _memory_context_contains(memory_context, "网红"):
+        terms.extend(["夫子庙", "老门东", "新街口", "网红", "打卡街区", "热门游客街区"])
+    return terms
+
+
+def _conversation_context_blocked_terms(user_text: str, conversation_context: str) -> list[str]:
+    combined = f"{user_text}\n{conversation_context}"
+    if (
+        _contains_any(combined, ["避开网红", "不喜欢人挤人", "不喜欢人挤人的网红点"])
+        and not _contains_any(combined, ["取消避开网红", "不用避开网红", "网红点可以"])
+    ):
+        return ["夫子庙", "老门东", "新街口", "网红", "打卡街区", "热门游客街区"]
+    return []
 
 
 def _gift_selected_exclusions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
@@ -525,6 +686,18 @@ def _suppression_context_from_actions(
     context: str = "",
 ) -> dict[str, Any]:
     suppressed: list[dict[str, Any]] = []
+    requested_terms = _delete_request_suppression_terms(user_text)
+    if requested_terms:
+        suppressed.append(
+            {
+                "action": "delete",
+                "memory_id": "",
+                "content": user_text,
+                "scope": next(iter(_relevant_suppression_scopes(user_text, context)), ""),
+                "do_not_assume": requested_terms,
+                "duration": "current_task",
+            }
+        )
     for action in actions or []:
         if action.get("ok", True) is False:
             continue
@@ -571,6 +744,40 @@ def _suppression_context_from_actions(
             }
         )
     return {"items": suppressed}
+
+
+def _delete_request_suppression_terms(user_text: str) -> list[str]:
+    text = str(user_text or "")
+    if not _contains_any(text, ["删除", "删掉", "忘掉", "不再记", "清除"]):
+        return []
+    before_then = re.split(r"然后|并且|接着|再|重新", text, maxsplit=1)[0]
+    terms = _suppression_terms(before_then or text)
+    return terms[:24]
+
+
+def _suppression_blocked_terms(suppression_context: dict[str, Any]) -> list[str]:
+    items = suppression_context.get("items") if isinstance(suppression_context, dict) else None
+    if not isinstance(items, list):
+        return []
+    terms: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for term in item.get("do_not_assume", []) or []:
+            value = str(term).strip()
+            if value and value not in terms:
+                terms.append(value)
+    return terms[:24]
+
+
+def _blocked_terms_used_in_answer(text: str, blocked_terms: list[str]) -> list[str]:
+    body = _answer_body_without_management_ack(text)
+    used: list[str] = []
+    for term in blocked_terms or []:
+        value = str(term or "").strip()
+        if value and _suppressed_term_used_as_plan(body, value) and value not in used:
+            used.append(value)
+    return used[:12]
 
 
 def _relevant_suppression_scopes(user_text: str, context: str = "") -> set[str]:
@@ -630,7 +837,11 @@ def _suppression_terms(content: str) -> list[str]:
     for marker in ["紫色", "动物", "自然", "网红", "首饰", "少步行", "步行", "玫瑰金"]:
         if marker in content and marker not in terms:
             terms.append(marker)
-    return terms[:8]
+    if "动物" in terms or "动物" in content:
+        for marker in ["动物园", "红山森林", "熊猫", "考拉", "长臂猿", "鸽子", "喂鸽子", "鸟", "湖鸥", "喂湖鸥", "鱼", "喂鱼", "捞鱼", "海洋馆", "水族馆"]:
+            if marker not in terms:
+                terms.append(marker)
+    return terms[:24]
 
 
 def _memory_actions_from_call(call: Any) -> list[dict[str, Any]]:
@@ -665,6 +876,8 @@ def _llm_response_is_usable(
     user_text: str = "",
     selected_gift: str = "",
     suppression_context: dict[str, Any] | None = None,
+    memory_context: dict[str, Any] | None = None,
+    conversation_context: str = "",
 ) -> bool:
     text = str(rewritten or "").strip()
     if not text:
@@ -675,7 +888,16 @@ def _llm_response_is_usable(
         return False
     if _violates_suppression_context(text, suppression_context or {}, user_text=user_text):
         return False
+    if _violates_memory_context_constraints(
+        text,
+        memory_context or {},
+        user_text=user_text,
+        conversation_context=conversation_context,
+    ):
+        return False
     if _contains_any(text, ["这个草案", "该草案", "上面的方案"]) and not _contains_any(text, ["第 1 天", "第1天", "上午", "下午", "推荐方向", "方案："]):
+        return False
+    if _is_route_task_request(user_text) and not _is_route_answer_deliverable(text):
         return False
     if _is_gift_new_recommendation_request(user_text) and _contains_any(text, ["无需重新推荐", "已展示过", "不用重新推荐", "剩下唯一待确认"]):
         return False
@@ -700,6 +922,45 @@ def _llm_response_is_usable(
     if _is_clarification_only(text):
         return False
     return True
+
+
+def _violates_memory_context_constraints(
+    text: str,
+    memory_context: dict[str, Any],
+    *,
+    user_text: str = "",
+    conversation_context: str = "",
+) -> bool:
+    body = _answer_body_without_management_ack(text)
+    if not body:
+        return False
+    combined_context = f"{user_text}\n{conversation_context}"
+    avoid_influencer_spots = _memory_context_contains(memory_context, "网红") or (
+        _contains_any(combined_context, ["避开网红", "不喜欢人挤人", "不喜欢人挤人的网红点"])
+        and not _contains_any(combined_context, ["取消避开网红", "不用避开网红", "网红点可以"])
+    )
+    if avoid_influencer_spots and not _contains_any(user_text, ["夫子庙", "老门东", "新街口"]):
+        tourist_terms = ["夫子庙", "老门东", "新街口", "网红", "打卡街区", "热门游客"]
+        for term in tourist_terms:
+            if term in body and not _contains_any(body, [f"避开{term}", f"不去{term}", f"不要{term}", f"不安排{term}", f"非{term}"]):
+                return True
+    return False
+
+
+def _is_route_task_request(text: str) -> bool:
+    return _contains_any(text, ["安排", "行程", "路线", "半日游", "一日游", "1 天", "1天", "2 天", "2天"])
+
+
+def _is_route_answer_deliverable(text: str) -> bool:
+    stripped = str(text or "").strip()
+    if len(stripped) < 40:
+        return False
+    if _contains_any(stripped, ["继续适用", "沿用上", "按刚才", "按前面"]) and not _contains_any(
+        stripped,
+        ["09:", "9:", "14:", "上午", "下午", "时间", "路线"],
+    ):
+        return False
+    return _contains_any(stripped, ["09:", "9:", "10:", "14:", "15:", "上午", "下午", "时间", "路线", "半日"])
 
 
 def _violates_suppression_context(text: str, suppression_context: dict[str, Any], *, user_text: str = "") -> bool:
@@ -731,7 +992,7 @@ def _answer_body_without_management_ack(text: str) -> str:
             continue
         if _contains_any(stripped, ["已删除", "删除成功", "记忆已删除", "已降级", "已归档"]):
             continue
-        if _contains_any(stripped, ["不再按", "不基于", "不把"]) and _contains_any(stripped, ["作为依据", "作为推荐理由", "偏好"]):
+        if _contains_any(stripped, ["不再按", "不基于", "不把", "不按"]) and _contains_any(stripped, ["作为依据", "作为推荐理由", "偏好", "主题"]):
             continue
         lines.append(line)
     return "\n".join(lines).strip()
@@ -762,6 +1023,8 @@ def _suppressed_term_used_as_plan(body: str, term: str) -> bool:
         f"不推荐{term}",
         f"不再推荐{term}",
         f"不安排{term}",
+        f"不按{term}",
+        f"不再按{term}",
         f"避开{term}",
         f"不去{term}",
         f"删除{term}",
@@ -829,7 +1092,11 @@ def _looks_truncated(text: str) -> bool:
 
 def _has_unresolved_choice(text: str) -> bool:
     value = str(text or "")
-    return _contains_any(value, ["二选一", "A还是B", "选A还是B"]) and not _contains_any(value, ["我建议选", "优先选", "直接选"])
+    if _contains_any(value, ["我建议选", "优先选", "直接选", "默认推荐"]):
+        return False
+    if _contains_any(value, ["二选一", "A还是B", "选A还是B", "哪个方向", "确认后给具体"]):
+        return True
+    return bool(re.search(r"方案\s*[ABCＡＢＣ].*方案\s*[ABCＡＢＣ]", value, flags=re.DOTALL))
 
 
 def _contains_any(text: str, terms: list[str]) -> bool:

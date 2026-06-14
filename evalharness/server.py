@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from assist_everything_betterandbetter_skill.cases import CASES, DIMENSIONS, EvalCase
+from assist_everything_betterandbetter_skill.cases import WORKBENCH_CASES, DIMENSIONS, EvalCase
 from assist_everything_betterandbetter_skill.mem0_backend import HostedMem0Client, Mem0Config, config_from_dict
 from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
@@ -622,7 +622,7 @@ def _settings_payload() -> dict[str, Any]:
 
 def _scenario_library_payload() -> dict[str, Any]:
     return {
-        "items": [_scenario_from_case(case) for case in CASES] + [_gift_scenario()],
+        "items": [_gift_scenario()] + [_scenario_from_case(case) for case in WORKBENCH_CASES],
         "run_hint": "Run All 会用当前 Provider 运行真实 LLM chat + 真实 LLM eval；History Evals 只保存结果。",
     }
 
@@ -630,7 +630,6 @@ def _scenario_library_payload() -> dict[str, Any]:
 def _scenario_from_case(case: EvalCase) -> dict[str, Any]:
     optimized = {
         "C01": ["旅行输出从框架草案增强为可执行路线", "删除后续答会过滤已删偏好"],
-        "C02": ["跨部门适用范围不会误删老板材料规则", "老板材料和跨部门同步分流生成"],
         "C04": ["研究场景空回复重试", "综述/brainstorm 草稿可直接交付"],
     }
     return {

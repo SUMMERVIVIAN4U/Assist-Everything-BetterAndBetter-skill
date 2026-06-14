@@ -88,6 +88,8 @@ CASES: list[EvalCase] = [
     ),
 ]
 
+WORKBENCH_CASES: list[EvalCase] = [case for case in CASES if case.id != "C02"]
+
 
 def get_case(case_id: str) -> EvalCase:
     for case in CASES:

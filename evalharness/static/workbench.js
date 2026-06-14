@@ -429,7 +429,7 @@ let report = null;
       return `<div class="scenario-card ${expanded ? 'active' : ''}">
         <button class="scenario-title" onclick="toggleScenario('${escapeAttr(scenario.id)}')">
           <span>
-            <b>${escapeHtml(scenario.id)} · ${escapeHtml(scenario.title)}</b>
+            <b>${escapeHtml(caseDisplayName(scenario))}</b>
             <span class="muted">${escapeHtml(scenario.module || scenario.domain || '')}</span>
           </span>
           <span class="chip ${scenario.optimized ? 'good' : ''}">${scenario.optimized ? '已优化' : '基线'}</span>
@@ -473,6 +473,9 @@ let report = null;
       history.forEach(run => (run.cases || []).forEach(c => out.push({run, c, key:`${run.run_id || 'latest'}::${c.id}`})));
       return out;
     }
+    function caseDisplayName(c) {
+      return c?.title || c?.name || c?.id || '';
+    }
     function renderCases() {
       const rows = historyCases();
       const list = document.getElementById('caseList');
@@ -484,7 +487,7 @@ let report = null;
       if (!selectedCaseKey || !rows.find(r => r.key === selectedCaseKey)) selectedCaseKey = rows[0].key;
       list.innerHTML = rows.map(r => `
         <button class="case-btn ${r.key === selectedCaseKey ? 'active' : ''}" onclick="selectCase('${escapeAttr(r.key)}')">
-          <div class="case-head"><b>${escapeHtml(r.c.id)} ${escapeHtml(r.c.title || '')}</b><span class="score">${r.c.score}</span></div>
+          <div class="case-head"><b>${escapeHtml(caseDisplayName(r.c))}</b><span class="score">${r.c.score}</span></div>
           <div class="muted">${escapeHtml(r.run.source || r.run.harness?.eval_source || '')} · ${formatTime(r.run.created_at)}</div>
           <div class="chips"><span class="chip">费力度 ${r.c.user_effort?.final_score ?? '-'}</span><span class="chip good">记忆节省信息点 ${r.c.user_effort?.memory_saving_points ?? r.c.user_effort?.saved_score ?? 0}</span></div>
         </button>`).join('');
@@ -511,7 +514,7 @@ let report = null;
       const checks = c.checks || {};
       return `
         <div>
-          <div class="case-head"><div><h2>${escapeHtml(c.id || '')} ${escapeHtml(c.title || '')}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div><span class="score">${c.score ?? '-'}/100</span></div>
+          <div class="case-head"><div><h2>${escapeHtml(caseDisplayName(c))}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div><span class="score">${c.score ?? '-'}/100</span></div>
           <div class="metrics">
             <div class="metric"><span class="muted">六维总分</span><b>${c.score ?? '-'}</b><div class="muted">六个维度的综合质量分，越高越好。</div></div>
             <div class="metric"><span class="muted">费力度</span><b>${effort.final_score ?? '-'}</b><div class="muted">每轮用户输入、补充、重复说明、纠错和严重错误累计的沟通成本。</div></div>
