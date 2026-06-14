@@ -103,7 +103,7 @@ class HarnessAgent:
         memory_context = _rewrite_memory_context(snapshot, memory_pack or {}, applied_memories)
         memory_actions = _compact_memory_actions(current_memory_actions or self.toolbox.skill.memory.events[-8:], snapshot=snapshot)
         selected_gift = _selected_gift_from_actions(memory_actions) or _gift_selection_phrase(user_text)
-        suppression_context = _suppression_context_from_actions(memory_actions)
+        suppression_context = _suppression_context_from_actions(memory_actions, snapshot=snapshot, user_text=user_text, context=context)
         messages = [
             {
                 "role": "system",
@@ -517,7 +517,13 @@ def _memory_lookup(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return lookup
 
 
-def _suppression_context_from_actions(actions: list[dict[str, Any]]) -> dict[str, Any]:
+def _suppression_context_from_actions(
+    actions: list[dict[str, Any]],
+    *,
+    snapshot: dict[str, Any] | None = None,
+    user_text: str = "",
+    context: str = "",
+) -> dict[str, Any]:
     suppressed: list[dict[str, Any]] = []
     for action in actions or []:
         if action.get("ok", True) is False:
@@ -540,7 +546,47 @@ def _suppression_context_from_actions(actions: list[dict[str, Any]]) -> dict[str
                 "duration": "current_task",
             }
         )
+    relevant_scopes = _relevant_suppression_scopes(user_text, context)
+    for item in (snapshot or {}).get("deleted", []) or []:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content") or "").strip()
+        scope = str(item.get("scope") or "").strip()
+        if not content or (relevant_scopes and scope and scope not in relevant_scopes):
+            continue
+        terms = _suppression_terms(content)
+        if not terms:
+            continue
+        key = (item.get("id"), content)
+        if any((existing.get("memory_id"), existing.get("content")) == key for existing in suppressed):
+            continue
+        suppressed.append(
+            {
+                "action": "delete",
+                "memory_id": item.get("id"),
+                "content": content,
+                "scope": scope,
+                "do_not_assume": terms,
+                "duration": "current_task",
+            }
+        )
     return {"items": suppressed}
+
+
+def _relevant_suppression_scopes(user_text: str, context: str = "") -> set[str]:
+    combined = f"{user_text}\n{context}"
+    scopes: set[str] = set()
+    if _contains_any(combined, ["礼物", "送", "选", "买", "女朋友", "男朋友", "老公", "老婆", "妈妈", "爸爸"]):
+        scopes.add("gift_planning")
+    if _contains_any(combined, ["旅行", "行程", "路线", "半日游", "亲子", "家庭", "父亲", "孩子", "小孩", "网红", "步行", "南京", "上海", "杭州", "北京", "景点", "自然", "动物"]):
+        scopes.add("life_family_travel")
+    if _contains_any(combined, ["学习", "复习", "考试", "例题", "自测"]):
+        scopes.add("study_plan")
+    if _contains_any(combined, ["老板", "周报", "项目", "同步", "风险"]):
+        scopes.add("work_report")
+    if _contains_any(combined, ["文献", "综述", "研究", "RAG", "可复现"]):
+        scopes.add("research_review")
+    return scopes
 
 
 def _suppression_terms(content: str) -> list[str]:
