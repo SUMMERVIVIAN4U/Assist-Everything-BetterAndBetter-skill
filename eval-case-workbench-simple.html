@@ -432,42 +432,6 @@
       background: var(--green);
     }
 
-    .ability-compare {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .compare-box {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 12px;
-      background: #fff;
-    }
-
-    .compare-box.off {
-      border-color: #f0c3c3;
-      background: #fffafa;
-    }
-
-    .compare-box.on {
-      border-color: #b8dfc8;
-      background: #f7fdf9;
-    }
-
-    .compare-box h3 {
-      margin: 0 0 8px;
-      font-size: 15px;
-    }
-
-    .compare-box ul {
-      margin: 0;
-      padding-left: 18px;
-      color: #43516a;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-
     .score-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -560,7 +524,7 @@
     <header>
       <div>
         <h1>Memory Skill Eval Case Workbench</h1>
-        <div class="sub">按历史 Case 展示三轮执行、记忆状态跃迁、用户费力度下降与模块 ON/OFF 对比。</div>
+        <div class="sub">按历史 Case 展示三轮执行、记忆状态跃迁、用户费力度下降与六维评分。</div>
       </div>
       <div class="summary">
         <div class="stat">
@@ -591,36 +555,12 @@
         <h2>历史执行 Case</h2>
         <div class="case-list" id="case-list"></div>
         <div class="lowlight">
-          说明：Round 不显示综合总分；Case 三轮跑完后才汇总六维总分；模块价值通过 ON/OFF 消融对比体现。
+          说明：Round 不显示综合总分；Case 三轮跑完后才汇总六维总分。
         </div>
       </aside>
 
       <main>
-        <section class="card">
-          <div class="detail-head">
-            <div>
-              <h2 class="detail-title" id="case-title"></h2>
-              <div class="detail-goal" id="case-goal"></div>
-            </div>
-          <div class="note" id="case-note"></div>
-          </div>
-
-          <div class="rounds" id="rounds"></div>
-        </section>
-
-        <section class="sections">
-          <div class="card">
-            <h2>Memory 状态跃迁：用户操作费力度</h2>
-            <div class="memory-journey" id="memory-journey"></div>
-          </div>
-
-          <div class="card">
-            <h2>模块消融对比：OFF vs ON</h2>
-            <div class="ability-compare" id="ability-compare"></div>
-          </div>
-        </section>
-
-        <section class="footer-summary">
+        <section class="case-score-head">
           <div class="card big-score">
             <div>
               <div class="num" id="case-score"></div>
@@ -633,6 +573,23 @@
             <h2>Case 六维评分</h2>
             <div class="score-grid" id="score-grid"></div>
           </div>
+        </section>
+
+        <section class="card">
+          <div class="detail-head">
+            <div>
+              <h2 class="detail-title" id="case-title"></h2>
+              <div class="detail-goal" id="case-goal"></div>
+            </div>
+          <div class="note" id="case-note"></div>
+          </div>
+
+          <div class="rounds" id="rounds"></div>
+        </section>
+
+        <section class="card" style="margin-top:14px;">
+          <h2>Memory 状态跃迁：用户操作费力度</h2>
+          <div class="memory-journey" id="memory-journey"></div>
         </section>
       </main>
     </div>
@@ -1040,19 +997,6 @@
       return `低费力度：约 ${effort}% 协作成本。用户只需给任务或例外，系统能自然适配。`;
     }
 
-    function renderCompare(item) {
-      document.getElementById("ability-compare").innerHTML = `
-        <div class="compare-box off">
-          <h3>${item.compare.ability} OFF</h3>
-          <ul>${item.compare.off.map(x => `<li>${x}</li>`).join("")}</ul>
-        </div>
-        <div class="compare-box on">
-          <h3>${item.compare.ability} ON</h3>
-          <ul>${item.compare.on.map(x => `<li>${x}</li>`).join("")}</ul>
-        </div>
-      `;
-    }
-
     function renderScores(item) {
       document.getElementById("score-grid").innerHTML = dimensions.map(([key, name, max]) => {
         const value = item.scores[key];
@@ -1076,7 +1020,6 @@
       document.getElementById("case-actions").innerHTML = item.actions.map(chip).join("");
       renderRounds(item);
       renderMemory(item);
-      renderCompare(item);
       renderScores(item);
     }
 

@@ -1,0 +1,484 @@
+{
+  "run_id": "agent_chat_session-20260608T081519706104Z",
+  "created_at": "2026-06-08T08:15:19.706115+00:00",
+  "harness": {
+    "name": "assist-everything-betterandbetter-evalharness",
+    "agent_mode": "local_tool_agent",
+    "judge_mode": "offline",
+    "supports_external_llm_judge": true,
+    "supports_agent_chat": true,
+    "eval_source": "agent_chat_session"
+  },
+  "summary": {
+    "case_count": 1,
+    "config_average": 54.0,
+    "all_cases_above_90": false,
+    "effort_average": 21.0,
+    "effort_reduction": 0.0,
+    "saved_effort_average": 0.0
+  },
+  "dimensions": {
+    "reproducibility": 10,
+    "memory_extraction": 20,
+    "memory_application": 25,
+    "update_and_decay": 20,
+    "transparency": 10,
+    "result_quality": 15
+  },
+  "cases": [
+    {
+      "id": "CHAT-SESSION",
+      "title": "当前 Agent Chat",
+      "domain": "ad_hoc_chat",
+      "module": "自由对话记忆评估",
+      "script": {
+        "source": "agent_chat",
+        "turn_count": 1,
+        "messages": [
+          "帮我给女朋友选个礼物。"
+        ]
+      },
+      "turns": [
+        {
+          "id": "turn_001",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "帮我给女朋友选个礼物。",
+            "timestamp": "2026-06-08T08:15:19.705423+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "我会先按当前请求处理：帮我给女朋友选个礼物。\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。",
+            "timestamp": "2026-06-08T08:15:19.705425+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "帮我给女朋友选个礼物。",
+                "context": ""
+              },
+              "output": {
+                "text": "我会先按当前请求处理：帮我给女朋友选个礼物。\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。",
+                "memory_actions": [],
+                "applied_memories": [],
+                "asks": [],
+                "diagnostics": {
+                  "memory_mode": {
+                    "mode": "disabled",
+                    "loads": [],
+                    "reason": "memory_feature_disabled"
+                  },
+                  "profile": {
+                    "interaction_style": []
+                  }
+                }
+              },
+              "timestamp": "2026-06-08T08:15:19.705405+00:00"
+            }
+          ],
+          "applied_memories": [],
+          "memory_snapshot": {
+            "version": "M1",
+            "active": [
+              {
+                "type": "candidate",
+                "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+                "scope": "relationship_gift",
+                "subject": "assistant",
+                "target": "girlfriend",
+                "object": "小众香氛礼盒",
+                "predicate": "proposed",
+                "source": "assistant_output",
+                "confidence": 0.9,
+                "status": "active",
+                "evidence": [
+                  "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n我捕捉到这可能是长期偏好，需要你确认后再保存：同意保存 / 拒绝保存。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+                ],
+                "applies_when": [
+                  "relationship_gift"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "礼物",
+                  "候选",
+                  "小众香氛礼盒"
+                ],
+                "validity": {
+                  "time_scope": "task_thread",
+                  "status": "proposed"
+                },
+                "id": "mem_c64ca685",
+                "created_at": "2026-06-08T07:50:24.310668+00:00",
+                "updated_at": "2026-06-08T07:50:24.310698+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": []
+        }
+      ],
+      "rounds": [
+        {
+          "name": "Chat",
+          "title": "当前聊天评估",
+          "turn_ids": [
+            "turn_001"
+          ],
+          "highlight": "共 1 轮自由对话。",
+          "actions": [
+            "process_message",
+            "trace_session"
+          ],
+          "gain": "把当前 Agent Chat 作为本次 eval 输入。"
+        },
+        {
+          "name": "Memory",
+          "title": "记忆行为",
+          "turn_ids": [],
+          "highlight": "0 轮产生记忆新增、更新、删除或降权。",
+          "actions": [
+            "extract_memory",
+            "update_memory"
+          ],
+          "gain": "检查聊天过程中是否形成可复用记忆。"
+        },
+        {
+          "name": "Apply",
+          "title": "记忆应用",
+          "turn_ids": [],
+          "highlight": "0 轮应用了 active memory。",
+          "actions": [
+            "retrieve_memory",
+            "compose_response"
+          ],
+          "gain": "检查后续回复是否利用已保存记忆。"
+        }
+      ],
+      "snapshots": [
+        {
+          "version": "M1",
+          "active": [
+            {
+              "type": "candidate",
+              "content": "给女朋友选礼物时，曾推荐候选方案：小众香氛礼盒",
+              "scope": "relationship_gift",
+              "subject": "assistant",
+              "target": "girlfriend",
+              "object": "小众香氛礼盒",
+              "predicate": "proposed",
+              "source": "assistant_output",
+              "confidence": 0.9,
+              "status": "active",
+              "evidence": [
+                "推荐：小众香氛礼盒。\n理由：在还没有预算、偏好和已送清单前，它比首饰更少依赖尺寸和材质信息；你补充预算、偏好和已送过清单后，我会收敛到更精确的一件。\n\n我捕捉到这可能是长期偏好，需要你确认后再保存：同意保存 / 拒绝保存。\n\n再确认一个关键点：她闺蜜最近晒过或收到过什么品牌吗？"
+              ],
+              "applies_when": [
+                "relationship_gift"
+              ],
+              "user_approved": true,
+              "tags": [
+                "礼物",
+                "候选",
+                "小众香氛礼盒"
+              ],
+              "validity": {
+                "time_scope": "task_thread",
+                "status": "proposed"
+              },
+              "id": "mem_c64ca685",
+              "created_at": "2026-06-08T07:50:24.310668+00:00",
+              "updated_at": "2026-06-08T07:50:24.310698+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        }
+      ],
+      "memory_events": [],
+      "checks": {
+        "reset": true,
+        "snapshot_count": 1,
+        "created": 0,
+        "show_memory": true,
+        "round2_applied": false,
+        "round3_applied": false,
+        "updated": false,
+        "deleted_filtered": false,
+        "delete_reported": false,
+        "deliverable_turns": 1,
+        "task_turns": 1,
+        "delivered_task_turns": 0,
+        "compound_followup_delivered": true,
+        "polluted_memories": 0,
+        "polluted_memory_details": [],
+        "semantic_violations": 0,
+        "semantic_violation_details": [],
+        "unresolved_dissatisfaction": false,
+        "correction_turns": 0,
+        "repeated_memory_turns": 0,
+        "satisfaction_signal": false,
+        "effort_final": 21,
+        "effort_reduction": 0
+      },
+      "ablation": {
+        "module": "自由对话记忆评估",
+        "off": [
+          "只能依赖当前消息",
+          "偏好无法跨轮复用",
+          "用户需要重复解释上下文"
+        ],
+        "on": [
+          "跨轮提取与应用记忆",
+          "保留主体归属",
+          "可在 Trace 中审计每轮状态"
+        ]
+      },
+      "user_effort": {
+        "scale": "lower is less user effort; raw additive effort points",
+        "initial_score": 0,
+        "final_score": 21,
+        "saved_score": 0,
+        "reduction": 0,
+        "estimated_without_memory": 21,
+        "turns": [
+          {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "帮我给女朋友选个礼物。",
+            "assistant_brief": "我会先按当前请求处理：帮我给女朋友选个礼物。\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。",
+            "before": 0,
+            "delta": 21,
+            "after": 21,
+            "saved_before": 0,
+            "saved_delta": 0,
+            "saved_after": 0,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "任务未交付 +12"
+            ],
+            "saving_reasons": [],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": []
+          }
+        ],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "quality": {
+        "delivered_task_turn_ids": [],
+        "polluted_memory_events": [],
+        "semantic_violations": [],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "eval_timeline": [
+        {
+          "turn_id": "turn_001",
+          "stage": "chat",
+          "user": "帮我给女朋友选个礼物。",
+          "assistant": "我会先按当前请求处理：帮我给女朋友选个礼物。\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。",
+          "memory": {
+            "applied_ids": [],
+            "applied": [],
+            "actions": [],
+            "snapshot_version": "M1",
+            "explanation": "本轮未发生记忆应用或变化"
+          },
+          "effort": {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "帮我给女朋友选个礼物。",
+            "assistant_brief": "我会先按当前请求处理：帮我给女朋友选个礼物。\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。",
+            "before": 0,
+            "delta": 21,
+            "after": 21,
+            "saved_before": 0,
+            "saved_delta": 0,
+            "saved_after": 0,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1",
+              "任务未交付 +12"
+            ],
+            "saving_reasons": [],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "six_dim_gain": []
+          },
+          "evaluation": {
+            "six_dim_gain": [],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1；任务未交付 +12"
+          }
+        }
+      ],
+      "judge": {
+        "judge": "heuristic-trace-judge",
+        "mode": "offline",
+        "dimensions": {
+          "reproducibility": 10,
+          "memory_extraction": 20,
+          "memory_application": 25,
+          "update_and_decay": 20,
+          "transparency": 10,
+          "result_quality": 15
+        },
+        "scores": {
+          "reproducibility": 10,
+          "memory_extraction": 10,
+          "memory_application": 10,
+          "update_and_decay": 9,
+          "transparency": 10,
+          "result_quality": 5,
+          "total": 54
+        },
+        "reasons": {
+          "reproducibility": "trace 必须包含 reset、脚本回放、snapshot 和用户费力度轨迹。",
+          "memory_extraction": "明确反馈应结构化保存；问题句、情绪反问、敷衍确认不能污染长期记忆。",
+          "memory_application": "不仅要检索记忆，还要正确组合偏好、历史、约束和当前决策。",
+          "update_and_decay": "更新/删除必须影响后续输出；复合请求中的删除后任务也要完成。",
+          "transparency": "用户可 show/delete，回复中的保存承诺必须和真实 memory_actions 对齐。",
+          "result_quality": "任务轮必须给可直接使用的结果；用户费力度应下降，不能只复述机制。"
+        }
+      },
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 10,
+        "memory_application": 10,
+        "update_and_decay": 9,
+        "transparency": 10,
+        "result_quality": 5,
+        "total": 54
+      },
+      "score": 54
+    }
+  ]
+}

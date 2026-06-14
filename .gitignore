@@ -1,3 +1,10 @@
 .DS_Store
 __pycache__/
 *.pyc
+.venv/
+.superpowers/
+eval/output/verify_run_*/
+.env
+.env.local
+1.env
+memories/

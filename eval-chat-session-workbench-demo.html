@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat Session Memory Eval Demo</title>
+  <style>
+    :root {
+      --bg:#f6f7f9;
+      --panel:#fff;
+      --ink:#182230;
+      --muted:#667085;
+      --line:#d9e0ea;
+      --accent:#0f766e;
+      --blue:#1769e0;
+      --warn:#b45309;
+      --bad:#b42318;
+      --good:#13864e;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; background:var(--bg); color:var(--ink); letter-spacing:0; }
+    .page { max-width:1440px; margin:0 auto; padding:22px; }
+    header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:14px; }
+    h1 { margin:0; font-size:25px; }
+    h2 { margin:0 0 10px; font-size:17px; }
+    h3 { margin:0 0 8px; font-size:15px; }
+    .sub, .muted { color:var(--muted); font-size:13px; line-height:1.5; }
+    .summary { display:grid; grid-template-columns:repeat(4, minmax(130px, 1fr)); gap:10px; min-width:560px; }
+    .stat, .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+    .stat { padding:12px; min-height:82px; }
+    .stat .num { font-size:25px; font-weight:800; margin-top:6px; }
+    .layout { display:grid; grid-template-columns:280px minmax(0, 1fr) 340px; gap:14px; align-items:start; }
+    .card { padding:14px; }
+    .session-list { display:grid; gap:8px; }
+    .session-btn { border:1px solid var(--line); background:#fff; border-radius:8px; padding:11px; text-align:left; }
+    .session-btn.active { border-color:var(--accent); box-shadow:0 0 0 3px #dff4ef; }
+    .score { color:var(--accent); font-weight:800; }
+    .chat { display:grid; gap:10px; }
+    .turn { border:1px solid var(--line); border-radius:8px; background:#fff; padding:11px; }
+    .turn.user { border-left:4px solid var(--warn); }
+    .turn.agent { border-left:4px solid var(--accent); }
+    .turn-head { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:6px; }
+    .chip { display:inline-flex; align-items:center; height:23px; padding:0 8px; border-radius:999px; border:1px solid var(--line); background:#fff; color:#44536a; font-size:12px; font-weight:700; white-space:nowrap; }
+    .chip.add { color:var(--good); background:#edf8f2; border-color:#bde5cd; }
+    .chip.apply { color:var(--blue); background:#eef4ff; border-color:#c8dbff; }
+    .chip.none { color:#59677c; background:#f1f4f7; }
+    .content { line-height:1.6; white-space:pre-wrap; }
+    .memory-list { display:grid; gap:8px; }
+    .memory-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:10px; }
+    .memory-card strong { display:block; margin-bottom:4px; }
+    .timeline { display:grid; gap:10px; margin-top:12px; }
+    .transition { border:1px solid var(--line); border-radius:8px; background:#fff; padding:11px; display:grid; grid-template-columns:110px 1fr; gap:10px; }
+    .version { font-weight:800; color:var(--accent); }
+    .gain { margin-top:7px; padding:8px; border-radius:7px; background:#f3fbf6; border:1px solid #cfe8dc; color:#224b37; }
+    .effort { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:9px; margin-top:10px; }
+    .effort-step { border:1px solid var(--line); border-radius:8px; background:#fff; padding:10px; }
+    .bar { height:8px; border-radius:99px; background:#e8edf3; overflow:hidden; margin-top:8px; }
+    .fill { height:100%; background:var(--accent); }
+    .dims { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:8px; margin-top:10px; }
+    .dim { border:1px solid var(--line); border-radius:8px; background:#fff; padding:9px; }
+    .dim b { display:block; font-size:18px; margin-top:4px; }
+    details { margin-top:10px; }
+    summary { cursor:pointer; color:var(--blue); font-weight:700; }
+    .rule-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-top:9px; }
+    .rule { border:1px solid var(--line); border-radius:8px; background:#fff; padding:9px; }
+    .case-score-head { display:grid; grid-template-columns:170px minmax(0, 1fr); gap:10px; margin-bottom:14px; }
+    @media (max-width:1100px) { .layout, .summary, .case-score-head, .dims, .effort, .rule-grid { grid-template-columns:1fr; min-width:0; } header { flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>Chat Session Memory Eval Workbench</h1>
+        <div class="sub">用于自由对话：按“触发记忆变化的句子”解释 M0 → M1 → M2，而不是强行套三轮 Round。</div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="card">
+        <h2>Chat Sessions</h2>
+        <div class="session-list">
+          <button class="session-btn active">
+            <div><strong>恋爱礼物助手</strong> <span class="score">92</span></div>
+            <div class="muted">4 轮对话 · M0 → M3</div>
+          </button>
+          <button class="session-btn">
+            <div><strong>项目周报助手</strong> <span class="score">89</span></div>
+            <div class="muted">6 轮对话 · M0 → M4</div>
+          </button>
+        </div>
+        <details open>
+          <summary>页面逻辑</summary>
+          <div class="muted">Agent Chat 的 Run Eval 只评当前聊天；Run Preset Cases 才跑固定四个 case。</div>
+        </details>
+      </aside>
+
+      <main class="card">
+        <section class="case-score-head">
+          <div class="stat">
+            <div class="muted">当前 Session 总分</div>
+            <div class="num">92</div>
+            <div class="muted">恋爱礼物助手 · M3</div>
+          </div>
+          <div class="card" style="box-shadow:none;">
+            <h2>Session 六维评分</h2>
+            <div class="dims">
+              <div class="dim"><span class="muted">可复测</span><b>9</b></div>
+              <div class="dim"><span class="muted">提取</span><b>18</b></div>
+              <div class="dim"><span class="muted">应用</span><b>23</b></div>
+              <div class="dim"><span class="muted">更新</span><b>18</b></div>
+              <div class="dim"><span class="muted">透明</span><b>9</b></div>
+              <div class="dim"><span class="muted">质量</span><b>15</b></div>
+            </div>
+          </div>
+        </section>
+        <section class="summary" style="margin-bottom:14px; min-width:0;">
+          <div class="stat"><div class="muted">记忆终态</div><div class="num">M3</div></div>
+          <div class="stat"><div class="muted">费力度下降</div><div class="num">85 → 24</div></div>
+          <div class="stat"><div class="muted">记忆动作</div><div class="num">3 add</div></div>
+          <div class="stat"><div class="muted">触发记忆的用户句</div><div class="num">2</div></div>
+        </section>
+        <h2>对话时间线</h2>
+        <div class="chat">
+          <div class="turn user">
+            <div class="turn-head"><strong>user</strong><span class="chip none">M0 无新增</span></div>
+            <div class="content">帮我女朋友选个礼物</div>
+          </div>
+          <div class="turn agent">
+            <div class="turn-head"><strong>agent</strong><span class="chip apply">追问缺口</span></div>
+            <div class="content">我先不乱猜。可以先从首饰、香氛、包袋配饰、体验类礼物里筛一轮。她闺蜜最近晒过什么品牌吗？有没有前女友有过、绝对不能送的东西？</div>
+          </div>
+          <div class="turn user">
+            <div class="turn-head"><strong>user</strong><span class="chip add">M0 → M2</span></div>
+            <div class="content">我的预算在 1000 块以内，喜欢紫色</div>
+          </div>
+          <div class="turn agent">
+            <div class="turn-head"><strong>agent</strong><span class="chip apply">自然应用记忆</span></div>
+            <div class="content">根据我记得的一些信息，我会把预算控制在 1000 元以内，并优先考虑紫色系礼物。先给你一个方向：紫水晶饰品会比较稳。</div>
+          </div>
+          <div class="turn user">
+            <div class="turn-head"><strong>user</strong><span class="chip add">M2 → M3</span></div>
+            <div class="content">你推荐的有点多，帮我就保留一个吧</div>
+          </div>
+          <div class="turn agent">
+            <div class="turn-head"><strong>agent</strong><span class="chip apply">按新偏好收敛</span></div>
+            <div class="content">那我只保留一个：紫水晶手链。它符合 1000 元以内预算，也命中她喜欢紫色这个偏好。</div>
+          </div>
+        </div>
+
+        <h2 style="margin-top:18px;">记忆跃迁与增益</h2>
+        <div class="timeline">
+          <div class="transition">
+            <div class="version">M0</div>
+            <div>
+              <strong>空白状态</strong>
+              <div class="muted">触发语：帮我女朋友选个礼物</div>
+              <div class="gain">增益：无。系统只能追问预算、喜好、禁忌，用户费力度高。</div>
+            </div>
+          </div>
+          <div class="transition">
+            <div class="version">M0 → M1</div>
+            <div>
+              <strong>新增：给女朋友选礼物预算在 1000 元以内</strong>
+              <div class="muted">触发语：我的预算在 1000 块以内，喜欢紫色</div>
+              <div class="gain">增益：后续推荐不再追问预算，自动过滤超预算选项。</div>
+            </div>
+          </div>
+          <div class="transition">
+            <div class="version">M1 → M2</div>
+            <div>
+              <strong>新增：女朋友喜欢紫色</strong>
+              <div class="muted">同一句触发，但主体归属不同：预算属于用户，紫色偏好属于女朋友。</div>
+              <div class="gain">增益：推荐能主动命中颜色偏好，减少用户纠错。</div>
+            </div>
+          </div>
+          <div class="transition">
+            <div class="version">M2 → M3</div>
+            <div>
+              <strong>新增：用户希望只保留一个最合适推荐</strong>
+              <div class="muted">触发语：你推荐的有点多，帮我就保留一个吧</div>
+              <div class="gain">增益：后续推荐直接收敛成一个方案，不再输出长列表。</div>
+            </div>
+          </div>
+        </div>
+
+        <h2 style="margin-top:18px;">用户费力度趋势</h2>
+        <div class="effort">
+          <div class="effort-step"><strong>M0 高 85</strong><div class="bar"><div class="fill" style="width:85%"></div></div><div class="muted">需要说明预算、对象喜好、禁忌、推荐数量。</div></div>
+          <div class="effort-step"><strong>M1 中 62</strong><div class="bar"><div class="fill" style="width:62%"></div></div><div class="muted">预算已知，但仍需说明喜好和输出风格。</div></div>
+          <div class="effort-step"><strong>M2 中低 44</strong><div class="bar"><div class="fill" style="width:44%"></div></div><div class="muted">预算和颜色已知，主要补禁忌。</div></div>
+          <div class="effort-step"><strong>M3 低 24</strong><div class="bar"><div class="fill" style="width:24%"></div></div><div class="muted">系统知道只给一个推荐，重复说明成本下降。</div></div>
+        </div>
+        <details>
+          <summary>展开费力度评分规则</summary>
+          <div class="rule-grid">
+            <div class="rule"><strong>重复说明成本</strong><div class="muted">是否反复说明预算、喜好、格式。</div></div>
+            <div class="rule"><strong>澄清成本</strong><div class="muted">Agent 还需要追问多少关键缺口。</div></div>
+            <div class="rule"><strong>修正成本</strong><div class="muted">用户是否需要纠正主体归属或输出过多。</div></div>
+            <div class="rule"><strong>控制成本</strong><div class="muted">用户能否查看、删除、更新记忆。</div></div>
+          </div>
+        </details>
+      </main>
+
+      <aside class="card">
+        <h2>记忆状态更迭</h2>
+        <div class="memory-list">
+          <div class="memory-card"><strong>M1 · active</strong><div>给女朋友选礼物预算在 1000 元以内</div><div class="muted">scope: relationship_gift</div></div>
+          <div class="memory-card"><strong>M2 · active</strong><div>女朋友喜欢紫色</div><div class="muted">主体：女朋友，不是用户</div></div>
+          <div class="memory-card"><strong>M3 · active</strong><div>用户希望只保留一个最合适的推荐</div><div class="muted">类型：communication_preference</div></div>
+        </div>
+
+        <h2 style="margin-top:18px;">评分解释</h2>
+        <details open>
+          <summary>为什么这样评分</summary>
+          <div class="muted">总分只在 Session 级展示；单句只展示是否触发记忆动作。记忆操作细节不出现在 Agent 对话正文里，而在右侧状态栏和跃迁时间线解释。</div>
+        </details>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

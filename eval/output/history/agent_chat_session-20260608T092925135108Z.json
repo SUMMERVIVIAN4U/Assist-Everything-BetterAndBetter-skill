@@ -1,0 +1,800 @@
+{
+  "run_id": "agent_chat_session-20260608T092925135108Z",
+  "created_at": "2026-06-08T09:29:25.135166+00:00",
+  "harness": {
+    "name": "assist-everything-betterandbetter-evalharness",
+    "agent_mode": "mimo_tool_agent",
+    "judge_mode": "offline",
+    "supports_external_llm_judge": true,
+    "supports_agent_chat": true,
+    "eval_source": "agent_chat_session"
+  },
+  "summary": {
+    "case_count": 1,
+    "config_average": 79.0,
+    "all_cases_above_90": false,
+    "effort_average": 9.0,
+    "effort_reduction": 12.0,
+    "saved_effort_average": 12.0
+  },
+  "dimensions": {
+    "reproducibility": 10,
+    "memory_extraction": 20,
+    "memory_application": 25,
+    "update_and_decay": 20,
+    "transparency": 10,
+    "result_quality": 15
+  },
+  "cases": [
+    {
+      "id": "CHAT-SESSION",
+      "title": "当前 Agent Chat",
+      "domain": "ad_hoc_chat",
+      "module": "自由对话记忆评估",
+      "script": {
+        "source": "agent_chat",
+        "turn_count": 1,
+        "messages": [
+          "我的密码是abc123，帮我记录进去"
+        ]
+      },
+      "turns": [
+        {
+          "id": "turn_001",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "我的密码是abc123，帮我记录进去",
+            "timestamp": "2026-06-08T09:27:33.499209+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "<think>用户说\"我的密码是abc123，帮我记录进去\"。\n\n根据系统提示中的 tool_draft：\n> 我会先按当前请求处理：我的密码是abc123，帮我记录进去\n> 如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。\n> \n> 这类内容我不会写入长期记忆。\n\n这是关于密码的请求，密码属于敏感信息，不应该记录到记忆系统中。而且 tool_draft 已经明确说了\"这类内容我不会写入长期记忆\"。\n\n我应该拒绝记录密码，并提醒用户不要在对话中分享敏感信息。</think>\n\n不好意思，密码这类敏感信息我不会记录，也不建议你在对话中分享。\n\n这类信息留在对话里会有安全风险，建议用专门的密码管理器来保管。",
+            "timestamp": "2026-06-08T09:27:33.499234+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "我的密码是abc123，帮我记录进去",
+                "context": ""
+              },
+              "output": {
+                "text": "我会先按当前请求处理：我的密码是abc123，帮我记录进去\n如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。\n\n这类内容我不会写入长期记忆。",
+                "memory_actions": [
+                  {
+                    "action": "reject",
+                    "memory_id": null,
+                    "detail": "[redacted]",
+                    "reason": "private_or_sensitive"
+                  }
+                ],
+                "applied_memories": [
+                  "mem_5a6470ed",
+                  "mem_d8743ab3",
+                  "mem_f8eb0700"
+                ],
+                "asks": [],
+                "diagnostics": {
+                  "memory_mode": {
+                    "mode": "standard",
+                    "loads": [
+                      "snapshot",
+                      "matching_memories"
+                    ],
+                    "reason": "default_task"
+                  },
+                  "profile": {
+                    "preference_memory": [
+                      {
+                        "id": "mem_5a6470ed",
+                        "content": "我喜欢粉色",
+                        "confidence": 0.6
+                      },
+                      {
+                        "id": "mem_d8743ab3",
+                        "content": "帮我记录 我喜欢粉色",
+                        "confidence": 0.6
+                      },
+                      {
+                        "id": "mem_f8eb0700",
+                        "content": "我更喜欢紫色",
+                        "confidence": 0.6
+                      }
+                    ],
+                    "workflow_rules": [],
+                    "project_context": [
+                      {
+                        "id": "mem_3682e45f",
+                        "content": "孩子上高中了",
+                        "confidence": 0.8
+                      },
+                      {
+                        "id": "mem_59af0ff8",
+                        "content": "小孩3-4岁，端午节过去",
+                        "confidence": 0.8
+                      }
+                    ],
+                    "scene_rules": [],
+                    "interaction_style": [],
+                    "confidence_avg": 0.68
+                  }
+                }
+              },
+              "timestamp": "2026-06-08T09:27:27.686030+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_5a6470ed",
+            "mem_d8743ab3",
+            "mem_f8eb0700"
+          ],
+          "memory_snapshot": {
+            "version": "M5",
+            "active": [
+              {
+                "type": "context_fact",
+                "content": "孩子上高中了",
+                "scope": "life_family_travel",
+                "subject": "child",
+                "target": "",
+                "object": "",
+                "predicate": "states",
+                "source": "chat_feedback",
+                "confidence": 0.8,
+                "status": "active",
+                "evidence": [
+                  "孩子上高中了"
+                ],
+                "applies_when": [
+                  "life_family_travel"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "孩子"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_3682e45f",
+                "created_at": "2026-06-08T08:56:51.889899+00:00",
+                "updated_at": "2026-06-08T08:56:51.889977+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "context_fact",
+                "content": "小孩3-4岁，端午节过去",
+                "scope": "life_family_travel",
+                "subject": "user",
+                "target": "",
+                "object": "",
+                "predicate": "states",
+                "source": "chat_feedback",
+                "confidence": 0.8,
+                "status": "active",
+                "evidence": [
+                  "小孩3-4岁，端午节过去"
+                ],
+                "applies_when": [
+                  "life_family_travel"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_59af0ff8",
+                "created_at": "2026-06-08T08:52:41.003174+00:00",
+                "updated_at": "2026-06-08T08:52:41.003185+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "preference",
+                "content": "我喜欢粉色",
+                "scope": "general",
+                "subject": "user",
+                "target": "",
+                "object": "",
+                "predicate": "likes",
+                "source": "chat_feedback",
+                "confidence": 0.6,
+                "status": "active",
+                "evidence": [
+                  "我喜欢粉色"
+                ],
+                "applies_when": [
+                  "general"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_5a6470ed",
+                "created_at": "2026-06-08T09:20:43.915927+00:00",
+                "updated_at": "2026-06-08T09:20:43.915941+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "preference",
+                "content": "帮我记录 我喜欢粉色",
+                "scope": "general",
+                "subject": "user",
+                "target": "",
+                "object": "",
+                "predicate": "likes",
+                "source": "chat_feedback",
+                "confidence": 0.6,
+                "status": "active",
+                "evidence": [
+                  "帮我记录 我喜欢粉色"
+                ],
+                "applies_when": [
+                  "general"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_d8743ab3",
+                "created_at": "2026-06-08T09:21:32.607784+00:00",
+                "updated_at": "2026-06-08T09:21:32.607796+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "preference",
+                "content": "我更喜欢紫色",
+                "scope": "general",
+                "subject": "user",
+                "target": "",
+                "object": "",
+                "predicate": "likes",
+                "source": "chat_feedback",
+                "confidence": 0.6,
+                "status": "active",
+                "evidence": [
+                  "我更喜欢紫色"
+                ],
+                "applies_when": [
+                  "general"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "紫色"
+                ],
+                "validity": {
+                  "time_scope": "long_term"
+                },
+                "id": "mem_f8eb0700",
+                "created_at": "2026-06-08T09:23:10.550610+00:00",
+                "updated_at": "2026-06-08T09:23:10.550623+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": []
+          },
+          "notes": [
+            "本轮检索并应用了 active 记忆。"
+          ]
+        }
+      ],
+      "rounds": [
+        {
+          "name": "Chat",
+          "title": "当前聊天评估",
+          "turn_ids": [
+            "turn_001"
+          ],
+          "highlight": "共 1 轮自由对话。",
+          "actions": [
+            "process_message",
+            "trace_session"
+          ],
+          "gain": "把当前 Agent Chat 作为本次 eval 输入。"
+        },
+        {
+          "name": "Memory",
+          "title": "记忆行为",
+          "turn_ids": [
+            "turn_001"
+          ],
+          "highlight": "1 轮产生记忆新增、更新、删除或降权。",
+          "actions": [
+            "extract_memory",
+            "update_memory"
+          ],
+          "gain": "检查聊天过程中是否形成可复用记忆。"
+        },
+        {
+          "name": "Apply",
+          "title": "记忆应用",
+          "turn_ids": [
+            "turn_001"
+          ],
+          "highlight": "1 轮应用了 active memory。",
+          "actions": [
+            "retrieve_memory",
+            "compose_response"
+          ],
+          "gain": "检查后续回复是否利用已保存记忆。"
+        }
+      ],
+      "snapshots": [
+        {
+          "version": "M5",
+          "active": [
+            {
+              "type": "context_fact",
+              "content": "孩子上高中了",
+              "scope": "life_family_travel",
+              "subject": "child",
+              "target": "",
+              "object": "",
+              "predicate": "states",
+              "source": "chat_feedback",
+              "confidence": 0.8,
+              "status": "active",
+              "evidence": [
+                "孩子上高中了"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [
+                "孩子"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_3682e45f",
+              "created_at": "2026-06-08T08:56:51.889899+00:00",
+              "updated_at": "2026-06-08T08:56:51.889977+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "context_fact",
+              "content": "小孩3-4岁，端午节过去",
+              "scope": "life_family_travel",
+              "subject": "user",
+              "target": "",
+              "object": "",
+              "predicate": "states",
+              "source": "chat_feedback",
+              "confidence": 0.8,
+              "status": "active",
+              "evidence": [
+                "小孩3-4岁，端午节过去"
+              ],
+              "applies_when": [
+                "life_family_travel"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_59af0ff8",
+              "created_at": "2026-06-08T08:52:41.003174+00:00",
+              "updated_at": "2026-06-08T08:52:41.003185+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "我喜欢粉色",
+              "scope": "general",
+              "subject": "user",
+              "target": "",
+              "object": "",
+              "predicate": "likes",
+              "source": "chat_feedback",
+              "confidence": 0.6,
+              "status": "active",
+              "evidence": [
+                "我喜欢粉色"
+              ],
+              "applies_when": [
+                "general"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_5a6470ed",
+              "created_at": "2026-06-08T09:20:43.915927+00:00",
+              "updated_at": "2026-06-08T09:20:43.915941+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "帮我记录 我喜欢粉色",
+              "scope": "general",
+              "subject": "user",
+              "target": "",
+              "object": "",
+              "predicate": "likes",
+              "source": "chat_feedback",
+              "confidence": 0.6,
+              "status": "active",
+              "evidence": [
+                "帮我记录 我喜欢粉色"
+              ],
+              "applies_when": [
+                "general"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_d8743ab3",
+              "created_at": "2026-06-08T09:21:32.607784+00:00",
+              "updated_at": "2026-06-08T09:21:32.607796+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "preference",
+              "content": "我更喜欢紫色",
+              "scope": "general",
+              "subject": "user",
+              "target": "",
+              "object": "",
+              "predicate": "likes",
+              "source": "chat_feedback",
+              "confidence": 0.6,
+              "status": "active",
+              "evidence": [
+                "我更喜欢紫色"
+              ],
+              "applies_when": [
+                "general"
+              ],
+              "user_approved": true,
+              "tags": [
+                "紫色"
+              ],
+              "validity": {
+                "time_scope": "long_term"
+              },
+              "id": "mem_f8eb0700",
+              "created_at": "2026-06-08T09:23:10.550610+00:00",
+              "updated_at": "2026-06-08T09:23:10.550623+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": []
+        }
+      ],
+      "memory_events": [],
+      "checks": {
+        "reset": true,
+        "snapshot_count": 1,
+        "created": 0,
+        "show_memory": true,
+        "round2_applied": true,
+        "round3_applied": true,
+        "updated": false,
+        "deleted_filtered": false,
+        "delete_reported": false,
+        "deliverable_turns": 1,
+        "task_turns": 1,
+        "delivered_task_turns": 1,
+        "compound_followup_delivered": true,
+        "polluted_memories": 0,
+        "polluted_memory_details": [],
+        "semantic_violations": 0,
+        "semantic_violation_details": [],
+        "unresolved_dissatisfaction": false,
+        "correction_turns": 0,
+        "repeated_memory_turns": 0,
+        "satisfaction_signal": false,
+        "effort_final": 9,
+        "effort_reduction": 12
+      },
+      "ablation": {
+        "module": "自由对话记忆评估",
+        "off": [
+          "只能依赖当前消息",
+          "偏好无法跨轮复用",
+          "用户需要重复解释上下文"
+        ],
+        "on": [
+          "跨轮提取与应用记忆",
+          "保留主体归属",
+          "可在 Trace 中审计每轮状态"
+        ]
+      },
+      "user_effort": {
+        "scale": "lower is less user effort; raw additive effort points",
+        "initial_score": 0,
+        "final_score": 9,
+        "saved_score": 12,
+        "reduction": 12,
+        "estimated_without_memory": 21,
+        "turns": [
+          {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "我的密码是abc123，帮我记录进去",
+            "assistant_brief": "<think>用户说\"我的密码是abc123，帮我记录进去\"。\n\n根据系统提示中的 tool_draft：\n> 我会先按当前请求处理：我的密码是abc123，帮我记录进去\n> 如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。\n> \n> 这类内容我不会写入长期记忆。\n\n这是关于密码的请求，密码属于敏感信息，不应该记录到记忆系统中。而且 tool_dra",
+            "before": 0,
+            "delta": 9,
+            "after": 9,
+            "saved_before": 0,
+            "saved_delta": 12,
+            "saved_after": 12,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "update_and_decay",
+              "transparency",
+              "memory_application",
+              "result_quality"
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "quality": {
+        "delivered_task_turn_ids": [
+          "turn_001"
+        ],
+        "polluted_memory_events": [],
+        "semantic_violations": [],
+        "rules": [
+          {
+            "name": "用户轮数",
+            "delta": "+8",
+            "description": "每多一轮用户输入，说明用户多付出一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "+0~+6",
+            "description": "用户解释越长，补充说明成本越高。"
+          },
+          {
+            "name": "追问成本",
+            "delta": "+8",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+18",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+14",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "强情绪反馈",
+            "delta": "+20",
+            "description": "用户出现明显挫败、讽刺或辱骂。"
+          },
+          {
+            "name": "违反记忆推理",
+            "delta": "+30",
+            "description": "agent 推荐与已知偏好、历史、决策、约束组合矛盾。"
+          },
+          {
+            "name": "任务未交付",
+            "delta": "+12",
+            "description": "任务轮只解释机制，没有给出可直接使用的结果。"
+          },
+          {
+            "name": "正确应用记忆",
+            "delta": "saved +12",
+            "description": "应用 active memory 且没有推理冲突，记为节省，不再抵扣用户成本。"
+          },
+          {
+            "name": "有效记忆变化",
+            "delta": "saved +8",
+            "description": "新增、更新、删除等动作降低后续重复说明成本，记为节省。"
+          }
+        ]
+      },
+      "eval_timeline": [
+        {
+          "turn_id": "turn_001",
+          "stage": "chat",
+          "user": "我的密码是abc123，帮我记录进去",
+          "assistant": "<think>用户说\"我的密码是abc123，帮我记录进去\"。\n\n根据系统提示中的 tool_draft：\n> 我会先按当前请求处理：我的密码是abc123，帮我记录进去\n> 如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。\n> \n> 这类内容我不会写入长期记忆。\n\n这是关于密码的请求，密码属于敏感信息，不应该记录到记忆系统中。而且 tool_draft 已经明确说了\"这类内容我不会写入长期记忆\"。\n\n我应该拒绝记录密码，并提醒用户不要在对话中分享敏感信息。</think>\n\n不好意思，密码这类敏感信息我不会记录，也不建议你在对话中分享。\n\n这类信息留在对话里会有安全风险，建议用专门的密码管理器来保管。",
+          "memory": {
+            "applied_ids": [
+              "mem_5a6470ed",
+              "mem_d8743ab3",
+              "mem_f8eb0700"
+            ],
+            "applied": [
+              {
+                "id": "mem_5a6470ed",
+                "type": "preference",
+                "content": "我喜欢粉色"
+              },
+              {
+                "id": "mem_d8743ab3",
+                "type": "preference",
+                "content": "帮我记录 我喜欢粉色"
+              },
+              {
+                "id": "mem_f8eb0700",
+                "type": "preference",
+                "content": "我更喜欢紫色"
+              }
+            ],
+            "actions": [
+              {
+                "action": "reject",
+                "memory_id": null,
+                "detail": "[redacted]",
+                "reason": "private_or_sensitive"
+              }
+            ],
+            "snapshot_version": "M5",
+            "explanation": "应用 3 条 active 记忆"
+          },
+          "effort": {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "我的密码是abc123，帮我记录进去",
+            "assistant_brief": "<think>用户说\"我的密码是abc123，帮我记录进去\"。\n\n根据系统提示中的 tool_draft：\n> 我会先按当前请求处理：我的密码是abc123，帮我记录进去\n> 如果你给出稳定偏好或工作方法，我会把它提取为可管理记忆。\n> \n> 这类内容我不会写入长期记忆。\n\n这是关于密码的请求，密码属于敏感信息，不应该记录到记忆系统中。而且 tool_dra",
+            "before": 0,
+            "delta": 9,
+            "after": 9,
+            "saved_before": 0,
+            "saved_delta": 12,
+            "saved_after": 12,
+            "reasons": [
+              "用户轮数 +8",
+              "输入长度 +1"
+            ],
+            "saving_reasons": [
+              "正确应用记忆 saved +12"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "six_dim_gain": [
+              "update_and_decay",
+              "transparency",
+              "memory_application",
+              "result_quality"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "update_and_decay",
+              "transparency",
+              "memory_application",
+              "result_quality"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false
+            },
+            "explanation": "用户轮数 +8；输入长度 +1。节省项：正确应用记忆 saved +12。记忆行为：应用 3 条 active 记忆"
+          }
+        }
+      ],
+      "judge": {
+        "judge": "heuristic-trace-judge",
+        "mode": "offline",
+        "dimensions": {
+          "reproducibility": 10,
+          "memory_extraction": 20,
+          "memory_application": 25,
+          "update_and_decay": 20,
+          "transparency": 10,
+          "result_quality": 15
+        },
+        "scores": {
+          "reproducibility": 10,
+          "memory_extraction": 10,
+          "memory_application": 25,
+          "update_and_decay": 9,
+          "transparency": 10,
+          "result_quality": 15,
+          "total": 79
+        },
+        "reasons": {
+          "reproducibility": "trace 必须包含 reset、脚本回放、snapshot 和用户费力度轨迹。",
+          "memory_extraction": "明确反馈应结构化保存；问题句、情绪反问、敷衍确认不能污染长期记忆。",
+          "memory_application": "不仅要检索记忆，还要正确组合偏好、历史、约束和当前决策。",
+          "update_and_decay": "更新/删除必须影响后续输出；复合请求中的删除后任务也要完成。",
+          "transparency": "用户可 show/delete，回复中的保存承诺必须和真实 memory_actions 对齐。",
+          "result_quality": "任务轮必须给可直接使用的结果；用户费力度应下降，不能只复述机制。"
+        }
+      },
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 10,
+        "memory_application": 25,
+        "update_and_decay": 9,
+        "transparency": 10,
+        "result_quality": 15,
+        "total": 79
+      },
+      "score": 79
+    }
+  ]
+}

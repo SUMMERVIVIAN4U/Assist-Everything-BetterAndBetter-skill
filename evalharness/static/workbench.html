@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eval Harness Workbench</title>
+  <link rel="stylesheet" href="/static/workbench.css">
+
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Memory Eval Workbench</h1>
+      <div class="muted">Agent Chat 负责手动回放；每个 session 单独 Eval；History Evals 用来比较多轮表现。</div>
+    </div>
+    <div>
+      <select id="llmProvider">
+        <option value="deepseek_pro" selected>DeepSeek V4 Pro</option>
+        <option value="deepseek_flash">DeepSeek V4 Flash</option>
+        <option value="mimo">Mimo</option>
+      </select>
+      <button onclick="checkProviderHealth()">Check Provider</button>
+      <span id="llmHealth" class="muted"></span>
+    </div>
+  </header>
+  <nav>
+    <button class="tab active" onclick="setTab('chat', this)">Agent Chat</button>
+    <button class="tab" onclick="setTab('cases', this)">History Evals</button>
+    <button class="tab" onclick="setTab('settings', this)">设置</button>
+    <button class="tab" onclick="setTab('performance', this)">Memory Scale Eval</button>
+  </nav>
+  <main>
+    <section id="chat">
+      <div class="chat-layout">
+        <div>
+          <div id="chatlog" class="chatlog"></div>
+          <div class="composer">
+            <input id="chatInput" placeholder="输入当前对话，例如：帮我规划一个周末任务">
+            <button class="primary" onclick="sendChat()">Send</button>
+            <button id="chatEvalBtn" onclick="runChatEval()">Run LLM Eval</button>
+            <button onclick="resetSession()">Reset Session</button>
+            <button onclick="resetMemory()">Reset Memory</button>
+          </div>
+        </div>
+        <div class="side">
+          <div class="panel">
+            <div class="case-head">
+              <div>
+                <h2>比赛测试案例</h2>
+                <div id="scenarioStatus" class="muted">点击步骤填入输入框；Eval 节点会评估当前 session；Round 2/3 会自动新开 session。</div>
+              </div>
+            </div>
+            <div id="scenarioLibrary" class="scenario-list"><div class="muted">loading...</div></div>
+          </div>
+          <div class="panel">
+            <div class="case-head"><div><h2>当前对话 Eval</h2><div id="chatEvalStatus" class="muted">点击 Run LLM Eval 后显示当前会话评分。</div></div></div>
+            <div id="chatEvalPanel" class="muted">暂无评分。</div>
+          </div>
+          <div class="panel">
+            <div class="case-head">
+              <div>
+                <h2>当前 Memory</h2>
+                <div id="chatMemoryStatus" class="muted">loading...</div>
+              </div>
+              <button onclick="refreshChatMemory()">刷新</button>
+            </div>
+            <pre id="chatMemory">{}</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="cases" class="hidden">
+      <div class="cases-layout">
+        <aside class="panel">
+          <div class="case-head">
+            <div><h2>History Evals</h2><div id="historyHint" class="muted">按最新 Eval 优先；同一测试任务会聚合展示多轮变化。</div></div>
+            <button onclick="clearHistoryEvals()">清空</button>
+          </div>
+          <div id="caseList" class="case-list"></div>
+        </aside>
+        <article id="caseDetail" class="panel muted">暂无历史 eval。</article>
+      </div>
+    </section>
+    <section id="performance" class="hidden">
+      <div class="performance-layout">
+        <div class="panel">
+          <div class="case-head">
+            <div>
+              <h2>Memory Scale Eval</h2>
+              <div id="performanceStatus" class="muted">后置模块：当前用于观察大规模记忆检索性能，后续会与真实 LLM eval 维度统一。</div>
+            </div>
+            <button onclick="fetchPerformanceLatest()">刷新</button>
+          </div>
+          <div class="demo-controls">
+            <label for="performanceEngine">记忆引擎</label>
+            <select id="performanceEngine">
+              <option value="local">本地JSON</option>
+              <option value="mem0_hosted">Mem0 Hosted</option>
+            </select>
+            <label for="performanceMode">运行模式</label>
+            <select id="performanceMode">
+              <option value="dry_run">Dry Run</option>
+              <option value="real_run">Real Run</option>
+            </select>
+            <label for="performanceScale">记忆规模</label>
+            <select id="performanceScale">
+              <option value="1000">1,000</option>
+              <option value="10000">10,000</option>
+              <option value="50000">50,000</option>
+            </select>
+            <label for="performanceQueries">检索次数</label>
+            <input id="performanceQueries" type="number" min="1" max="100" value="20">
+            <div class="wide privacy-actions">
+              <button id="performanceRunBtn" class="primary" onclick="runPerformanceDemo()">Run Demo</button>
+              <button onclick="resetPerformanceDemo()">Reset Demo Memory</button>
+              <span class="status-line">本地引擎使用临时索引；Mem0 Real Run 使用隔离 demo 用户并在结束后清理。</span>
+            </div>
+          </div>
+          <div id="performanceMetrics" class="metrics performance-metrics"></div>
+          <div id="performanceTimeline" class="timeline"></div>
+        </div>
+        <div class="panel">
+          <div class="case-head"><div><h2>检索样例</h2><div class="muted">统一按得分 + 时间排序展示 TopK。</div></div></div>
+          <div id="performanceExamples" class="turn-list"><div class="muted">暂无演示结果。</div></div>
+        </div>
+        <div class="panel">
+          <div class="case-head"><div><h2>原始报告</h2><div class="muted">用于审计 demo_user_id、阶段、reset 结果。</div></div></div>
+          <pre id="performanceReport">{}</pre>
+        </div>
+      </div>
+    </section>
+    <section id="settings" class="hidden">
+      <div class="panel">
+        <div class="settings-tabs">
+          <button class="settings-tab active" onclick="setSettingsTab('agent', this)">Agent 管理</button>
+          <button class="settings-tab" onclick="setSettingsTab('skill', this)">Skill 管理</button>
+          <button class="settings-tab" onclick="setSettingsTab('memory', this)">记忆</button>
+          <button class="settings-tab" onclick="setSettingsTab('evalRules', this)">Eval 规则</button>
+        </div>
+
+        <div id="settingsViewAgent" class="settings-view">
+          <h2>Agent 管理</h2>
+          <div class="note">管理 Agent 的身份边界、说话风格和真实 LLM Provider。Agent 不预设用户身份，只按对话事实工作。</div>
+          <div id="settingsAgent" class="muted"></div>
+          <pre id="agentPersonaSummary">{}</pre>
+          <div class="persona-editor">
+            <div>
+              <h3>Identity</h3>
+              <textarea id="identityText"></textarea>
+            </div>
+            <div>
+              <h3>Soul</h3>
+              <textarea id="soulText"></textarea>
+            </div>
+          </div>
+          <div class="privacy-actions">
+            <button class="primary" onclick="savePersona()">保存 Soul / Identity</button>
+            <span id="personaStatus" class="status-line"></span>
+          </div>
+        </div>
+
+        <div id="settingsViewSkill" class="settings-view hidden">
+          <h2>Skill 管理</h2>
+          <div class="note">Workbench 调用当前 skill runtime：Agent Chat、Eval、记忆展示共用同一套提取、召回、删除和隐私策略。</div>
+          <pre id="skillConfigSummary">{}</pre>
+        </div>
+
+        <div id="settingsViewMemory" class="settings-view hidden">
+          <h2>记忆</h2>
+          <div class="note">这里管理记忆开关、长期后端、提取/召回/降级策略、隐私过滤，以及本地和 Mem0 记忆展示。</div>
+          <div class="settings-form">
+            <label for="memoryEnabled">记忆功能</label>
+            <label class="check-row"><input id="memoryEnabled" type="checkbox" onchange="previewMemoryBackendSelection()"> 启用记忆</label>
+            <label for="memoryBackend">长期记忆后端</label>
+            <select id="memoryBackend" onchange="previewMemoryBackendSelection()"><option value="local">本地JSON</option><option value="mem0_hosted">Mem0 Hosted</option></select>
+            <div class="wide privacy-actions">
+              <button class="primary" onclick="saveMemoryBackend()">保存记忆配置</button>
+              <button id="checkMem0Button" onclick="checkMem0Health()">Check Mem0</button>
+              <span id="memoryBackendStatus" class="status-line"></span>
+            </div>
+          </div>
+          <h3>策略说明</h3>
+          <div id="memoryPolicySummary" class="rules"></div>
+          <h3>后端配置</h3>
+          <div class="note">Mem0 连接参数以 `.env` 或本地 git-ignored 配置为准，不在页面中编辑或展示。</div>
+          <pre id="memoryBackendSummary">{}</pre>
+          <div class="case-head"><div><h3>本地Memory</h3><div id="localMemoryStatus" class="muted">点击刷新后查看本地记忆。</div></div><button onclick="fetchMemoryStore('local')">刷新</button></div>
+          <pre id="settingsLocalMemory">{}</pre>
+          <div class="case-head"><div><h3>Mem0 Hosted</h3><div id="mem0HostedMemoryStatus" class="muted">点击刷新后查看 Mem0 Hosted 记忆。</div></div><button onclick="fetchMemoryStore('mem0_hosted')">刷新</button></div>
+          <pre id="settingsMem0HostedMemory">{}</pre>
+          <div class="case-head"><div><h3>隐私设置</h3><div class="muted">逐行填写，命中后不会写入长期记忆。</div></div></div>
+          <div class="privacy-editor">
+            <div>
+              <textarea id="privacyItems" placeholder="例如：身份证&#10;银行卡&#10;家庭住址"></textarea>
+              <div class="privacy-actions">
+                <button class="primary" onclick="savePrivacyItems()">保存隐私设置</button>
+                <button onclick="resetDefaultPrivacyItems()">恢复默认</button>
+                <span id="privacyStatus" class="status-line"></span>
+              </div>
+            </div>
+            <div>
+              <div class="muted">当前生效</div>
+              <div id="privacyChips" class="chips"></div>
+              <h3>隐私报告</h3>
+              <pre id="privacyReport">{}</pre>
+            </div>
+          </div>
+        </div>
+
+        <div id="settingsViewEvalRules" class="settings-view hidden">
+          <h2>Eval 规则</h2>
+          <div class="note">Eval 只评当前 session。比赛多轮测试通过多个 session 的 Eval 结果横向比较。</div>
+          <div id="evalRulesSummary" class="rules"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="/static/workbench.js"></script>
+
+</body>
+</html>
