@@ -7,4 +7,5 @@ eval/output/verify_run_*/
 .env
 .env.local
 1.env
+memories/config/
 memories/

@@ -1,239 +1,298 @@
 ---
 name: assist-everything-betterandbetter-skill
-description: 当任务需要授权协作记忆、Workbench 记忆检查、隐私友好的本地或 Mem0 记忆后端、可复现记忆评测，或需要记录纠正、错误、能力缺口和可复用经验以形成自我改进闭环时使用。
+description: 当任务需要授权式协作记忆、跨会话偏好复用、记忆查看/删除/降级、Local JSON 或 Mem0 Hosted 后端、真实 LLM Agent Chat、或记忆 eval/workbench 演示时使用。
 ---
 
 # 万事越来越好协作记忆 Skill
 
-这个 Skill 提供一套经过授权的协作记忆工作流，也支持“从错误中学习、在经验中成长”。它把记忆视为用户可控、可审计的能力，而不是静默记录完整对话。
+这个 Skill 提供一个可安装的协作记忆 Agent。安装后，Agent 应该使用与 Workbench Agent Chat 相同的运行链路：`HarnessAgent -> AssistSkill -> memory backend -> LLM semantic extractor -> LLM final answer`。区别只是没有浏览器前端。
 
-## Trigger
+不要把它当作“只存 JSON 的工具”。它的目标是：在用户授权和可审计的前提下，把偏好、约束、历史、决策和纠错经验变成可复用记忆，并在后续相似任务里减少用户重复说明。它也要支持“从错误中学习、在经验中成长”的自我改进闭环。
 
-Use when the user or evaluator asks for:
+## When To Use
 
-- remembering preferences, constraints, context facts, decisions, or workflow rules with consent
-- applying remembered preferences to a similar later task
-- handling preference changes, conflict, narrowed scope, downgrade, archive, delete, or reset
-- inspecting memory profile, compact snapshot, three-layer memory state, privacy controls, or backend state
-- running reproducible evals for memory extraction, application, update/decay, transparency, and result quality
-- operating the Workbench Agent Chat, History Evals, Stats, Performance Demo, Settings, Workbench Memory, Mem0 Memory, 当前 Memory, or `/api/current-memory` views
-- logging corrections, command failures, integration errors, feature requests, and recurring patterns into `.learnings/`
+Use this skill when the user asks to:
 
-## Memory Policy
+- remember or reuse preferences, constraints, decisions, context facts, history, or workflow rules
+- inspect, reset, delete, downgrade, archive, or search memory
+- handle changed preferences, narrowed scope, temporary overrides, or memory conflicts
+- compare Local JSON memory with Mem0 Hosted memory
+- run the no-frontend direct Agent or the browser Workbench
+- evaluate whether memory reduces user effort across multiple sessions
 
-Never silently turn every statement into long-term memory. Extract only reusable information:
+## Installed Skill Runtime Path
 
-- `preference`: soft user, audience, or subject preference used for ranking or style
-- `constraint`: hard limit, taboo, exclusion, or conditional rule used for filtering
-- `workflow`: reusable process, output structure, study method, or research method
-- `decision`: current-task choice or settled interim conclusion that should be continued
-- `history`: past action or event that should inform future avoidance or continuity
-- `context_fact`: stable background fact or external signal that informs judgment
+For installed Skill usage in any host agent, the host agent's own model is the agent. This includes Codex, Claude Code, and similar coding/agent shells. Do not call a second business LLM by default. Use the Python CLI only as a memory tool layer.
 
-Use generic `type` values. Put the task domain in `scope` such as `life_family_travel`, `work_report`, `study_plan`, `research_review`, or another user-provided domain. Do not create scenario-specific memory types or hardcoded case logic.
+Normal task flow:
 
-Each memory must carry: `id`, `type`, `content`, `scope`, `source`, `confidence`, `status`, `evidence`, `applies_when`, and `user_approved`. Runtime memory may also carry `subject`, `target`, `object`, `predicate`, and `validity`.
+1. Call `memory-pack` with the current user message and a concise recent conversation context.
+2. Use the host agent's own model to answer the user, applying only `apply_now` memories by default and using `confirm_first` memories as cautious reminders.
+3. If the user provides reusable preferences, constraints, history, choices, decisions, or corrections, call `memory-write` after answering or before the next turn.
+4. For commands like `展示当前记忆`, `删除...`, `降级...`, `清空记忆`, call `memory-manage` and return its text.
 
-Only say a memory was saved after a real add/update action exists in the trace. If a sentence is only a question such as "你还记得之前做过什么吗？", do not save it as memory.
+Return a normal conversational answer. Do not mention the memory tool calls unless the user asks about memory/debug/eval/config.
 
-Use confidence tiers before writing memory:
+Conversational routing contract:
 
-- `reject`: sensitive or temporary content is not written
-- `ask`: weak signal needs clarification
-- `propose`: medium-confidence long-term memory waits for user approval
-- `add`: high-confidence structured or scoped memory can be saved
-- `dedupe`: duplicate active memory is reported but not saved again
+- The user only needs to mention `$assist-everything-betterandbetter-skill` once to start a task.
+- After the first invocation, treat follow-up messages in the same host-agent conversation as continuing this Skill task when they look like task details, feedback, choices, corrections, or memory-management commands.
+- Continue using the memory tool layer for those follow-ups until the user explicitly exits, starts a different non-memory task, or asks to reset the session.
+- Do not ask the user to repeat the skill name, choose a session id, configure a provider, or understand CLI modes.
 
-Simple `[q]` or greeting turns use instant mode and skip long-term retrieval. Normal tasks use standard mode with active matching memory. Deep/history turns expose snapshot, matching memory, and event-log intent in diagnostics.
+Installed Skill memory tool commands from the repo root:
 
-Statuses:
+```bash
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env memory-pack "帮我给女朋友选个生日礼物。"
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env memory-write --context "user: 帮我给女朋友选个生日礼物。" "预算1000元"
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env memory-manage "展示当前记忆"
+```
 
-- `active`: can be retrieved and applied
-- `superseded`: kept for audit, lower priority
-- `archived`: retained for history, not applied by default
-- `deleted`: must not be retrieved or applied
+The user can manage memory naturally in the same conversation:
 
-## Storage And Backends
+- `展示当前记忆`
+- `清空记忆`
+- `删除 她喜欢紫色`
+- `降级 父亲膝盖不好`
+- `归档 番茄钟`
+- `画像`
+- `快照`
+- `三层记忆`
+- `隐私报告`
 
-Default runtime storage is local Markdown/JSON under `ASSIST_MEMORY_DIR`; Workbench uses `memories/workbench/`. `ASSIST_MEMORY_PERSIST=0` disables persistence for reproducible eval runs.
+Only use the raw memory runtime for debugging:
 
-The Workbench can switch the long-term memory engine between two mutually exclusive adapters:
+```bash
+python3 -m assist_everything_betterandbetter_skill.cli chat --raw-skill "展示当前记忆"
+```
 
-- `LocalMemoryStore`: 本地 JSON/Markdown, using the skill's transparent local extraction and audit trail
-- `HostedMem0Client`: hosted or REST-compatible Mem0, using the skill's structured extraction and Mem0 as durable storage/search
+Raw mode returns the deterministic memory-tool draft and does not match Workbench answer quality.
 
-Only one engine is active at a time. Extraction rules are mutually exclusive, and memory results are mutually exclusive:
+Standalone fallback:
 
-- local mode never mirrors extracted memories to Mem0
-- hosted Mem0 mode runs the same structured extraction path as local mode, then stores structured memories remotely
-- UI snapshots may share the same display structure, but the content must come only from the selected engine
+- `agent-turn` and `agent-chat` still exist for standalone CLI, Workbench-equivalent smoke tests, and eval reproduction.
+- These commands require a configured LLM provider because they run outside the host agent's model.
+- Do not use them as the default installed Skill path.
 
-Retrieval ranking is unified across both engines. Each adapter may produce candidates differently, but before memories are applied to a response the runtime must:
+## Configuration
 
-- keep only `active` items and filter polluted or deleted content
-- annotate each candidate with `validity.retrieval_score` and `validity.retrieval_rank_strategy=score_time`
-- sort by retrieval score descending, then by `updated_at`/`created_at` descending
-- apply at most the top matching memories for the current turn
+Configuration is shared by the memory backend. Installed Skill mode does not require a separate business LLM provider because the host agent is the model.
 
-When Mem0 is selected, do not expose endpoint URLs, project IDs, or API keys in the UI. The public UI only shows whether endpoint, API key, and user are configured.
+Priority:
 
-Configuration:
+1. `.env` provides secrets and default values.
+2. `memories/config/runtime.json` is the shared saved runtime config. Workbench Settings writes here, and direct Skill reads here.
+3. CLI flags such as `--provider` and `--memory-backend` are temporary process overrides and do not rewrite shared config unless an explicit save API/action is used.
 
+Installed Skill mode and Workbench Agent Chat use the `default` profile unless explicitly overridden. Eval and performance demo should use isolated profiles or temporary memory dirs so they do not pollute real user memory.
+
+Standalone / Workbench / Eval LLM only:
+
+- `ASSIST_AGENT_PROVIDER=deepseek_pro|deepseek_flash|mimo`
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_BASE_URL`
+- `DEEPSEEK_PRO_MODEL=deepseek-v4-pro`
+- `DEEPSEEK_FLASH_MODEL=deepseek-v4-flash`
+- `MIMO_API_KEY`
+- `MIMO_BASE_URL`
+- `MIMO_MODEL`
+
+These provider settings are not required for installed Skill memory tools.
+
+Memory:
+
+- `ASSIST_MEMORY_ENABLED=1|0`
+- `ASSIST_MEMORY_DIR=memories/default`
 - `ASSIST_MEMORY_BACKEND=local|mem0_hosted`
-- `ASSIST_MEMORY_ENABLED=0|1`
+- `ASSIST_MEMORY_LLM_EXTRACTOR=1|0`
+- `ASSIST_RUNTIME_PROFILE=default|eval|workbench-demo|mem0-performance`
+- `LocalMemoryStore` is the local JSON/Markdown engine.
+- `HostedMem0Client` is the Mem0 Hosted / REST-compatible durable engine.
+- The two backends are mutually exclusive for active long-term memory: one selected engine is used at a time.
+
+Mem0 Hosted:
+
 - `MEM0_BASE_URL`
 - `MEM0_API_KEY`
 - `MEM0_USER_ID`
 - `MEM0_APP_ID`
+- `MEM0_PROJECT_ID`
+- `MEM0_PROJECT_NAME`
 
-Keep the public path focused on local JSON for the competition demo and Hosted Mem0 for durable external memory.
+Mem0 operations must stay scoped to the configured `user_id`; never run a global reset when user-scoped deletion is available.
 
-## Workbench Features
+Privacy:
 
-Run the interactive Workbench:
+- `ASSIST_PRIVACY_MARKERS=身份证,银行卡,token`
 
-```bash
-python3 -m evalharness.cli serve --port 8787
-```
-
-Workbench tabs:
-
-- `Agent Chat`: live conversation through the same `process_message(...)` path as evals.
-- `History Evals`: saved preset and chat eval runs.
-- `统计`: summary metrics across historical runs.
-- `Performance Demo`: 本地 JSON、Mem0 Hosted 的超大记忆端到端性能演示，展示写入、检索、score+time 排序、样例 TopK、阶段耗时和 reset 结果。
-- `设置`: Agent 配置, Workbench Memory, Mem0 Memory, 隐私设置.
-
-Agent Chat must keep the right-side `当前 Memory` panel intuitive:
-
-- show `记忆功能：开启/关闭`
-- show the user-selected engine: 本地 Markdown / JSON or Mem0
-- show only the selected engine's corresponding content
-- use `/api/current-memory` for refreshable current-memory state
-
-Settings rules:
-
-- Agent 配置 exposes only the memory feature switch and long-term memory backend choice.
-- Workbench Memory shows local trace/audit memory.
-- Mem0 Memory shows remote memory for comparison when configured.
-- 隐私设置 lets the user maintain private marker lines; matching content is rejected/redacted and not saved.
-
-Performance Demo rules:
-
-- 默认使用 `Dry Run`，只生成确定性数据和模拟指标，不访问远端 Mem0。
-- 本地 JSON 引擎的 `Real Run` 使用临时内存索引模拟本地记忆库写入、检索和清理，不写入 Workbench 当前记忆文件。
-- `Real Run` 只允许使用隔离用户 `workbench-demo-large-memory`，不得复用 Agent Chat 当前用户。
-- 演示结果必须展示 `demo_user_id`、记忆规模、写入 QPS、检索 P50/P95、错误率、阶段时间线和检索样例。
-- 检索样例使用与运行时一致的统一策略：按 `retrieval_score` 降序，再按更新时间降序，并标记 `retrieval_rank_strategy=score_time`。
-- `Reset Demo Memory` 只清理隔离 demo 用户的记忆；不得清理当前 Agent Chat 用户或全局记忆库。
-
-Reset Memory must reset only the selected engine. For HostedMem0Client, deletion/reset must be scoped to the configured `user_id`; never call a global reset when user-scoped deletion is available.
-
-Because Mem0 automatic extraction is less explainable than the local MemoryItem path, every remote action must still expose a trace event with backend, raw detail, success/failure, and returned result summary.
-
-## Commands
-
-Support slash-like commands or natural language:
-
-- `reset memory`, `清空记忆`, `重置记忆`
-- `show memory`, `展示当前记忆`, `查看记忆`
-- `delete <query>`, `删除...这条记忆`
-- `downgrade <query>`, `降权...`
-- `archive <query>`, `归档...`
-- `profile`, `画像`
-- `snapshot`, `快照`
-- `layers`, `三层记忆`
-- `privacy`, `隐私报告`
-
-The profile view aggregates active preferences, workflow rules, scene rules, project/context facts, interaction style, and confidence average. The layers view shows L0 instant interaction, L1 profile snapshot, and L2 long-term audit ledger with retention reasons.
-
-## Self-Improvement Loop
-
-Use `.learnings/` as the growth ledger for the skill and project. Initialize it before logging:
+Show effective config:
 
 ```bash
-mkdir -p .learnings
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env config --provider deepseek_pro
 ```
 
-Create missing files without overwriting existing content:
+The output includes `config_path`. For the shared config this should be `memories/config/runtime.json`.
 
-- `.learnings/LEARNINGS.md`: corrections, insights, knowledge gaps, best practices
-- `.learnings/ERRORS.md`: command failures, exceptions, integration errors
-- `.learnings/FEATURE_REQUESTS.md`: user-requested missing capabilities
+## Memory Model
 
-Do not log secrets, tokens, API keys, private identifiers, or full config files. Prefer short redacted summaries and related file paths.
+The memory schema is generic. Do not create scenario-specific memory types.
 
-Log immediately when:
+Types:
 
-- a command or operation fails unexpectedly
-- the user corrects the agent
-- an external API, memory backend, or tool call fails
-- the agent discovers outdated knowledge or a better recurring approach
-- the user asks for a capability the skill does not yet provide
+- `preference`: soft preference used for ranking or style
+- `constraint`: hard limit, taboo, exclusion, or conditional rule
+- `workflow`: reusable process or interaction rule
+- `decision`: current-task choice that should be continued
+- `history`: past action or event that should affect future avoidance or continuity
+- `context_fact`: background fact useful for the task
 
-Entry IDs use `LRN-YYYYMMDD-XXX`, `ERR-YYYYMMDD-XXX`, and `FEAT-YYYYMMDD-XXX`.
+Scopes are domains, not memory types:
 
-Minimum entry fields:
+- `gift_planning`
+- `life_family_travel`
+- `study_plan`
+- `work_report`
+- `research_review`
+- `general`
 
-- logged timestamp
-- priority: `low | medium | high | critical`
-- status: `pending | in_progress | resolved | promoted | wont_fix`
-- area: `frontend | backend | infra | tests | docs | config`
-- summary, context, suggested action, related files
+Validity layers:
 
-## Recurring Pattern And Promotion
+- `current_task`: only applies in the current session/task
+- `scene_memory`: same scene can recall it, but should confirm before applying
+- `long_term`: stable preference or rule, applies by default when scope matches
+- `past`: historical fact, mainly for continuity and avoiding repetition
 
-Before logging a new learning, search for similar entries:
+Statuses:
+
+- `active`: can be retrieved
+- `superseded`: kept for audit, lower priority
+- `archived`: retained but not applied by default
+- `deleted`: must not be retrieved or applied
+
+## Write Policy
+
+Never silently convert every utterance into long-term memory.
+
+The write path is hybrid:
+
+1. Rule extraction catches high-confidence structured signals such as budget, taboo, previous gifts, explicit deletion, and obvious travel/study/work constraints.
+2. LLM semantic extraction handles context-dependent intent such as “选拍立得”, “重复候选名就是选定”, and user corrections.
+3. The skill validates the candidate, assigns confidence, scopes it, dedupes it, and writes only valid memory.
+
+Confidence behavior:
+
+- `reject`: sensitive/private or inappropriate memory
+- `ask`: weak signal, needs clarification
+- `propose`: medium-confidence long-term memory waits for user approval
+- `add`: high-confidence memory can be saved
+- `dedupe`: equivalent active memory already exists
+
+Only say memory was saved when the trace contains a real `add` or successful update action.
+
+## Recall Policy
+
+Recall is filtered before ranking:
+
+1. status must be `active`
+2. scope must match current task
+3. gift recipient/target must match when available
+4. deleted or polluted memories are excluded
+5. validity layer decides whether memory goes to `apply_now` or `confirm_first`
+
+Ranking uses `retrieval_score` plus time:
+
+- base confidence or Mem0 score
+- layer bonus: current task > long term > scene memory > past
+- scope match bonus
+- keyword/entity hit bonus
+- user-approved bonus
+- final order: score descending, then update/create time descending
+
+The final LLM answer may only default-use `apply_now`; `confirm_first` is for cautious confirmation.
+
+## Workbench
+
+Workbench is the visual shell around the same Agent chain.
+
+Run:
 
 ```bash
-grep -r "keyword" .learnings/
+python3 -m evalharness.cli --env-file .env serve --port 8787 --agent deepseek_pro
 ```
 
-If similar, link it with `See Also`, bump priority when recurring, and add a stable `Pattern-Key` when it reflects a recurring pattern.
+Current Workbench modules:
 
-Recurring Pattern handling:
+- `Agent Chat`: real LLM chat with current memory panel and manual session reset
+- `History Evals`: real LLM eval history, grouped by task/session, newest first
+- `Settings`: Agent persona/LLM, Skill config, Memory config, Eval rules
+- `Performance Demo`: separate large-memory performance demo line
 
-- same `Pattern-Key` increments `Recurrence-Count`
-- keep `First-Seen` and `Last-Seen`
-- recurring issues should lead to systemic fixes, tests, docs, or skill changes
+Workbench memory views:
 
-Promotion rules:
+- `当前 Memory`: shows the selected active engine and whether `记忆功能` is enabled
+- `Workbench Memory`: local runtime trace/audit view
+- `Mem0 Memory`: remote memory inspection view when Mem0 Hosted is configured
+- `隐私设置`: edits private markers and redaction rules
+- `/api/current-memory`: refreshable API backing the current memory panel
 
-- promote broadly applicable, resolved, or recurring learnings into this `SKILL.md`, `AGENTS.md`, or other project guidance
-- write promoted rules as short prevention rules, not incident transcripts
-- update the original entry status to `promoted` and record the target
+Removed or disabled:
 
-## Eval Flow
+- no local deterministic chat mode in Workbench
+- no local agent mode in Workbench
+- no Run All button in Workbench UI
+- no Statistics tab
 
-Run the harness eval:
+## Eval
+
+CLI eval still exists for reproducible testing:
 
 ```bash
-python3 -m evalharness.cli run
+python3 -m evalharness.cli --env-file .env run --agent deepseek_pro --judge deepseek_pro
 ```
 
-Output:
+The competition demo should use manual multi-session replay in Agent Chat:
 
-- `eval/output/latest/eval_report.json`
-- `eval/output/latest/eval_report.md`
+1. Round 1: initial task, feedback, memory formation, eval
+2. Reset session
+3. Round 2: similar task, memory reuse, eval
+4. Reset session
+5. Round 3: changed/deleted preference, retest, eval
 
-Each eval case starts from `reset memory`. Eval cases are scripts only; do not put case-specific extraction, update, or response logic inside the skill. Send each case step as ordinary user text through the same runtime path used by Agent Chat.
+History Evals should show score, user effort, and reused memory information points across sessions.
 
-Recommended flow:
+## Installed Skill Smoke Test
 
-1. Round 1: perform an initial no-preference task, receive explicit feedback, extract authorized memory.
-2. Show memory: prove memory is inspectable and explainable.
-3. Round 2: run a similar but different task; apply active memory without asking the user to repeat it.
-4. Round 3: receive changed or narrowed preference; downgrade, condition, archive, or replace old memory.
-5. Delete retest: delete a selected memory and prove it is no longer retrieved or applied.
-
-Round cards do not receive full scores. Full six-dimensional score exists only at the case level.
-
-For Mimo LLM agent/judge mode:
+After installing the skill, verify the host-agent memory tool path:
 
 ```bash
-cp .env.example .env
-python3 -m evalharness.cli serve --port 8787 --agent mimo
-python3 -m evalharness.cli run --agent mimo --judge mimo
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env config
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env memory-pack "帮我给女朋友选个生日礼物"
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env memory-manage "展示当前记忆"
 ```
 
-The CLI also supports `--env-file .env.local`. Without Mimo env vars, the harness uses the local tool agent and offline trace judge for reproducible local development. `EVALHARNESS_JUDGE_CMD` is still supported for a custom external judge command.
+If no standalone LLM is configured, `agent-turn` / `agent-chat` should fail clearly instead of pretending to produce a local business answer. For memory-runtime debugging only:
+
+```bash
+python3 -m assist_everything_betterandbetter_skill.cli chat --allow-no-llm --raw-skill "展示当前记忆"
+```
+
+## Self-Improvement Ledger
+
+Use `.learnings/` to log recurring corrections, tool failures, integration failures, and feature requests. Do not log secrets or full env files.
+
+Create these files when needed:
+
+- `.learnings/LEARNINGS.md`
+- `.learnings/ERRORS.md`
+- `.learnings/FEATURE_REQUESTS.md`
+
+Recurring Pattern:
+
+- Give recurring issues a stable pattern key.
+- Track first seen, last seen, recurrence count, and related files.
+- Recurring issues should lead to a systemic fix, not one-off patching.
+
+Promotion:
+
+- Promote recurring resolved learnings into this `SKILL.md` or project docs as short prevention rules.
+- Update the original learning entry status to `promoted`.

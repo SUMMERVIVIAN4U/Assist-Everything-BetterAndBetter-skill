@@ -4,7 +4,7 @@ import argparse
 import json
 
 from .env import load_env
-from .llm import DEFAULT_LLM_PROVIDER, LLM_PROVIDER_LABELS
+from .llm import LLM_PROVIDER_LABELS
 from .runner import run_all
 from .server import serve
 
@@ -19,7 +19,7 @@ def main() -> None:
     run.add_argument("--agent", default="local", choices=["local", *LLM_PROVIDER_LABELS.keys()])
     server = sub.add_parser("serve")
     server.add_argument("--port", type=int, default=8787)
-    server.add_argument("--agent", default=DEFAULT_LLM_PROVIDER, choices=list(LLM_PROVIDER_LABELS), help="Workbench only supports real LLM mode.")
+    server.add_argument("--agent", default=None, choices=list(LLM_PROVIDER_LABELS), help="Workbench only supports real LLM mode. Defaults to shared runtime config.")
     args = parser.parse_args()
     load_env(args.env_file)
 

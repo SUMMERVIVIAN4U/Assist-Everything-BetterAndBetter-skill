@@ -73,6 +73,21 @@ def test_sanitize_llm_output_preserves_literal_double_asterisks():
     assert "**加粗**" in cleaned
 
 
+def test_memory_inspection_command_does_not_require_llm_rewrite():
+    class Client:
+        def chat(self, messages, temperature=0.3):
+            raise AssertionError("memory inspection should not call LLM rewrite")
+
+        def json_chat(self, messages, temperature=0.0):
+            raise AssertionError("memory inspection should not call LLM extractor")
+
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=Client(), persist_memory=False, require_llm=True)
+
+    turn = agent.reply("展示当前记忆")
+
+    assert "当前没有任何记忆" in turn.assistant.content
+
+
 def test_rewrite_payload_projects_selected_gifts_as_exclusions():
     client = _SemanticClient()
     agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)

@@ -392,6 +392,22 @@ let report = null;
     function selectedProvider() {
       return document.getElementById('llmProvider').value || 'deepseek_pro';
     }
+    async function saveAgentProvider() {
+      const el = document.getElementById('llmHealth');
+      el.textContent = 'saving provider...';
+      const data = await (await fetch('/api/settings/agent', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({provider:selectedProvider()})
+      })).json();
+      if (!data.ok) {
+        el.textContent = data.error || 'Provider 保存失败';
+        return;
+      }
+      settings = data.settings;
+      el.textContent = `Provider 已保存：${settings.llm_provider || selectedProvider()}`;
+      renderConfigSummaries();
+    }
     async function checkProviderHealth() {
       const el = document.getElementById('llmHealth');
       el.textContent = 'checking...';
