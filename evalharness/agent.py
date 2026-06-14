@@ -59,6 +59,7 @@ class HarnessAgent:
                 response.applied_memories,
                 rewrite_context,
                 (response.diagnostics or {}).get("memory_pack", {}),
+                response.memory_actions,
             )
 
         user = Message(role="user", content=user_text)
@@ -90,6 +91,7 @@ class HarnessAgent:
         applied_memories: list[str],
         context: str,
         memory_pack: dict[str, Any] | None = None,
+        current_memory_actions: list[dict[str, Any]] | None = None,
     ) -> str:
         if not self._use_llm():
             if self.require_llm:
@@ -99,7 +101,8 @@ class HarnessAgent:
         client = self.llm_client or _workbench_llm_client(provider)
         snapshot = self.toolbox.snapshot()
         memory_context = _rewrite_memory_context(snapshot, memory_pack or {}, applied_memories)
-        memory_actions = _compact_memory_actions(self.toolbox.skill.memory.events[-8:])
+        memory_actions = _compact_memory_actions(current_memory_actions or self.toolbox.skill.memory.events[-8:])
+        selected_gift = _selected_gift_from_actions(memory_actions) or _gift_selection_phrase(user_text)
         messages = [
             {
                 "role": "system",
@@ -115,7 +118,7 @@ class HarnessAgent:
                         "applied_memory_ids": applied_memories,
                         "memory_context": memory_context,
                         "memory_actions": memory_actions,
-                        "response_directives": _response_directives(user_text, memory_context),
+                        "response_directives": _response_directives(user_text, memory_context, selected_gift=selected_gift),
                     },
                     ensure_ascii=False,
                 ),
@@ -124,7 +127,7 @@ class HarnessAgent:
         try:
             rewritten = _sanitize_llm_output(client.chat(messages, temperature=0.3))
             rewritten = _remove_trailing_generic_question(rewritten)
-            if _llm_response_is_usable(rewritten, user_text=user_text):
+            if _llm_response_is_usable(rewritten, user_text=user_text, selected_gift=selected_gift):
                 return rewritten
             retry_messages = [
                 messages[0],
@@ -138,11 +141,12 @@ class HarnessAgent:
                             "applied_memory_ids": applied_memories,
                             "memory_context": memory_context,
                             "memory_actions": memory_actions,
-                            "response_directives": _response_directives(user_text, memory_context),
+                            "response_directives": _response_directives(user_text, memory_context, selected_gift=selected_gift),
                             "previous_rewrite": rewritten,
                             "instruction": (
                                 "上一次回复不可用。必须基于 user_message、conversation_context 和 memory_context 直接回答用户；"
                                 "如果用户是在确认、纠正或选择候选项，先承认并执行这个意图；"
+                                "如果 memory_actions 已经写入 selected 决策，必须确认该已选礼物，不能继续推荐其他方向；"
                                 "任务请求必须给出完整可用结果，不能只追问，不能说“这个草案/上面的方案”却不展示主体。"
                             ),
                         },
@@ -152,7 +156,7 @@ class HarnessAgent:
             ]
             rewritten = _sanitize_llm_output(client.chat(retry_messages, temperature=0.1))
             rewritten = _remove_trailing_generic_question(rewritten)
-            if _llm_response_is_usable(rewritten, user_text=user_text):
+            if _llm_response_is_usable(rewritten, user_text=user_text, selected_gift=selected_gift):
                 return rewritten
             return rewritten or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
         except Exception as exc:
@@ -401,9 +405,9 @@ def _rewrite_memory_context(snapshot: dict[str, Any], memory_pack: dict[str, Any
     }
 
 
-def _response_directives(user_text: str, memory_context: dict[str, Any]) -> list[str]:
+def _response_directives(user_text: str, memory_context: dict[str, Any], *, selected_gift: str = "") -> list[str]:
     directives: list[str] = []
-    selection = _gift_selection_phrase(user_text)
+    selection = selected_gift or _gift_selection_phrase(user_text)
     if selection:
         directives.append(f"用户正在确认候选礼物“{selection}”；必须确认已选定这个礼物，不要改推其他礼物。")
     if _is_gift_new_recommendation_request(user_text) and memory_context.get("gift_selected_exclusions"):
@@ -413,6 +417,22 @@ def _response_directives(user_text: str, memory_context: dict[str, Any]) -> list
         if not _contains_any(user_text, ["香氛", "香水", "香薰", "扩香", "蜡烛", "香味"]):
             directives.append("本轮不要推荐香氛、香水、香薰、扩香或蜡烛类礼物。")
     return directives
+
+
+def _selected_gift_from_actions(actions: list[dict[str, Any]]) -> str:
+    for action in reversed(actions or []):
+        if action.get("action") not in {"add", "dedupe", "update"}:
+            continue
+        detail = str(action.get("detail") or "")
+        if "已选定" not in detail and "selected" not in str(action.get("predicate") or ""):
+            continue
+        match = re.search(r"已选定为(.+?)(?:。|；|$)", detail)
+        selected = match.group(1).strip() if match else detail
+        selected = re.sub(r"^本次给.*?的礼物", "", selected).strip(" ：:，,。")
+        selected = selected.removeprefix("已选定为").strip(" ：:，,。")
+        if selected and selected not in {"这个", "这个礼物", "它", "这款"}:
+            return selected
+    return ""
 
 
 def _gift_selected_exclusions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
@@ -491,7 +511,7 @@ def _authoritative_memory_operation(call: Any, *, stage: str = "") -> bool:
     )
 
 
-def _llm_response_is_usable(rewritten: str, *, user_text: str = "") -> bool:
+def _llm_response_is_usable(rewritten: str, *, user_text: str = "", selected_gift: str = "") -> bool:
     text = str(rewritten or "").strip()
     if not text:
         return False
@@ -509,7 +529,7 @@ def _llm_response_is_usable(rewritten: str, *, user_text: str = "") -> bool:
         and _contains_any(text, ["香氛", "香水", "香薰", "扩香", "香薰礼盒", "香氛礼盒", "蜡烛"])
     ):
         return False
-    selection = _gift_selection_phrase(user_text)
+    selection = selected_gift or _gift_selection_phrase(user_text)
     if selection:
         required_terms = _selection_required_terms(selection)
         if required_terms and not any(term in text for term in required_terms):

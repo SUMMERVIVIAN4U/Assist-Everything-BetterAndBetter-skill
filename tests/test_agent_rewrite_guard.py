@@ -149,6 +149,54 @@ def test_rewrite_retries_when_selection_turn_recommends_different_gift():
     assert "香氛" not in turn.assistant.content
 
 
+def test_rewrite_uses_current_selected_memory_action_when_user_names_scarf():
+    class Client(_SemanticClient):
+        def __init__(self):
+            super().__init__()
+            self.responses = [
+                "1. **紫色丝巾** — 桑蚕丝方巾，1000元内可选。",
+                "1000元内可选方向：紫色电动牙刷、紫色吹风机、紫色折叠键盘。",
+                "已选定：紫色丝巾。后续就围绕这款推进，不再发散推荐其他方向。",
+            ]
+
+        def chat(self, messages, temperature=0.3):
+            self.chat_calls.append({"messages": messages, "temperature": temperature})
+            return self.responses.pop(0) if self.responses else ""
+
+        def json_chat(self, messages, temperature=0.0):
+            self.json_calls.append({"messages": messages, "temperature": temperature})
+            payload = json.loads(messages[-1]["content"])
+            if payload["user_message"] == "紫色丝巾":
+                return {
+                    "memories": [
+                        {
+                            "type": "decision",
+                            "content": "本次给女朋友的礼物已选定为紫色丝巾",
+                            "scope": "gift_planning",
+                            "target": "女朋友",
+                            "predicate": "selected",
+                            "time_scope": "current_task",
+                            "confidence": 0.95,
+                            "evidence": ["紫色丝巾"],
+                            "tags": ["紫色", "丝巾"],
+                        }
+                    ]
+                }
+            return {"memories": []}
+
+    client = Client()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("给我一个礼物推荐。")
+
+    turn = agent.reply("紫色丝巾")
+
+    assert len(client.chat_calls) >= 3
+    assert "紫色丝巾" in turn.assistant.content
+    assert "电动牙刷" not in turn.assistant.content
+    retry_payload = json.loads(client.chat_calls[-1]["messages"][1]["content"])
+    assert any("紫色丝巾" in directive for directive in retry_payload["response_directives"])
+
+
 def test_rewrite_never_falls_back_to_local_draft_when_llm_drops_travel_plan():
     client = _SequencedClient(
         [
