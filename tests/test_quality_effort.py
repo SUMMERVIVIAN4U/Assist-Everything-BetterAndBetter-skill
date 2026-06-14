@@ -57,6 +57,19 @@ def test_effort_uses_small_additive_weights():
     assert effort["final_score"] == 2
     assert effort["memory_saving_points"] == 0
     assert effort["turns"][0]["reasons"] == ["用户轮次 +1", "输入长度 +1"]
+    assert "turn_effort_delta" not in effort["turns"][0]
+    assert "cumulative_effort" not in effort["turns"][0]
+    assert "当前 session" in effort["scale"]
+
+
+def test_short_concrete_gift_answer_is_deliverable():
+    assistant = "女朋友礼物推荐：**紫色丝绸方巾**，200-500元区间。\n\n理由：紫色是她喜欢的颜色，方巾实用且有仪式感。"
+    result = augment_case_run(_case([_turn("t1", "给我一个礼物推荐。", assistant=assistant)]))
+
+    effort = result["user_effort"]
+    assert effort["final_score"] == 2
+    assert effort["turns"][0]["signals"]["serious_error"] is False
+    assert "严重错误 +5" not in effort["turns"][0]["reasons"]
 
 
 def test_memory_saving_points_come_from_applied_memory():

@@ -383,7 +383,7 @@ class MemoryAdvantagesTest(unittest.TestCase):
 
         add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
         self.assertIn("给女朋友选礼物预算在 1000 元左右", add_details)
-        self.assertTrue(any("女朋友的礼物偏好/背景" in detail and "紫色" in detail for detail in add_details))
+        self.assertTrue(any("女朋友的礼物颜色偏好" in detail and "喜欢紫色" in detail for detail in add_details))
 
     def test_gift_jewelry_facts_infer_gift_scope_without_literal_gift_word(self):
         response = self.skill.process_message(
@@ -392,7 +392,8 @@ class MemoryAdvantagesTest(unittest.TestCase):
 
         add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
         self.assertIn("礼物预算在 1000 元左右", add_details)
-        self.assertTrue(any("礼物偏好/背景" in detail and "紫色" in detail and "玫瑰金" in detail for detail in add_details))
+        self.assertTrue(any("礼物颜色偏好" in detail and "喜欢紫色" in detail for detail in add_details))
+        self.assertTrue(any("首饰类礼物偏好" in detail and "玫瑰金" in detail for detail in add_details))
         self.assertTrue(any("以前送过收礼人玫瑰金项链" in detail for detail in add_details))
         self.assertTrue(all(item.scope == "gift_planning" for item in self.skill.memory.active()))
 
@@ -424,6 +425,73 @@ class MemoryAdvantagesTest(unittest.TestCase):
 
         add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
         self.assertIn("本次给收礼人的礼物已选定为玫瑰金耳钉", add_details)
+
+    def test_gift_candidate_name_reference_uses_semantic_extractor(self):
+        def extractor(text, context, scope, active):
+            raise AssertionError("candidate references should be handled by the generic rule fast path")
+
+        skill = AssistSkill(memory_dir=self.tmp.name, persist=False, semantic_extractor=extractor)
+        context = (
+            "user: 不是，我想换个非首饰品类。\n"
+            "assistant: 1. 万事利（Wensli）：淡紫素绉缎方巾，约300-500元。"
+        )
+        response = skill.process_message("万事利（Wensli）：淡紫素绉缎方巾", context=context)
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("本次给收礼人的礼物已选定为万事利（Wensli）：淡紫素绉缎方巾", add_details)
+
+    def test_gift_new_selection_is_not_deduped_by_previous_selected_decision(self):
+        skill = AssistSkill(memory_dir=self.tmp.name, persist=False)
+        context = "user: 帮我给女朋友选个生日礼物。\nassistant: 推荐：潘多拉玫瑰金手链。"
+        skill.process_message("潘多拉玫瑰金手链", context=context)
+
+        response = skill.process_message(
+            "万事利（Wensli）：淡紫素绉缎方巾",
+            context=context + "\nassistant: 1. 万事利（Wensli）：淡紫素绉缎方巾，约300-500元。",
+        )
+
+        self.assertTrue(any(action["action"] == "add" and "万事利" in action["detail"] for action in response.memory_actions))
+        selected = [item.content for item in skill.memory.active() if item.type == DECISION and item.predicate == "selected"]
+        self.assertTrue(any("潘多拉" in item for item in selected))
+        self.assertTrue(any("万事利" in item for item in selected))
+
+    def test_gift_metatalk_is_not_recorded_as_selected_gift(self):
+        response = self.skill.process_message(
+            "如果我在你的推荐的多个选项里说了某个选项，就代表我选好了，已经锁定了明白吗",
+            context="user: 帮我给女朋友选个生日礼物。\nassistant: 推荐：潘多拉玫瑰金手链。",
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertFalse(any("明白吗" in detail for detail in add_details))
+        self.assertTrue(any("复述某个候选名称" in detail for detail in add_details))
+
+    def test_gift_rhetorical_previous_gift_question_does_not_pollute_history(self):
+        response = self.skill.process_message(
+            "不是送过手链了吗？",
+            context="user: 帮我给女朋友选个生日礼物。\nassistant: 推荐方向：玫瑰金手链。",
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertFalse(any("手链了吗" in detail for detail in add_details))
+        self.assertFalse(any(action.get("detail", "").startswith("以前送过") for action in response.memory_actions))
+
+    def test_gift_jewelry_preference_is_extracted_as_narrow_rule(self):
+        response = self.skill.process_message(
+            "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertTrue(any("首饰类礼物偏好" in detail and "玫瑰金" in detail for detail in add_details))
+
+    def test_gift_color_preference_is_separate_from_jewelry_preference(self):
+        response = self.skill.process_message(
+            "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertTrue(any("礼物颜色偏好" in detail and "喜欢紫色" in detail for detail in add_details))
+        self.assertTrue(any("首饰类礼物偏好" in detail and "玫瑰金" in detail for detail in add_details))
+        self.assertFalse(any("礼物偏好/背景：她喜欢紫色；如果是首饰" in detail for detail in add_details))
 
     def test_gift_planning_does_not_treat_profile_numbers_as_budget(self):
         response = self.skill.process_message("给老公买礼物，他身高180，喜欢跑步")

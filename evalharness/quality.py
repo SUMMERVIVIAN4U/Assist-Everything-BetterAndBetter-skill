@@ -144,7 +144,7 @@ def _effort_trace(case_run: dict[str, Any]) -> dict[str, Any]:
             }
         )
     return {
-        "scale": "费力度越低越省力；记忆节省信息点越多，说明用户少重复说明的信息越多。",
+        "scale": "费力度越低越省力；记忆节省信息点越多，说明用户少重复说明的信息越多。Agent Chat 中一次 Eval 对应当前 session，final_score 是该 session 的费力度。",
         "initial_score": 0,
         "final_score": score,
         "memory_saving_points": saved,
@@ -330,7 +330,20 @@ def _is_deliverable(case_run: dict[str, Any], turn: dict[str, Any]) -> bool:
         return _contains(assistant, ["第 1 天", "第 2 天", "自测", "例题", "考点"])
     if domain == "research_review":
         return _contains(assistant, ["方法", "数据集", "局限", "问题", "RAG"])
+    if _looks_like_gift_answer(user, assistant):
+        return True
     return len(assistant.strip()) >= 80 and not _meta_only(assistant)
+
+
+def _looks_like_gift_answer(user: str, assistant: str) -> bool:
+    if not _contains(user, ["礼物", "推荐", "选", "送"]):
+        return False
+    text = assistant.strip()
+    if len(text) < 30:
+        return False
+    if _meta_only(text):
+        return False
+    return _contains(text, ["礼物", "推荐", "理由", "预算", "元", "选定", "锁定", "方向"])
 
 
 def _meta_only(text: str) -> bool:

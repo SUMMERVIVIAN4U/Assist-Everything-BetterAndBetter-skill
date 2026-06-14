@@ -84,6 +84,8 @@ class AssistSkill:
         self.mem0_client = HostedMem0Client(self.mem0_config) if self.memory_backend == "mem0_hosted" and self.mem0_config.ready else None
         self.session_id = f"session_{uuid4().hex[:8]}"
         self.semantic_extractor = semantic_extractor
+        self._remote_deleted_ids: set[str] = set()
+        self._remote_deleted_items: list[MemoryItem] = []
 
     def process_message(self, text: str, context: str = "") -> SkillResponse:
         if not self.memory_enabled:
@@ -726,6 +728,8 @@ class AssistSkill:
             return SkillResponse("远端记忆后端未配置，无法重置。", [action], [], [])
         try:
             result = client.delete_all(page_size=200)
+            self._remote_deleted_ids.clear()
+            self._remote_deleted_items.clear()
             action = {"action": "reset", "backend": backend, "memory_id": None, "detail": "remote memory reset", "ok": not result.get("errors"), "result": result}
             return SkillResponse("已重置当前记忆后端。", [action], [], [])
         except Exception as exc:
@@ -750,6 +754,10 @@ class AssistSkill:
             remote_id = str(item.validity.get("mem0_id") or item.id)
             try:
                 result = client.delete(remote_id)
+                item.status = DELETED
+                item.updated_at = datetime.now().isoformat()
+                self._remote_deleted_ids.update({item.id, remote_id})
+                self._remember_remote_deleted_item(item)
                 deleted.append(item)
                 actions.append(
                     {
@@ -783,10 +791,20 @@ class AssistSkill:
             return {"version": "M0", "active": [], "superseded": [], "archived": [], "deleted": []}
         try:
             raw = client.get_all(page_size=50)
-            items = [_item_from_mem0_result(record).to_dict() for record in _mem0_results(raw)]
+            items = [
+                item
+                for item in (_item_from_mem0_result(record) for record in _mem0_results(raw))
+                if not self._is_remote_tombstoned(item)
+            ]
         except Exception as exc:
             return {"version": "M0", "active": [], "superseded": [], "archived": [], "deleted": [], "errors": [str(exc)]}
-        return {"version": f"M{len(items)}", "active": items, "superseded": [], "archived": [], "deleted": []}
+        return {
+            "version": f"M{len(items) + len(self._remote_deleted_items)}",
+            "active": [item.to_dict() for item in items],
+            "superseded": [],
+            "archived": [],
+            "deleted": [item.to_dict() for item in self._remote_deleted_items],
+        }
 
     def _search_remote(self, client: Any, text: str, context: str = "") -> list[MemoryItem]:
         if not client:
@@ -798,6 +816,7 @@ class AssistSkill:
                 item
                 for item in client.search(text, top_k=12)
                 if item.status == ACTIVE
+                and not self._is_remote_tombstoned(item)
                 and not _is_polluted_memory_item(item)
                 and _memory_scope_matches(item, scope)
                 and _memory_target_matches(item, scope, target)
@@ -814,10 +833,19 @@ class AssistSkill:
             return [
                 item
                 for item in (_item_from_mem0_result(record) for record in _mem0_results(client.get_all(page_size=50)))
-                if item.status == ACTIVE and not _is_polluted_memory_item(item)
+                if item.status == ACTIVE and not self._is_remote_tombstoned(item) and not _is_polluted_memory_item(item)
             ]
         except Exception:
             return []
+
+    def _is_remote_tombstoned(self, item: MemoryItem) -> bool:
+        remote_id = str(item.validity.get("mem0_id") or "")
+        return item.id in self._remote_deleted_ids or bool(remote_id and remote_id in self._remote_deleted_ids)
+
+    def _remember_remote_deleted_item(self, item: MemoryItem) -> None:
+        existing = {deleted.id for deleted in self._remote_deleted_items}
+        if item.id not in existing:
+            self._remote_deleted_items.append(item)
 
     def _sync_mem0_add(self, item: MemoryItem) -> dict[str, Any] | None:
         if not self.mem0_client:
@@ -964,6 +992,10 @@ class AssistSkill:
     def _duplicate_memory(self, candidate: MemoryItem, active_items: list[MemoryItem] | None = None) -> MemoryItem | None:
         active = active_items if active_items is not None else self.memory.active()
         for item in active:
+            if candidate.type == DECISION and candidate.predicate == "selected":
+                if item.content == candidate.content and item.scope == candidate.scope:
+                    return item
+                continue
             same_content = item.content == candidate.content and item.scope == candidate.scope
             same_fact = (
                 candidate.predicate
@@ -1484,6 +1516,8 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
         return True
     if _has_contextual_task_fact(text, context):
         return True
+    if _infer_scope(text, context) == "gift_planning" and _looks_like_gift_candidate_reference(text, context):
+        return True
     return False
 
 
@@ -1496,6 +1530,8 @@ def _semantic_extraction_gate(text: str, context: str, scope: str) -> bool:
     if _has_memory_signal(stripped, context) or _has_contextual_task_fact(stripped, context):
         return True
     if scope == "gift_planning":
+        if _looks_like_gift_candidate_reference(stripped, context):
+            return True
         return bool(re.search(r"^(?:就)?(?:选|买|送|定|下单|换)(?!礼物|一个|个)(.{1,30})$", stripped)) or stripped in {
             "就这个",
             "就它",
@@ -1519,6 +1555,8 @@ def _prepare_semantic_candidate(item: MemoryItem, text: str, scope: str) -> Memo
         item.scope = scope
     if item.type not in {PREFERENCE, CONSTRAINT, WORKFLOW, DECISION, HISTORY, CONTEXT_FACT}:
         item.type = _infer_memory_type(text, item.scope)
+    if item.scope == "gift_planning" and item.type == DECISION and _is_gift_selection_teaching(text):
+        return None
     if not item.evidence:
         item.evidence = [text]
     if not item.applies_when:
@@ -1584,6 +1622,17 @@ def _has_contextual_task_fact(text: str, context: str = "") -> bool:
         "推车",
     ]
     return bool(re.search(r"\d+\s*[-~到至]?\s*\d*\s*岁", text)) or any(marker in text for marker in fact_markers)
+
+
+def _looks_like_gift_candidate_reference(text: str, context: str = "") -> bool:
+    stripped = text.strip(" 。！？!?")
+    if not stripped or len(stripped) > 60:
+        return False
+    if _contains_any(stripped, ["为什么", "怎么", "明白吗", "懂吗", "气死", "你还", "不是", "不要", "不用"]):
+        return False
+    if not _contains_any(context, ["assistant:", "推荐", "方案", "首选", "备选", "选项"]):
+        return False
+    return stripped in context or _contains_any(stripped, ["潘多拉", "Pandora", "万事利", "Wensli", "拍立得", "方巾", "手链", "耳钉", "音箱", "包"])
 
 
 def _is_parent_identity_fact(text: str) -> bool:
@@ -1783,7 +1832,7 @@ def _extract_budget(text: str) -> str:
 
 def _is_gift_planning_context(text: str, context: str = "") -> bool:
     combined = f"{context}\n{text}"
-    gift_terms = ["礼物", "生日礼物", "送礼", "选礼", "买礼物", "挑礼物"]
+    gift_terms = ["礼物", "生日礼物", "送礼", "选礼", "买礼物", "挑礼物", "非首饰品类", "换个非首饰", "不要首饰"]
     if any(term in combined for term in gift_terms):
         return True
     jewelry_terms = ["首饰", "耳钉", "耳环", "手链", "戒指", "项链", "玫瑰金", "紫水晶"]
@@ -1797,6 +1846,20 @@ def _gift_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
     scope = "gift_planning"
     target = _gift_recipient(text) or _gift_recipient(context)
     candidates: list[MemoryItem] = []
+
+    if _is_gift_selection_teaching(text):
+        candidates.append(
+            _memory_item(
+                WORKFLOW,
+                "多候选送礼推荐后，用户复述某个候选名称即表示已选定该候选；不要继续追问或发散推荐",
+                scope,
+                text,
+                target,
+                "uses_workflow",
+                ["选定"],
+                {"time_scope": "long_term"},
+            )
+        )
 
     budget = _extract_budget(text)
     if budget:
@@ -1828,6 +1891,21 @@ def _gift_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
             )
         )
 
+    candidate_reference = _extract_gift_candidate_reference_decision(text, context)
+    if candidate_reference:
+        candidates.append(
+            _memory_item(
+                DECISION,
+                f"本次给{target or '收礼人'}的礼物已选定为{candidate_reference}",
+                scope,
+                text,
+                target,
+                "selected",
+                _keywords(candidate_reference),
+                {"time_scope": "current_task"},
+            )
+        )
+
     decision = _extract_gift_decision(text, context)
     if decision:
         candidates.append(
@@ -1856,6 +1934,36 @@ def _gift_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
                 "must_avoid",
                 _keywords(avoid),
                 {"time_scope": time_scope},
+            )
+        )
+
+    jewelry_preference = _extract_jewelry_preference(text)
+    if jewelry_preference:
+        candidates.append(
+            _memory_item(
+                PREFERENCE,
+                f"{target or '收礼人'}的首饰类礼物偏好：{jewelry_preference}",
+                scope,
+                text,
+                target,
+                "category_likes",
+                _keywords(jewelry_preference),
+                {"time_scope": "long_term"},
+            )
+        )
+
+    color_preference = _extract_gift_color_preference(text)
+    if color_preference:
+        candidates.append(
+            _memory_item(
+                PREFERENCE,
+                f"{target or '收礼人'}的礼物颜色偏好：{color_preference}",
+                scope,
+                text,
+                target,
+                "likes_color",
+                _keywords(color_preference),
+                {"time_scope": "long_term"},
             )
         )
 
@@ -2001,6 +2109,11 @@ def _gift_recipient(text: str) -> str:
 
 
 def _extract_previous_gifts(text: str) -> str:
+    normalized = text.strip()
+    if ("?" in normalized or "？" in normalized or normalized.endswith("吗")) and any(
+        token in normalized for token in ["不是送过", "不是买过", "没送过", "没有送过"]
+    ):
+        return ""
     patterns = [
         r"(?:以前|之前|上次|已经|曾经)?送过(?:了)?(.+?)(?:，?他还比较满意|，?她还比较满意|，?还比较满意|。|；|$)",
         r"(?:以前|之前|已经|曾经)?买过(?:了)?(.+?)(?:。|；|$)",
@@ -2015,6 +2128,8 @@ def _extract_previous_gifts(text: str) -> str:
 
 
 def _extract_gift_decision(text: str, context: str = "") -> str:
+    if _is_gift_selection_teaching(text):
+        return ""
     patterns = [
         r"(?:已经|刚刚|刚才)?(?:买了|下单了|入手了)(.+?)(?:。|；|$)",
         r"(?:礼物)?(?:选定|定了|决定买|确认送)(?:为|了)?(.+?)(?:。|；|$)",
@@ -2026,9 +2141,17 @@ def _extract_gift_decision(text: str, context: str = "") -> str:
             decision = _clean_gift_fragment(match.group(1))
             if _is_deictic_gift_decision(decision):
                 decision = _extract_last_gift_recommendation(context)
-            if decision and "推荐" not in decision:
+            if decision and "推荐" not in decision and not _is_gift_metatalk(decision):
                 return decision
     return ""
+
+
+def _extract_gift_candidate_reference_decision(text: str, context: str = "") -> str:
+    if re.match(r"^(?:就)?(?:选|买|送|定|下单|换)", text.strip()):
+        return ""
+    if not _looks_like_gift_candidate_reference(text, context):
+        return ""
+    return _clean_gift_fragment(text)
 
 
 def _is_gift_decision_text(text: str) -> bool:
@@ -2037,6 +2160,15 @@ def _is_gift_decision_text(text: str) -> bool:
 
 def _is_deictic_gift_decision(text: str) -> bool:
     return text.strip(" 了吧。！？!?，,") in {"这个", "这个礼物", "它", "这款", "这个方向", "这一个"}
+
+
+def _is_gift_metatalk(text: str) -> bool:
+    stripped = text.strip(" 了吧。！？!?，,")
+    return not stripped or stripped in {"明白吗", "懂吗", "知道吗", "理解吗"} or _contains_any(stripped, ["代表我选好了", "已经锁定", "不再发散"])
+
+
+def _is_gift_selection_teaching(text: str) -> bool:
+    return _contains_any(text, ["多个选项", "某个选项", "推荐的多个"]) and _contains_any(text, ["代表我选", "就代表", "选好了", "锁定"])
 
 
 def _extract_last_gift_recommendation(context: str) -> str:
@@ -2075,10 +2207,36 @@ def _extract_gift_constraint(text: str) -> str:
     return "；".join(item for item in constraints if item)
 
 
+def _extract_jewelry_preference(text: str) -> str:
+    clauses = _split_clauses(text)
+    outputs: list[str] = []
+    for clause in clauses:
+        if "首饰" not in clause:
+            continue
+        if "玫瑰金" in clause and any(token in clause for token in ["喜欢", "偏好", "优先"]):
+            outputs.append("首饰优先玫瑰金")
+        if "不需要硬凹紫色" in clause or "不用硬凹紫色" in clause or "不要硬凹紫色" in clause:
+            outputs.append("不需要硬凹紫色")
+    return "；".join(dict.fromkeys(outputs))
+
+
+def _extract_gift_color_preference(text: str) -> str:
+    outputs: list[str] = []
+    for clause in _split_clauses(text):
+        if "首饰" in clause:
+            continue
+        match = re.search(r"(?:他|她|ta|TA)?喜欢([^；;，,。]*?(?:紫色|蓝色|绿色|粉色|白色|黑色|银色|金色|玫瑰金))", clause)
+        if match:
+            outputs.append(f"喜欢{match.group(1).strip()}")
+    return "；".join(dict.fromkeys(outputs))
+
+
 def _extract_gift_profile(text: str) -> str:
     fragments = []
     for clause in _split_clauses(text):
         if _extract_budget(clause) or _extract_previous_gifts(clause) or _extract_gift_decision(clause):
+            continue
+        if _extract_gift_color_preference(clause) or _extract_jewelry_preference(clause):
             continue
         if any(token in clause for token in ["礼物", "生日礼物"]) and not any(token in clause for token in ["喜欢", "爱好", "他是", "她是", "是个", "程序员", "养花", "养草", "金鱼", "咖啡"]):
             continue
@@ -2141,7 +2299,7 @@ def _gift_answer(text: str, memories: list[MemoryItem], context: str = "") -> st
     avoid = [item.content for item in memories if item.predicate in {"previously_given", "must_avoid"}]
     preferences = [item.content for item in memories if item.type in {PREFERENCE, CONTEXT_FACT}]
     non_jewelry = any(token in combined for token in ["非首饰", "不要首饰", "不碰首饰", "不考虑首饰", "排除首饰"])
-    no_purple = "紫色" not in memory_text and "紫色" not in text.replace("删除 她喜欢紫色", "")
+    no_purple = ("删除" in text and "紫色" in text) or ("紫色" not in memory_text and "紫色" not in text.replace("删除 她喜欢紫色", ""))
     if "不重复" in text or "再给" in text or "推荐" in text:
         if non_jewelry:
             options = [

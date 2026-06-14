@@ -300,6 +300,9 @@ class MemoryAdapterTest(unittest.TestCase):
             self.assertTrue(any(action["action"] == "delete" and action["ok"] for action in response.memory_actions))
             self.assertIn("推荐方向", response.text)
             self.assertEqual([], response.applied_memories)
+            snapshot = skill.snapshot()
+            self.assertFalse(any("紫色" in item["content"] for item in snapshot["active"]))
+            self.assertTrue(any("紫色" in item["content"] for item in snapshot["deleted"]))
 
     def test_hosted_mem0_search_filters_cross_scope_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:

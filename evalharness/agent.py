@@ -93,12 +93,13 @@ class HarnessAgent:
     ) -> str:
         if not self._use_llm():
             if self.require_llm:
-                raise RuntimeError("真实 LLM provider 未配置或未启用，Workbench 不允许回退到本地草稿。")
-            return draft
+                raise RuntimeError("真实 LLM provider 未配置或未启用，Workbench 不允许使用本地业务回答。")
+            return "真实 LLM provider 未配置或未启用，无法生成业务回答。"
         provider = self._provider()
         client = self.llm_client or _workbench_llm_client(provider)
         snapshot = self.toolbox.snapshot()
         memory_context = _rewrite_memory_context(snapshot, memory_pack or {}, applied_memories)
+        memory_actions = _compact_memory_actions(self.toolbox.skill.memory.events[-8:])
         messages = [
             {
                 "role": "system",
@@ -111,9 +112,10 @@ class HarnessAgent:
                         "stage": stage,
                         "user_message": user_text,
                         "conversation_context": context,
-                        "tool_draft": draft,
                         "applied_memory_ids": applied_memories,
                         "memory_context": memory_context,
+                        "memory_actions": memory_actions,
+                        "response_directives": _response_directives(user_text, memory_context),
                     },
                     ensure_ascii=False,
                 ),
@@ -122,7 +124,7 @@ class HarnessAgent:
         try:
             rewritten = _sanitize_llm_output(client.chat(messages, temperature=0.3))
             rewritten = _remove_trailing_generic_question(rewritten)
-            if _rewrite_is_usable(user_text, draft, rewritten, context=context):
+            if _llm_response_is_usable(rewritten, user_text=user_text):
                 return rewritten
             retry_messages = [
                 messages[0],
@@ -133,15 +135,15 @@ class HarnessAgent:
                             "stage": stage,
                             "user_message": user_text,
                             "conversation_context": context,
-                            "tool_draft": draft,
                             "applied_memory_ids": applied_memories,
                             "memory_context": memory_context,
+                            "memory_actions": memory_actions,
+                            "response_directives": _response_directives(user_text, memory_context),
                             "previous_rewrite": rewritten,
                             "instruction": (
-                                "上一次改写没有保留 tool_draft 的可执行内容。"
-                                "如果 user_message 是对 conversation_context 中上一轮任务的补充约束，必须直接更新上一轮任务结果；"
-                                "必须直接给用户完整可用方案，保留具体路线/步骤/推荐/结论；"
-                                "不要在可执行结果后追加泛泛追问，不能只追问，不能说“这个草案”却不展示草案。"
+                                "上一次回复不可用。必须基于 user_message、conversation_context 和 memory_context 直接回答用户；"
+                                "如果用户是在确认、纠正或选择候选项，先承认并执行这个意图；"
+                                "任务请求必须给出完整可用结果，不能只追问，不能说“这个草案/上面的方案”却不展示主体。"
                             ),
                         },
                         ensure_ascii=False,
@@ -150,11 +152,13 @@ class HarnessAgent:
             ]
             rewritten = _sanitize_llm_output(client.chat(retry_messages, temperature=0.1))
             rewritten = _remove_trailing_generic_question(rewritten)
-            return rewritten if _rewrite_is_usable(user_text, draft, rewritten, context=context) else draft
+            if _llm_response_is_usable(rewritten, user_text=user_text):
+                return rewritten
+            return rewritten or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
         except Exception as exc:
             if self.require_llm:
-                raise RuntimeError(f"真实 LLM 改写失败，Workbench 不允许回退到本地草稿（provider={provider}）：{exc}") from exc
-            return f"{draft}\n\n远端 LLM 改写超时或失败，已回退到本地工具草稿：{exc}"
+                raise RuntimeError(f"真实 LLM 调用失败，Workbench 不允许回退到本地业务回答（provider={provider}）：{exc}") from exc
+            return f"真实 LLM 调用失败，已拒绝回退到本地业务回答：{exc}"
 
     def _recent_context(self, *, include_pre_reset: bool = False) -> str:
         messages = self.session.messages if include_pre_reset else self.session.messages[self._context_start_index :]
@@ -237,6 +241,9 @@ class LLMSemanticMemoryExtractor:
                     "current_task 用于本次任务决策或临时约束；long_term 用于稳定偏好；"
                     "scene_memory 用于同类场景下需下次确认的条件；past 用于历史已发生事项。"
                     "如果用户说“选拍立得”，在送礼上下文中应提取为 decision/selected，内容写明具体礼物。"
+                    "如果用户在多候选推荐后复述某个候选名称，即使没有“选”字，也应按上下文提取为 decision/selected。"
+                    "如果用户在纠正你的交互方式，例如“我说某个选项就代表选好了”，应提取为 workflow 记忆，"
+                    "内容写成可复用交互规则，不要把“明白吗/懂吗”当作礼物。"
                 ),
             },
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
@@ -316,9 +323,22 @@ def _system_prompt() -> str:
     base = (
         "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
         "记忆工具已经完成提取、更新、删除和检索。"
-        "必须尊重 tool_draft 和 memory_context，不要虚构或使用 deleted/superseded 记忆。"
+        "必须尊重 memory_context，不要虚构或使用 deleted/superseded 记忆。"
+        "如果用户本轮删除或否定了某条偏好，该删除/否定优先级高于 conversation_context 中更早的说法，后续回答不得继续使用被删除偏好。"
+        "如果被删除的是颜色偏好，后续不要推荐该颜色、不要把该颜色作为搭配理由；即使历史已选礼物名称含该颜色，也只称“已选礼物/已选方巾”，不要复述该颜色词。"
         "只能默认使用 memory_context.apply_now 里的记忆；memory_context.confirm_first 只能作为需要确认的提示，不能直接当作已生效约束。"
-        "你的回复不能为空；对任务请求必须保留 tool_draft 的可用草案或结果，不能只说需要更多材料。"
+        "你的回复不能为空；对任务请求必须直接给完整可用结果，不能只说需要更多材料。"
+        "信息不足时也要先基于合理假设给 2-4 个可执行候选，并明确默认假设；不要把第一反应变成追问。"
+        "处理偏好时要区分广义偏好和窄域/条件偏好：窄域条件优先于广义偏好。"
+        "例如“喜欢紫色；如果是首饰喜欢玫瑰金”表示首饰优先玫瑰金，不要为了紫色强行选择紫色首饰。"
+        "如果用户纠正“首饰不需要硬凹紫色”，后续首饰推荐不得再叠加紫色。"
+        "如果用户复述或点名 conversation_context 里你刚推荐过的候选项，默认视为用户已经选定该候选，不要继续发散推荐。"
+        "送礼场景中，memory_context.gift_selected_exclusions 是已经选定或确认过的礼物。"
+        "如果用户后续说“给我一个礼物推荐”“再给一个推荐”“换个方向/品类”，除非明确要求购买渠道、包装或继续推进该已选礼物，"
+        "必须把这些已选礼物及其同品类作为排除项，不要重复推荐。"
+        "如果用户纠正你，优先承认纠正并按纠正后的约束继续，不要重复已经被否定的方向。"
+        "送礼场景中，如果用户已经选过其他品类、纠正过推荐方向，或正在要求不重复的新方向，"
+        "不要把香氛/香水/香薰/扩香/蜡烛作为默认兜底推荐，除非用户明确要求香味类礼物。"
         "不要使用“这个草案”“上面的方案”这类空指代，除非你已经把草案主体写出来。"
         "不要在已交付方案末尾追加“需要我帮你查”“选A还是B”这类泛泛追问。"
         "默认用中文短答，像正常人说话；不要主动解释记忆工具、记忆变更和推理链路。"
@@ -346,6 +366,8 @@ def _remove_trailing_generic_question(text: str) -> str:
         "要不要",
         "需要推荐",
         "帮你查",
+        "要记住",
+        "告诉我",
         "补充、修改或删除",
         "选A还是B",
         "两个都要",
@@ -375,7 +397,72 @@ def _rewrite_memory_context(snapshot: dict[str, Any], memory_pack: dict[str, Any
         "apply_now": memory_pack.get("apply_now", []),
         "confirm_first": memory_pack.get("confirm_first", []),
         "suppressed": memory_pack.get("suppressed", []),
+        "gift_selected_exclusions": _gift_selected_exclusions(snapshot),
     }
+
+
+def _response_directives(user_text: str, memory_context: dict[str, Any]) -> list[str]:
+    directives: list[str] = []
+    selection = _gift_selection_phrase(user_text)
+    if selection:
+        directives.append(f"用户正在确认候选礼物“{selection}”；必须确认已选定这个礼物，不要改推其他礼物。")
+    if _is_gift_new_recommendation_request(user_text) and memory_context.get("gift_selected_exclusions"):
+        directives.append(
+            "用户正在要新的礼物推荐；必须避开 memory_context.gift_selected_exclusions 中已选礼物及同品类，直接给新候选，不要总结当前记忆或说无需推荐。"
+        )
+        if not _contains_any(user_text, ["香氛", "香水", "香薰", "扩香", "蜡烛", "香味"]):
+            directives.append("本轮不要推荐香氛、香水、香薰、扩香或蜡烛类礼物。")
+    return directives
+
+
+def _gift_selected_exclusions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    exclusions: list[dict[str, Any]] = []
+    for item in snapshot.get("active", []):
+        if not isinstance(item, dict):
+            continue
+        if item.get("scope") != "gift_planning":
+            continue
+        if item.get("type") != DECISION and item.get("predicate") != "selected":
+            continue
+        content = str(item.get("content") or "")
+        if not content:
+            continue
+        exclusions.append(
+            {
+                "content": content,
+                "target": item.get("target", ""),
+                "category": _gift_category_hint(content),
+            }
+        )
+    return exclusions[:8]
+
+
+def _gift_category_hint(text: str) -> str:
+    if _contains_any(text, ["项链", "手链", "耳钉", "耳环", "戒指", "首饰", "珠宝"]):
+        return "首饰"
+    if _contains_any(text, ["方巾", "丝巾", "围巾", "披肩"]):
+        return "丝巾/围巾"
+    if _contains_any(text, ["包", "小包", "手提包", "斜挎", "腋下包"]):
+        return "包袋"
+    if _contains_any(text, ["拍立得", "相机"]):
+        return "影像设备"
+    if _contains_any(text, ["香氛", "香水", "蜡烛", "扩香"]):
+        return "香氛"
+    return ""
+
+
+def _compact_memory_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for action in actions:
+        output.append(
+            {
+                "action": action.get("action"),
+                "detail": action.get("detail") or action.get("memory_id"),
+                "ok": action.get("ok", True),
+                "extractor": action.get("extractor"),
+            }
+        )
+    return output
 
 
 def _memory_actions_from_call(call: Any) -> list[dict[str, Any]]:
@@ -390,7 +477,13 @@ def _has_reset_action(call: Any) -> bool:
 def _authoritative_memory_operation(call: Any, *, stage: str = "") -> bool:
     if stage in {"reset", "show_memory"}:
         return True
-    if getattr(call, "name", "") in {"reset_memory", "show_memory", "manage_memory"}:
+    raw_input = getattr(call, "input", {}) or {}
+    input_text = str(raw_input.get("command") or raw_input.get("message") or "")
+    if _contains_any(input_text, ["然后", "继续", "再给", "推荐", "安排", "写", "做"]):
+        return False
+    if getattr(call, "name", "") in {"reset_memory", "show_memory"}:
+        return True
+    if getattr(call, "name", "") == "manage_memory":
         return True
     return any(
         action.get("ok") is False or action.get("action") in {"reset", "delete", "downgrade", "archive"}
@@ -398,7 +491,7 @@ def _authoritative_memory_operation(call: Any, *, stage: str = "") -> bool:
     )
 
 
-def _rewrite_is_usable(user_text: str, draft: str, rewritten: str, *, context: str = "") -> bool:
+def _llm_response_is_usable(rewritten: str, *, user_text: str = "") -> bool:
     text = str(rewritten or "").strip()
     if not text:
         return False
@@ -406,25 +499,60 @@ def _rewrite_is_usable(user_text: str, draft: str, rewritten: str, *, context: s
         return False
     if _has_unresolved_choice(text):
         return False
-    if not _draft_has_deliverable(draft):
-        return True
-    if _contains_any(text, ["这个草案", "该草案", "上面的方案"]) and len(text) < max(120, len(draft) // 2):
+    if _contains_any(text, ["这个草案", "该草案", "上面的方案"]) and not _contains_any(text, ["第 1 天", "第1天", "上午", "下午", "推荐方向", "方案："]):
         return False
-    if _is_clarification_only(text):
+    if _is_gift_new_recommendation_request(user_text) and _contains_any(text, ["无需重新推荐", "已展示过", "不用重新推荐", "剩下唯一待确认"]):
         return False
-    if _contains_any(draft, ["亲子行程", "半日亲子路线", "执行约束"]) and _contains_any(text, ["要不要", "需要我", "我可以", "是否要"]):
-        if not _contains_any(text, ["第 1 天", "第1天", "上午", "下午", "点位", "执行约束"]):
+    if (
+        _is_gift_new_recommendation_request(user_text)
+        and not _contains_any(user_text, ["香氛", "香水", "香薰", "扩香", "蜡烛", "香味"])
+        and _contains_any(text, ["香氛", "香水", "香薰", "扩香", "香薰礼盒", "香氛礼盒", "蜡烛"])
+    ):
+        return False
+    selection = _gift_selection_phrase(user_text)
+    if selection:
+        required_terms = _selection_required_terms(selection)
+        if required_terms and not any(term in text for term in required_terms):
             return False
-    required_markers = _required_delivery_markers(user_text, context, draft)
-    if required_markers and not _contains_any(text, required_markers):
-        return False
-    if len(text) < 80 and len(draft) >= 120 and not _has_deliverable_marker(text):
+        if not _contains_any(text, ["选定", "锁定", "定下", "就这个", "已选", "确认"]):
+            return False
+        if not _contains_any(selection, ["香氛", "香水", "香薰", "扩香", "蜡烛"]) and _contains_any(
+            text,
+            ["香氛", "香水", "香薰", "扩香", "蜡烛"],
+        ):
+            return False
+    if _is_clarification_only(text):
         return False
     return True
 
 
-def _draft_has_deliverable(draft: str) -> bool:
-    return len(str(draft or "").strip()) >= 80 and _has_deliverable_marker(draft)
+def _is_gift_new_recommendation_request(text: str) -> bool:
+    value = str(text or "")
+    return _contains_any(value, ["礼物推荐", "再给一个推荐", "推荐一个", "一个推荐", "换个方向", "不重复的礼物方向"]) and not _contains_any(
+        value,
+        ["购买渠道", "链接", "包装", "尺寸", "下单", "贺卡"],
+    )
+
+
+def _gift_selection_phrase(text: str) -> str:
+    value = str(text or "").strip(" 。！？!?，,")
+    if not value or len(value) > 80:
+        return ""
+    if _contains_any(value, ["删除", "再给", "推荐", "为什么", "怎么", "不是", "不要", "不用", "明白吗", "懂吗"]):
+        return ""
+    if re.match(r"^(?:就)?(?:选|买|送|定|下单)", value):
+        return value
+    if _contains_any(value, ["拍立得", "万事利", "Wensli", "潘多拉", "Pandora", "方巾", "手链", "耳钉", "小包", "包", "音箱", "相册套装"]):
+        return value
+    return ""
+
+
+def _selection_required_terms(selection: str) -> list[str]:
+    terms = []
+    for token in ["拍立得", "相册", "万事利", "Wensli", "潘多拉", "Pandora", "方巾", "手链", "小包", "音箱"]:
+        if token in selection:
+            terms.append(token)
+    return terms or [selection]
 
 
 def _has_deliverable_marker(text: str) -> bool:
@@ -434,29 +562,13 @@ def _has_deliverable_marker(text: str) -> bool:
     )
 
 
-def _required_delivery_markers(user_text: str, context: str, draft: str) -> list[str]:
-    signal = f"{context}\n{user_text}\n{draft}"
-    if _contains_any(draft, ["亲子行程", "半日亲子路线"]) or (
-        _contains_any(signal, ["旅行", "行程", "路线", "亲子", "家庭出行"])
-        and _contains_any(draft, ["第 1 天", "半日亲子路线", "执行约束"])
-    ):
-        return ["第 1 天", "第1天", "上午", "下午", "点位", "执行约束"]
-    if _contains_any(draft, ["推荐方向", "预算", "已送", "礼物"]):
-        return ["推荐方向", "理由", "预算", "备选", "避开"]
-    if _contains_any(draft, ["同步草案", "结论", "风险", "负责人", "下一步"]):
-        return ["结论", "风险", "负责人", "下一步", "同步"]
-    if _contains_any(draft, ["复习计划", "自测", "例题", "考点"]):
-        return ["第 1 天", "第1天", "计划", "自测", "例题", "考点"]
-    if _contains_any(draft, ["综述草案", "研究问题", "方法", "数据集", "局限"]):
-        return ["方法", "数据集", "局限", "研究问题", "问题"]
-    if _contains_any(signal, ["帮我", "安排", "写", "做", "推荐", "规划"]) and _draft_has_deliverable(draft):
-        return ["第 1 天", "第1天", "上午", "下午", "路线", "行程", "方案", "推荐方向", "结论", "计划", "步骤", "执行约束", "落地建议"]
-    return []
-
-
 def _is_clarification_only(text: str) -> bool:
-    if not _contains_any(text, ["再确认", "需要确认", "我需要", "需要一个关键信息", "有没有", "大概多大", "信息不足", "为了把"]):
+    if not _contains_any(text, ["再确认", "需要确认", "我需要", "需要一个关键信息", "有没有", "大概多大", "信息不足", "为了把", "为了更准", "需要知道"]):
         return False
+    if len(str(text or "").strip()) < 120:
+        return True
+    if _contains_any(text, ["我需要再确认", "还需要知道", "需要知道", "有没有"]) and text.endswith(("?", "？", "。")):
+        return True
     return not _has_deliverable_marker(text)
 
 

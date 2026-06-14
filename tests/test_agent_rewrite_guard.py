@@ -1,4 +1,6 @@
-from evalharness.agent import HarnessAgent, _rewrite_is_usable
+import json
+
+from evalharness.agent import HarnessAgent
 
 
 class _SequencedClient:
@@ -53,7 +55,101 @@ def test_harness_injects_semantic_extractor_for_short_gift_selection():
     assert any(action["action"] == "add" and "拍立得" in action["detail"] for action in actions)
 
 
-def test_rewrite_guard_falls_back_when_llm_drops_travel_plan():
+def test_rewrite_payload_projects_selected_gifts_as_exclusions():
+    client = _SemanticClient()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("帮我给女朋友选个生日礼物。")
+    agent.reply("选拍立得")
+
+    agent.reply("给我一个礼物推荐。")
+
+    payload = json.loads(client.chat_calls[-1]["messages"][1]["content"])
+    exclusions = payload["memory_context"]["gift_selected_exclusions"]
+    assert exclusions
+    assert any("拍立得" in item["content"] for item in exclusions)
+    assert any(item["category"] == "影像设备" for item in exclusions)
+
+
+def test_rewrite_retries_when_gift_recommendation_only_summarizes_selected_item():
+    class Client(_SemanticClient):
+        def __init__(self):
+            super().__init__()
+            self.responses = [
+                "初始推荐：拍立得相机。",
+                "礼物已选定：拍立得。",
+                "礼物已选定，无需重新推荐。剩下唯一待确认是尺寸。",
+                "新的礼物推荐：真丝睡衣礼盒。\n预算：约800-1000元。\n避开：不重复已选拍立得。",
+            ]
+
+        def chat(self, messages, temperature=0.3):
+            self.chat_calls.append({"messages": messages, "temperature": temperature})
+            return self.responses.pop(0) if self.responses else ""
+
+    client = Client()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("帮我给女朋友选个生日礼物。")
+    agent.reply("选拍立得")
+
+    turn = agent.reply("给我一个礼物推荐。")
+
+    assert len(client.chat_calls) >= 4
+    assert "真丝睡衣礼盒" in turn.assistant.content
+    assert "无需重新推荐" not in turn.assistant.content
+
+
+def test_rewrite_retries_fragrance_fallback_for_new_gift_direction():
+    class Client(_SemanticClient):
+        def __init__(self):
+            super().__init__()
+            self.responses = [
+                "初始推荐：拍立得相机。",
+                "礼物已选定：拍立得。",
+                "推荐：小众香氛礼盒，预算900元。",
+                "新的礼物推荐：真丝睡衣礼盒。\n预算：约800-1000元。\n避开：不重复已选拍立得。",
+            ]
+
+        def chat(self, messages, temperature=0.3):
+            self.chat_calls.append({"messages": messages, "temperature": temperature})
+            return self.responses.pop(0) if self.responses else ""
+
+    client = Client()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("帮我给女朋友选个生日礼物。")
+    agent.reply("选拍立得")
+
+    turn = agent.reply("再给一个不重复的礼物方向。")
+
+    assert len(client.chat_calls) >= 4
+    assert "真丝睡衣礼盒" in turn.assistant.content
+    assert "香氛" not in turn.assistant.content
+
+
+def test_rewrite_retries_when_selection_turn_recommends_different_gift():
+    class Client(_SemanticClient):
+        def __init__(self):
+            super().__init__()
+            self.responses = [
+                "推荐：拍立得相册套装。",
+                "小众香氛蜡烛礼盒。",
+                "已选定：拍立得相册套装。预算按当前范围控制，后续只推进这款。",
+            ]
+
+        def chat(self, messages, temperature=0.3):
+            self.chat_calls.append({"messages": messages, "temperature": temperature})
+            return self.responses.pop(0) if self.responses else ""
+
+    client = Client()
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
+    agent.reply("再给一个推荐。")
+
+    turn = agent.reply("拍立得相册套装")
+
+    assert len(client.chat_calls) >= 3
+    assert "拍立得相册套装" in turn.assistant.content
+    assert "香氛" not in turn.assistant.content
+
+
+def test_rewrite_never_falls_back_to_local_draft_when_llm_drops_travel_plan():
     client = _SequencedClient(
         [
             "这个草案是照顾亲子的节奏来规划的。为了把具体路线调得更准，我需要再确认一下：有没有老人、小孩多大？",
@@ -65,8 +161,10 @@ def test_rewrite_guard_falls_back_when_llm_drops_travel_plan():
     turn = agent.reply("帮我安排北京周末 2 天亲子旅行。")
 
     assert len(client.calls) == 2
-    assert "北京2天亲子行程" in turn.assistant.content
-    assert "第 1 天" in turn.assistant.content
+    first_payload = json.loads(client.calls[0]["messages"][1]["content"])
+    assert "tool_draft" not in first_payload
+    assert "为了更准" in turn.assistant.content
+    assert "北京2天亲子行程" not in turn.assistant.content
     assert "这个草案" not in turn.assistant.content
 
 
@@ -167,44 +265,13 @@ def test_rewrite_guard_rejects_unresolved_choice_plan():
     assert "共青森林公园" in turn.assistant.content
 
 
-def test_rewrite_guard_rejects_offer_to_replan_without_plan():
-    draft = (
-        "北京2天亲子行程：\n"
-        "第 1 天：上午国家植物园或奥森北园，下午中国科技馆。\n"
-        "第 2 天：上午北京海洋馆，午后找近距离室内休息点。\n"
-        "执行约束：控制步行，优先电瓶车；避开人挤人的网红点。"
-    )
-    rewritten = (
-        "好，这些都记住了。以后家庭出行会按这个来调方案。"
-        "刚才那个北京周末行程我也会按这三个约束帮你重新调整，要不要我现在就改一版？"
-    )
+def test_rewrite_payload_includes_memory_actions_without_tool_draft():
+    client = _SequencedClient(["已按你的纠正更新。"])
+    agent = HarnessAgent(llm_mode="deepseek_pro", llm_client=client, persist_memory=False)
 
-    assert not _rewrite_is_usable(
-        "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。",
-        draft,
-        rewritten,
-    )
+    agent.reply("帮我给女朋友选个生日礼物。")
+    agent.reply("预算1000元左右", stage="feedback")
 
-
-def test_rewrite_guard_uses_context_for_task_continuation():
-    context = (
-        "user: 帮我安排北京周末 2 天亲子旅行。\n"
-        "assistant: 北京2天亲子行程：第 1 天上午国家植物园，下午中国科技馆；第 2 天上午北京海洋馆。"
-    )
-    draft = (
-        "北京2天亲子行程：\n"
-        "第 1 天：上午国家植物园或奥森北园，下午中国科技馆。\n"
-        "第 2 天：上午北京海洋馆，午后找近距离室内休息点。\n"
-        "执行约束：控制步行，优先电瓶车；避开人挤人的网红点。"
-    )
-    rewritten = (
-        "好，这些都记住了。以后家庭出行会减少步行，优先安排自然和动物相关体验，"
-        "也会避开人挤人的网红点；后续你再让我规划家庭出行时，我会直接按这些规则处理。"
-    )
-
-    assert not _rewrite_is_usable(
-        "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。",
-        draft,
-        rewritten,
-        context=context,
-    )
+    payload = json.loads(client.calls[-1]["messages"][1]["content"])
+    assert "tool_draft" not in payload
+    assert payload["memory_actions"]
