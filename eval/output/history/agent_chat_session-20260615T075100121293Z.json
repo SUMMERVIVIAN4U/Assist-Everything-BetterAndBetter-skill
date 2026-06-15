@@ -1,0 +1,1449 @@
+{
+  "run_id": "agent_chat_session-20260615T075100121293Z",
+  "created_at": "2026-06-15T07:51:00.121473+00:00",
+  "harness": {
+    "name": "assist-everything-betterandbetter-evalharness",
+    "agent_mode": "mimo_tool_agent",
+    "judge_mode": "mimo_llm",
+    "supports_external_llm_judge": true,
+    "supports_agent_chat": true,
+    "eval_source": "agent_chat_session"
+  },
+  "summary": {
+    "case_count": 1,
+    "config_average": 97.0,
+    "all_cases_above_90": true,
+    "effort_average": 2.0,
+    "memory_saving_points_average": 3.0,
+    "effort_reduction": 3.0,
+    "saved_effort_average": 3.0
+  },
+  "dimensions": {
+    "reproducibility": 10,
+    "memory_extraction": 20,
+    "memory_application": 25,
+    "update_and_decay": 20,
+    "transparency": 10,
+    "result_quality": 15
+  },
+  "cases": [
+    {
+      "id": "CHAT-SESSION",
+      "title": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向...",
+      "domain": "ad_hoc_chat",
+      "module": "自由对话记忆评估",
+      "script": {
+        "source": "agent_chat",
+        "turn_count": 2,
+        "messages": [
+          "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。",
+          "展示当前记忆"
+        ],
+        "chat_started_at": "2026-06-15T07:49:50.489197+00:00",
+        "chat_ended_at": "2026-06-15T07:49:50.494519+00:00"
+      },
+      "turns": [
+        {
+          "id": "turn_001",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。",
+            "timestamp": "2026-06-15T07:49:50.489197+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "已删除\"喜欢紫色\"这条偏好。\n\n新的礼物方向推荐：**便携式颈椎按摩仪**，实用且日常使用频率高，适合办公室久坐人群，体积小好收纳，价位可选空间大。",
+            "timestamp": "2026-06-15T07:49:50.489224+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。",
+                "context": ""
+              },
+              "output": {
+                "text": "删除结果：mem_73f3efb5。后续检索会过滤 deleted 记忆。\n\n删除后仍可使用的相关记忆：\n- 女朋友的首饰类礼物偏好：首饰优先玫瑰金\n- 给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明\n- 以前送过女朋友玫瑰金项链，送过的不要再送\n\n继续处理：\n推荐方向：玫瑰金耳饰或手链，带精致但不过度夸张的设计。\n- 预算：按 预算按用户当前范围控制 控制。\n- 依据：女朋友的首饰类礼物偏好：首饰优先玫瑰金。\n- 避免：给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明；以前送过女朋友玫瑰金项链，送过的不要再送。",
+                "memory_actions": [
+                  {
+                    "action": "delete",
+                    "memory_id": "mem_73f3efb5",
+                    "detail": "user_requested_delete",
+                    "version": "M6",
+                    "timestamp": "2026-06-15T07:49:48.399847+00:00"
+                  }
+                ],
+                "applied_memories": [
+                  "mem_420c1f7a",
+                  "mem_f84aa7f0",
+                  "mem_fcac8f95"
+                ],
+                "asks": []
+              },
+              "timestamp": "2026-06-15T07:49:48.400583+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_420c1f7a",
+            "mem_f84aa7f0",
+            "mem_fcac8f95"
+          ],
+          "memory_snapshot": {
+            "version": "M7",
+            "active": [
+              {
+                "type": "preference",
+                "content": "女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "category_likes",
+                "source": "chat_feedback",
+                "confidence": 0.93,
+                "status": "active",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term",
+                  "layer": "long_term",
+                  "needs_confirmation": false,
+                  "default_application": "apply",
+                  "retrieval_score": 1.1755,
+                  "retrieval_rank_strategy": "score_time"
+                },
+                "id": "mem_420c1f7a",
+                "created_at": "2026-06-15T07:43:28.428821+00:00",
+                "updated_at": "2026-06-15T07:43:28.428824+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物约束：不要首饰，换非首饰品类",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "must_avoid",
+                "source": "chat_feedback",
+                "confidence": 0.95,
+                "status": "active",
+                "evidence": [
+                  "不是，我想换个非首饰品类。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "current_task",
+                  "layer": "current_task",
+                  "session_id": "session_82984ced",
+                  "expires": "session_end"
+                },
+                "id": "mem_996dbab4",
+                "created_at": "2026-06-15T07:44:06.725600+00:00",
+                "updated_at": "2026-06-15T07:44:06.725611+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "must_avoid",
+                "source": "chat_feedback",
+                "confidence": 0.88,
+                "status": "active",
+                "evidence": [
+                  "再帮我给女朋友选一个生日礼物。请复用之前已保存的信息，不要让我重复说明。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term",
+                  "layer": "long_term",
+                  "needs_confirmation": false,
+                  "default_application": "apply",
+                  "retrieval_score": 1.158,
+                  "retrieval_rank_strategy": "score_time"
+                },
+                "id": "mem_f84aa7f0",
+                "created_at": "2026-06-15T07:47:32.779722+00:00",
+                "updated_at": "2026-06-15T07:47:32.779728+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元左右",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "budget_limit",
+                "source": "chat_feedback",
+                "confidence": 1.0,
+                "status": "active",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "预算"
+                ],
+                "validity": {
+                  "time_scope": "current_task",
+                  "layer": "current_task",
+                  "session_id": "session_82984ced",
+                  "expires": "session_end"
+                },
+                "id": "mem_fca199ba",
+                "created_at": "2026-06-15T07:43:28.428706+00:00",
+                "updated_at": "2026-06-15T07:43:28.428720+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "history",
+                "content": "以前送过女朋友玫瑰金项链，送过的不要再送",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "previously_given",
+                "source": "chat_feedback",
+                "confidence": 1.0,
+                "status": "active",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "past",
+                  "layer": "past",
+                  "retrieval_score": 0.8,
+                  "retrieval_rank_strategy": "score_time"
+                },
+                "id": "mem_fcac8f95",
+                "created_at": "2026-06-15T07:43:28.428756+00:00",
+                "updated_at": "2026-06-15T07:43:28.428758+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": [
+              {
+                "type": "preference",
+                "content": "女朋友的礼物颜色偏好：喜欢紫色",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "likes_color",
+                "source": "chat_feedback",
+                "confidence": 0.93,
+                "status": "deleted",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "紫色"
+                ],
+                "validity": {
+                  "time_scope": "long_term",
+                  "layer": "long_term",
+                  "needs_confirmation": false,
+                  "default_application": "apply"
+                },
+                "id": "mem_73f3efb5",
+                "created_at": "2026-06-15T07:43:28.428845+00:00",
+                "updated_at": "2026-06-15T07:49:48.399841+00:00",
+                "supersedes": []
+              }
+            ]
+          },
+          "notes": [
+            "本轮处理了记忆更新、淘汰或删除。",
+            "本轮检索并应用了 active 记忆。"
+          ]
+        },
+        {
+          "id": "turn_002",
+          "stage": "chat",
+          "user": {
+            "role": "user",
+            "content": "展示当前记忆",
+            "timestamp": "2026-06-15T07:49:50.494516+00:00"
+          },
+          "assistant": {
+            "role": "assistant",
+            "content": "当前 active 记忆与历史状态：\n- mem_420c1f7a [active/preference/gift_planning] 女朋友的首饰类礼物偏好：首饰优先玫瑰金\n- mem_996dbab4 [active/constraint/gift_planning] 给女朋友选礼物约束：不要首饰，换非首饰品类\n- mem_f84aa7f0 [active/constraint/gift_planning] 给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明\n- mem_fca199ba [active/constraint/gift_planning] 给女朋友选礼物预算在 1000 元左右\n- mem_fcac8f95 [active/history/gift_planning] 以前送过女朋友玫瑰金项链，送过的不要再送\n- mem_73f3efb5 [deleted/preference/gift_planning] 女朋友的礼物颜色偏好：喜欢紫色",
+            "timestamp": "2026-06-15T07:49:50.494519+00:00"
+          },
+          "tool_calls": [
+            {
+              "name": "process_message",
+              "input": {
+                "message": "展示当前记忆",
+                "context": "user: 删除 她喜欢紫色。然后：再给一个不重复的礼物方向。\nassistant: 已删除\"喜欢紫色\"这条偏好。\n\n新的礼物方向推荐：**便携式颈椎按摩仪**，实用且日常使用频率高，适合办公室久坐人群，体积小好收纳，价位可选空间大。"
+              },
+              "output": {
+                "text": "当前 active 记忆与历史状态：\n- mem_420c1f7a [active/preference/gift_planning] 女朋友的首饰类礼物偏好：首饰优先玫瑰金\n- mem_996dbab4 [active/constraint/gift_planning] 给女朋友选礼物约束：不要首饰，换非首饰品类\n- mem_f84aa7f0 [active/constraint/gift_planning] 给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明\n- mem_fca199ba [active/constraint/gift_planning] 给女朋友选礼物预算在 1000 元左右\n- mem_fcac8f95 [active/history/gift_planning] 以前送过女朋友玫瑰金项链，送过的不要再送\n- mem_73f3efb5 [deleted/preference/gift_planning] 女朋友的礼物颜色偏好：喜欢紫色",
+                "memory_actions": [],
+                "applied_memories": [
+                  "mem_420c1f7a",
+                  "mem_996dbab4",
+                  "mem_f84aa7f0",
+                  "mem_fca199ba",
+                  "mem_fcac8f95"
+                ],
+                "asks": []
+              },
+              "timestamp": "2026-06-15T07:49:50.494488+00:00"
+            }
+          ],
+          "applied_memories": [
+            "mem_420c1f7a",
+            "mem_996dbab4",
+            "mem_f84aa7f0",
+            "mem_fca199ba",
+            "mem_fcac8f95"
+          ],
+          "memory_snapshot": {
+            "version": "M7",
+            "active": [
+              {
+                "type": "preference",
+                "content": "女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "category_likes",
+                "source": "chat_feedback",
+                "confidence": 0.93,
+                "status": "active",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term",
+                  "layer": "long_term",
+                  "needs_confirmation": false,
+                  "default_application": "apply",
+                  "retrieval_score": 1.1755,
+                  "retrieval_rank_strategy": "score_time"
+                },
+                "id": "mem_420c1f7a",
+                "created_at": "2026-06-15T07:43:28.428821+00:00",
+                "updated_at": "2026-06-15T07:43:28.428824+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物约束：不要首饰，换非首饰品类",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "must_avoid",
+                "source": "chat_feedback",
+                "confidence": 0.95,
+                "status": "active",
+                "evidence": [
+                  "不是，我想换个非首饰品类。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "current_task",
+                  "layer": "current_task",
+                  "session_id": "session_82984ced",
+                  "expires": "session_end"
+                },
+                "id": "mem_996dbab4",
+                "created_at": "2026-06-15T07:44:06.725600+00:00",
+                "updated_at": "2026-06-15T07:44:06.725611+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "must_avoid",
+                "source": "chat_feedback",
+                "confidence": 0.88,
+                "status": "active",
+                "evidence": [
+                  "再帮我给女朋友选一个生日礼物。请复用之前已保存的信息，不要让我重复说明。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "long_term",
+                  "layer": "long_term",
+                  "needs_confirmation": false,
+                  "default_application": "apply",
+                  "retrieval_score": 1.158,
+                  "retrieval_rank_strategy": "score_time"
+                },
+                "id": "mem_f84aa7f0",
+                "created_at": "2026-06-15T07:47:32.779722+00:00",
+                "updated_at": "2026-06-15T07:47:32.779728+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元左右",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "budget_limit",
+                "source": "chat_feedback",
+                "confidence": 1.0,
+                "status": "active",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "预算"
+                ],
+                "validity": {
+                  "time_scope": "current_task",
+                  "layer": "current_task",
+                  "session_id": "session_82984ced",
+                  "expires": "session_end"
+                },
+                "id": "mem_fca199ba",
+                "created_at": "2026-06-15T07:43:28.428706+00:00",
+                "updated_at": "2026-06-15T07:43:28.428720+00:00",
+                "supersedes": []
+              },
+              {
+                "type": "history",
+                "content": "以前送过女朋友玫瑰金项链，送过的不要再送",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "previously_given",
+                "source": "chat_feedback",
+                "confidence": 1.0,
+                "status": "active",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [],
+                "validity": {
+                  "time_scope": "past",
+                  "layer": "past",
+                  "retrieval_score": 0.8,
+                  "retrieval_rank_strategy": "score_time"
+                },
+                "id": "mem_fcac8f95",
+                "created_at": "2026-06-15T07:43:28.428756+00:00",
+                "updated_at": "2026-06-15T07:43:28.428758+00:00",
+                "supersedes": []
+              }
+            ],
+            "superseded": [],
+            "archived": [],
+            "deleted": [
+              {
+                "type": "preference",
+                "content": "女朋友的礼物颜色偏好：喜欢紫色",
+                "scope": "gift_planning",
+                "subject": "recipient",
+                "target": "女朋友",
+                "object": "",
+                "predicate": "likes_color",
+                "source": "chat_feedback",
+                "confidence": 0.93,
+                "status": "deleted",
+                "evidence": [
+                  "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+                ],
+                "applies_when": [
+                  "gift_planning"
+                ],
+                "user_approved": true,
+                "tags": [
+                  "紫色"
+                ],
+                "validity": {
+                  "time_scope": "long_term",
+                  "layer": "long_term",
+                  "needs_confirmation": false,
+                  "default_application": "apply"
+                },
+                "id": "mem_73f3efb5",
+                "created_at": "2026-06-15T07:43:28.428845+00:00",
+                "updated_at": "2026-06-15T07:49:48.399841+00:00",
+                "supersedes": []
+              }
+            ]
+          },
+          "notes": [
+            "本轮检索并应用了 active 记忆。"
+          ]
+        }
+      ],
+      "rounds": [
+        {
+          "name": "Chat",
+          "title": "当前聊天评估",
+          "turn_ids": [
+            "turn_001",
+            "turn_002"
+          ],
+          "highlight": "共 2 轮自由对话。",
+          "actions": [
+            "process_message",
+            "trace_session"
+          ],
+          "gain": "把当前 Agent Chat 作为本次 eval 输入。"
+        },
+        {
+          "name": "Memory",
+          "title": "记忆行为",
+          "turn_ids": [
+            "turn_001"
+          ],
+          "highlight": "1 轮产生记忆新增、更新、删除或降权。",
+          "actions": [
+            "extract_memory",
+            "update_memory"
+          ],
+          "gain": "检查聊天过程中是否形成可复用记忆。"
+        },
+        {
+          "name": "Apply",
+          "title": "记忆应用",
+          "turn_ids": [
+            "turn_001",
+            "turn_002"
+          ],
+          "highlight": "2 轮应用了 active memory。",
+          "actions": [
+            "retrieve_memory",
+            "compose_response"
+          ],
+          "gain": "检查后续回复是否利用已保存记忆。"
+        }
+      ],
+      "snapshots": [
+        {
+          "version": "M7",
+          "active": [
+            {
+              "type": "preference",
+              "content": "女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "category_likes",
+              "source": "chat_feedback",
+              "confidence": 0.93,
+              "status": "active",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term",
+                "layer": "long_term",
+                "needs_confirmation": false,
+                "default_application": "apply",
+                "retrieval_score": 1.1755,
+                "retrieval_rank_strategy": "score_time"
+              },
+              "id": "mem_420c1f7a",
+              "created_at": "2026-06-15T07:43:28.428821+00:00",
+              "updated_at": "2026-06-15T07:43:28.428824+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物约束：不要首饰，换非首饰品类",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "must_avoid",
+              "source": "chat_feedback",
+              "confidence": 0.95,
+              "status": "active",
+              "evidence": [
+                "不是，我想换个非首饰品类。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "current_task",
+                "layer": "current_task",
+                "session_id": "session_82984ced",
+                "expires": "session_end"
+              },
+              "id": "mem_996dbab4",
+              "created_at": "2026-06-15T07:44:06.725600+00:00",
+              "updated_at": "2026-06-15T07:44:06.725611+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "must_avoid",
+              "source": "chat_feedback",
+              "confidence": 0.88,
+              "status": "active",
+              "evidence": [
+                "再帮我给女朋友选一个生日礼物。请复用之前已保存的信息，不要让我重复说明。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term",
+                "layer": "long_term",
+                "needs_confirmation": false,
+                "default_application": "apply",
+                "retrieval_score": 1.158,
+                "retrieval_rank_strategy": "score_time"
+              },
+              "id": "mem_f84aa7f0",
+              "created_at": "2026-06-15T07:47:32.779722+00:00",
+              "updated_at": "2026-06-15T07:47:32.779728+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物预算在 1000 元左右",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "budget_limit",
+              "source": "chat_feedback",
+              "confidence": 1.0,
+              "status": "active",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [
+                "预算"
+              ],
+              "validity": {
+                "time_scope": "current_task",
+                "layer": "current_task",
+                "session_id": "session_82984ced",
+                "expires": "session_end"
+              },
+              "id": "mem_fca199ba",
+              "created_at": "2026-06-15T07:43:28.428706+00:00",
+              "updated_at": "2026-06-15T07:43:28.428720+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "history",
+              "content": "以前送过女朋友玫瑰金项链，送过的不要再送",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "previously_given",
+              "source": "chat_feedback",
+              "confidence": 1.0,
+              "status": "active",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "past",
+                "layer": "past",
+                "retrieval_score": 0.8,
+                "retrieval_rank_strategy": "score_time"
+              },
+              "id": "mem_fcac8f95",
+              "created_at": "2026-06-15T07:43:28.428756+00:00",
+              "updated_at": "2026-06-15T07:43:28.428758+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": [
+            {
+              "type": "preference",
+              "content": "女朋友的礼物颜色偏好：喜欢紫色",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "likes_color",
+              "source": "chat_feedback",
+              "confidence": 0.93,
+              "status": "deleted",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [
+                "紫色"
+              ],
+              "validity": {
+                "time_scope": "long_term",
+                "layer": "long_term",
+                "needs_confirmation": false,
+                "default_application": "apply"
+              },
+              "id": "mem_73f3efb5",
+              "created_at": "2026-06-15T07:43:28.428845+00:00",
+              "updated_at": "2026-06-15T07:49:48.399841+00:00",
+              "supersedes": []
+            }
+          ]
+        },
+        {
+          "version": "M7",
+          "active": [
+            {
+              "type": "preference",
+              "content": "女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "category_likes",
+              "source": "chat_feedback",
+              "confidence": 0.93,
+              "status": "active",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term",
+                "layer": "long_term",
+                "needs_confirmation": false,
+                "default_application": "apply",
+                "retrieval_score": 1.1755,
+                "retrieval_rank_strategy": "score_time"
+              },
+              "id": "mem_420c1f7a",
+              "created_at": "2026-06-15T07:43:28.428821+00:00",
+              "updated_at": "2026-06-15T07:43:28.428824+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物约束：不要首饰，换非首饰品类",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "must_avoid",
+              "source": "chat_feedback",
+              "confidence": 0.95,
+              "status": "active",
+              "evidence": [
+                "不是，我想换个非首饰品类。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "current_task",
+                "layer": "current_task",
+                "session_id": "session_82984ced",
+                "expires": "session_end"
+              },
+              "id": "mem_996dbab4",
+              "created_at": "2026-06-15T07:44:06.725600+00:00",
+              "updated_at": "2026-06-15T07:44:06.725611+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "must_avoid",
+              "source": "chat_feedback",
+              "confidence": 0.88,
+              "status": "active",
+              "evidence": [
+                "再帮我给女朋友选一个生日礼物。请复用之前已保存的信息，不要让我重复说明。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "long_term",
+                "layer": "long_term",
+                "needs_confirmation": false,
+                "default_application": "apply",
+                "retrieval_score": 1.158,
+                "retrieval_rank_strategy": "score_time"
+              },
+              "id": "mem_f84aa7f0",
+              "created_at": "2026-06-15T07:47:32.779722+00:00",
+              "updated_at": "2026-06-15T07:47:32.779728+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "constraint",
+              "content": "给女朋友选礼物预算在 1000 元左右",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "budget_limit",
+              "source": "chat_feedback",
+              "confidence": 1.0,
+              "status": "active",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [
+                "预算"
+              ],
+              "validity": {
+                "time_scope": "current_task",
+                "layer": "current_task",
+                "session_id": "session_82984ced",
+                "expires": "session_end"
+              },
+              "id": "mem_fca199ba",
+              "created_at": "2026-06-15T07:43:28.428706+00:00",
+              "updated_at": "2026-06-15T07:43:28.428720+00:00",
+              "supersedes": []
+            },
+            {
+              "type": "history",
+              "content": "以前送过女朋友玫瑰金项链，送过的不要再送",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "previously_given",
+              "source": "chat_feedback",
+              "confidence": 1.0,
+              "status": "active",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [],
+              "validity": {
+                "time_scope": "past",
+                "layer": "past",
+                "retrieval_score": 0.8,
+                "retrieval_rank_strategy": "score_time"
+              },
+              "id": "mem_fcac8f95",
+              "created_at": "2026-06-15T07:43:28.428756+00:00",
+              "updated_at": "2026-06-15T07:43:28.428758+00:00",
+              "supersedes": []
+            }
+          ],
+          "superseded": [],
+          "archived": [],
+          "deleted": [
+            {
+              "type": "preference",
+              "content": "女朋友的礼物颜色偏好：喜欢紫色",
+              "scope": "gift_planning",
+              "subject": "recipient",
+              "target": "女朋友",
+              "object": "",
+              "predicate": "likes_color",
+              "source": "chat_feedback",
+              "confidence": 0.93,
+              "status": "deleted",
+              "evidence": [
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。"
+              ],
+              "applies_when": [
+                "gift_planning"
+              ],
+              "user_approved": true,
+              "tags": [
+                "紫色"
+              ],
+              "validity": {
+                "time_scope": "long_term",
+                "layer": "long_term",
+                "needs_confirmation": false,
+                "default_application": "apply"
+              },
+              "id": "mem_73f3efb5",
+              "created_at": "2026-06-15T07:43:28.428845+00:00",
+              "updated_at": "2026-06-15T07:49:48.399841+00:00",
+              "supersedes": []
+            }
+          ]
+        }
+      ],
+      "memory_events": [
+        {
+          "action": "delete",
+          "memory_id": "mem_73f3efb5",
+          "detail": "user_requested_delete",
+          "version": "M6",
+          "timestamp": "2026-06-15T07:49:48.399847+00:00"
+        }
+      ],
+      "checks": {
+        "reset": true,
+        "snapshot_count": 2,
+        "created": 0,
+        "show_memory": true,
+        "round2_applied": true,
+        "round3_applied": true,
+        "updated": true,
+        "deleted_filtered": true,
+        "delete_reported": true,
+        "deliverable_turns": 2,
+        "task_turns": 1,
+        "delivered_task_turns": 1,
+        "compound_followup_delivered": true,
+        "polluted_memories": 0,
+        "polluted_memory_details": [],
+        "semantic_violations": 0,
+        "semantic_violation_details": [],
+        "unresolved_dissatisfaction": false,
+        "correction_turns": 0,
+        "repeated_memory_turns": 0,
+        "satisfaction_signal": false,
+        "effort_final": 2,
+        "effort_reduction": 3
+      },
+      "ablation": {
+        "module": "自由对话记忆评估",
+        "off": [
+          "只能依赖当前消息",
+          "偏好无法跨轮复用",
+          "用户需要重复解释上下文"
+        ],
+        "on": [
+          "跨轮提取与应用记忆",
+          "保留主体归属",
+          "可在 Trace 中审计每轮状态"
+        ]
+      },
+      "user_effort": {
+        "scale": "费力度越低越省力；记忆节省信息点越多，说明用户少重复说明的信息越多。Agent Chat 中一次 Eval 对应当前 session，final_score 是该 session 的费力度。",
+        "initial_score": 0,
+        "final_score": 2,
+        "memory_saving_points": 3,
+        "saved_score": 3,
+        "reduction": 3,
+        "turns": [
+          {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。",
+            "assistant_brief": "已删除\"喜欢紫色\"这条偏好。\n\n新的礼物方向推荐：**便携式颈椎按摩仪**，实用且日常使用频率高，适合办公室久坐人群，体积小好收纳，价位可选空间大。",
+            "before": 0,
+            "delta": 2,
+            "after": 2,
+            "saved_before": 0,
+            "saved_delta": 3,
+            "saved_after": 3,
+            "reasons": [
+              "用户轮次 +1",
+              "输入长度 +1"
+            ],
+            "saving_reasons": [
+              "复用信息点：女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+              "复用信息点：请复用之前已保存的信息，不要让我重复说明",
+              "复用信息点：以前送过女朋友玫瑰金项链，送过的不要再送"
+            ],
+            "memory_saving_points": [
+              "女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+              "请复用之前已保存的信息，不要让我重复说明",
+              "以前送过女朋友玫瑰金项链，送过的不要再送"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false,
+              "serious_error": false
+            },
+            "six_dim_gain": [
+              "update_and_decay",
+              "transparency",
+              "memory_application",
+              "result_quality"
+            ]
+          },
+          {
+            "turn_id": "turn_002",
+            "stage": "chat",
+            "user": "展示当前记忆",
+            "assistant_brief": "当前 active 记忆与历史状态：\n- mem_420c1f7a [active/preference/gift_planning] 女朋友的首饰类礼物偏好：首饰优先玫瑰金\n- mem_996dbab4 [active/constraint/gift_planning] 给女朋友选礼物约束：不要首饰，换非首饰品类\n- mem_f84aa7f0 [activ",
+            "before": 2,
+            "delta": 0,
+            "after": 2,
+            "saved_before": 3,
+            "saved_delta": 0,
+            "saved_after": 3,
+            "reasons": [
+              "管理/查看/删除记忆轮不计入用户任务费力度"
+            ],
+            "saving_reasons": [],
+            "memory_saving_points": [],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false,
+              "serious_error": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "name": "用户轮次",
+            "delta": "+1",
+            "description": "每个非管理类用户输入计一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "每 50 字 +1",
+            "description": "用户输入越长，说明补充信息成本越高。"
+          },
+          {
+            "name": "被追问",
+            "delta": "+2",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+3",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+3",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "严重错误",
+            "delta": "+5",
+            "description": "任务未交付、记忆误用、污染记忆或明显挫败信号。"
+          },
+          {
+            "name": "记忆节省信息点",
+            "delta": "每个信息点 +1",
+            "description": "本轮由记忆提供、用户未重复说明、且被正确应用的信息点。"
+          }
+        ]
+      },
+      "quality": {
+        "delivered_task_turn_ids": [
+          "turn_001"
+        ],
+        "polluted_memory_events": [],
+        "semantic_violations": [],
+        "rules": [
+          {
+            "name": "用户轮次",
+            "delta": "+1",
+            "description": "每个非管理类用户输入计一次操作成本。"
+          },
+          {
+            "name": "输入长度",
+            "delta": "每 50 字 +1",
+            "description": "用户输入越长，说明补充信息成本越高。"
+          },
+          {
+            "name": "被追问",
+            "delta": "+2",
+            "description": "agent 需要用户补充本应从上下文或记忆获得的信息。"
+          },
+          {
+            "name": "重复说明",
+            "delta": "+3",
+            "description": "用户重复之前已经表达的记忆、历史、约束或已选方案。"
+          },
+          {
+            "name": "纠错/不满",
+            "delta": "+3",
+            "description": "用户指出 agent 忘记、误用、推荐方向错误或需要换方案。"
+          },
+          {
+            "name": "严重错误",
+            "delta": "+5",
+            "description": "任务未交付、记忆误用、污染记忆或明显挫败信号。"
+          },
+          {
+            "name": "记忆节省信息点",
+            "delta": "每个信息点 +1",
+            "description": "本轮由记忆提供、用户未重复说明、且被正确应用的信息点。"
+          }
+        ]
+      },
+      "eval_timeline": [
+        {
+          "turn_id": "turn_001",
+          "stage": "chat",
+          "user": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。",
+          "assistant": "已删除\"喜欢紫色\"这条偏好。\n\n新的礼物方向推荐：**便携式颈椎按摩仪**，实用且日常使用频率高，适合办公室久坐人群，体积小好收纳，价位可选空间大。",
+          "memory": {
+            "applied_ids": [
+              "mem_420c1f7a",
+              "mem_f84aa7f0",
+              "mem_fcac8f95"
+            ],
+            "applied": [
+              {
+                "id": "mem_420c1f7a",
+                "type": "preference",
+                "content": "女朋友的首饰类礼物偏好：首饰优先玫瑰金"
+              },
+              {
+                "id": "mem_f84aa7f0",
+                "type": "constraint",
+                "content": "给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明"
+              },
+              {
+                "id": "mem_fcac8f95",
+                "type": "history",
+                "content": "以前送过女朋友玫瑰金项链，送过的不要再送"
+              }
+            ],
+            "actions": [
+              {
+                "action": "delete",
+                "memory_id": "mem_73f3efb5",
+                "detail": "user_requested_delete",
+                "version": "M6",
+                "timestamp": "2026-06-15T07:49:48.399847+00:00"
+              }
+            ],
+            "snapshot_version": "M7",
+            "explanation": "应用 3 条 active 记忆；更新/删除/降权 1 条记忆"
+          },
+          "effort": {
+            "turn_id": "turn_001",
+            "stage": "chat",
+            "user": "删除 她喜欢紫色。然后：再给一个不重复的礼物方向。",
+            "assistant_brief": "已删除\"喜欢紫色\"这条偏好。\n\n新的礼物方向推荐：**便携式颈椎按摩仪**，实用且日常使用频率高，适合办公室久坐人群，体积小好收纳，价位可选空间大。",
+            "before": 0,
+            "delta": 2,
+            "after": 2,
+            "saved_before": 0,
+            "saved_delta": 3,
+            "saved_after": 3,
+            "reasons": [
+              "用户轮次 +1",
+              "输入长度 +1"
+            ],
+            "saving_reasons": [
+              "复用信息点：女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+              "复用信息点：请复用之前已保存的信息，不要让我重复说明",
+              "复用信息点：以前送过女朋友玫瑰金项链，送过的不要再送"
+            ],
+            "memory_saving_points": [
+              "女朋友的首饰类礼物偏好：首饰优先玫瑰金",
+              "请复用之前已保存的信息，不要让我重复说明",
+              "以前送过女朋友玫瑰金项链，送过的不要再送"
+            ],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false,
+              "serious_error": false
+            },
+            "six_dim_gain": [
+              "update_and_decay",
+              "transparency",
+              "memory_application",
+              "result_quality"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "update_and_decay",
+              "transparency",
+              "memory_application",
+              "result_quality"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": true,
+              "bad_memory": false,
+              "serious_error": false
+            },
+            "explanation": "用户轮次 +1；输入长度 +1。记忆节省信息点：复用信息点：女朋友的首饰类礼物偏好：首饰优先玫瑰金；复用信息点：请复用之前已保存的信息，不要让我重复说明；复用信息点：以前送过女朋友玫瑰金项链，送过的不要再送。记忆行为：应用 3 条 active 记忆；更新/删除/降权 1 条记忆"
+          }
+        },
+        {
+          "turn_id": "turn_002",
+          "stage": "chat",
+          "user": "展示当前记忆",
+          "assistant": "当前 active 记忆与历史状态：\n- mem_420c1f7a [active/preference/gift_planning] 女朋友的首饰类礼物偏好：首饰优先玫瑰金\n- mem_996dbab4 [active/constraint/gift_planning] 给女朋友选礼物约束：不要首饰，换非首饰品类\n- mem_f84aa7f0 [active/constraint/gift_planning] 给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明\n- mem_fca199ba [active/constraint/gift_planning] 给女朋友选礼物预算在 1000 元左右\n- mem_fcac8f95 [active/history/gift_planning] 以前送过女朋友玫瑰金项链，送过的不要再送\n- mem_73f3efb5 [deleted/preference/gift_planning] 女朋友的礼物颜色偏好：喜欢紫色",
+          "memory": {
+            "applied_ids": [
+              "mem_420c1f7a",
+              "mem_996dbab4",
+              "mem_f84aa7f0",
+              "mem_fca199ba",
+              "mem_fcac8f95"
+            ],
+            "applied": [
+              {
+                "id": "mem_420c1f7a",
+                "type": "preference",
+                "content": "女朋友的首饰类礼物偏好：首饰优先玫瑰金"
+              },
+              {
+                "id": "mem_996dbab4",
+                "type": "constraint",
+                "content": "给女朋友选礼物约束：不要首饰，换非首饰品类"
+              },
+              {
+                "id": "mem_f84aa7f0",
+                "type": "constraint",
+                "content": "给女朋友选礼物约束：请复用之前已保存的信息，不要让我重复说明"
+              },
+              {
+                "id": "mem_fca199ba",
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元左右"
+              },
+              {
+                "id": "mem_fcac8f95",
+                "type": "history",
+                "content": "以前送过女朋友玫瑰金项链，送过的不要再送"
+              }
+            ],
+            "actions": [],
+            "snapshot_version": "M7",
+            "explanation": "应用 5 条 active 记忆"
+          },
+          "effort": {
+            "turn_id": "turn_002",
+            "stage": "chat",
+            "user": "展示当前记忆",
+            "assistant_brief": "当前 active 记忆与历史状态：\n- mem_420c1f7a [active/preference/gift_planning] 女朋友的首饰类礼物偏好：首饰优先玫瑰金\n- mem_996dbab4 [active/constraint/gift_planning] 给女朋友选礼物约束：不要首饰，换非首饰品类\n- mem_f84aa7f0 [activ",
+            "before": 2,
+            "delta": 0,
+            "after": 2,
+            "saved_before": 3,
+            "saved_delta": 0,
+            "saved_after": 3,
+            "reasons": [
+              "管理/查看/删除记忆轮不计入用户任务费力度"
+            ],
+            "saving_reasons": [],
+            "memory_saving_points": [],
+            "signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false,
+              "serious_error": false
+            },
+            "six_dim_gain": [
+              "memory_application"
+            ]
+          },
+          "evaluation": {
+            "six_dim_gain": [
+              "memory_application"
+            ],
+            "quality_signals": {
+              "correction": false,
+              "repeated_memory": false,
+              "emotion": false,
+              "semantic_violation": false,
+              "delivered": false,
+              "bad_memory": false,
+              "serious_error": false
+            },
+            "explanation": "管理/查看/删除记忆轮不计入用户任务费力度。记忆行为：应用 5 条 active 记忆"
+          }
+        }
+      ],
+      "judge": {
+        "judge": "mimo-llm-judge",
+        "mode": "mimo_llm",
+        "dimensions": {
+          "reproducibility": 10,
+          "memory_extraction": 20,
+          "memory_application": 25,
+          "update_and_decay": 20,
+          "transparency": 10,
+          "result_quality": 15
+        },
+        "scores": {
+          "reproducibility": 10,
+          "memory_extraction": 18,
+          "memory_application": 24,
+          "update_and_decay": 20,
+          "transparency": 10,
+          "result_quality": 15,
+          "total": 97
+        },
+        "reasons": {
+          "reproducibility": "记忆删除操作正确执行(mem_73f3efb5已删除)并报告；快照已创建(snapshot_count=2)；turn_001正确应用了3条记忆(mem_420c1f7a, mem_f84aa7f0, mem_fcac8f95)；turn_002正确展示全部active记忆和deleted记忆。",
+          "memory_extraction": "本session未产生新记忆提取，但记忆应用和删除操作均正确执行。扣除2分是因为用户改变了礼物方向约束(从首饰转为非首饰)但未将新的偏好/约束记录为独立记忆点，仅依赖已有mem_996dbab4。",
+          "memory_application": "turn_001成功应用了5条记忆：mem_996dbab4的'不要首饰'约束确保推荐非首饰品类；mem_fcac8f95的历史记录避免重复送项链；mem_fca199ba的预算约束(~1000元)指导价位选择。turn_002正确展示所有active记忆状态。扣除1分是因为mem_420c1f7a(首饰优先玫瑰金)与mem_996dbab4(不要首饰)之间存在语义张力，assistant虽正确优先了新约束，但这种记忆状态不一致性值得注意。",
+          "update_and_decay": "删除操作完美执行：mem_73f3efb5状态变更为[deleted/preference/gift_planning]，删除原因记录为user_requested_delete，删除结果已在turn_002可见展示。",
+          "transparency": "删除操作清晰报告('已删除\"喜欢紫色\"这条偏好')；turn_002完整展示当前active记忆列表和deleted记忆状态，用户可完整追溯记忆状态变迁。",
+          "result_quality": "turn_001成功交付任务：推荐的'便携式颈椎按摩仪'符合非首饰约束、避免重复(非玫瑰金项链)、贴合预算范围(~1000元)、实用且日常使用频率高。用户无需纠错，任务在单轮内完成。"
+        },
+        "effort_review": {
+          "session_effort_judgement": "本session仅2轮，turn_001是任务轮(删除+礼物推荐)，turn_002是管理轮(查看记忆)。用户总输入极短，无重复说明、无追问、无纠错。effort_final=2属于极低费力度。",
+          "agent_induced_corrections": [],
+          "user_driven_refinements": [],
+          "certified_memory_savings": [
+            {
+              "memory": "给女朋友选礼物约束：不要首饰，换非首饰品类 (mem_996dbab4)",
+              "turn": "turn_001",
+              "reason": "此约束在session前已存在，用户未重复说明，assistant明确应用此约束推荐非首饰类产品(颈椎按摩仪)而非首饰"
+            },
+            {
+              "memory": "以前送过女朋友玫瑰金项链，送过的不要再送 (mem_fcac8f95)",
+              "turn": "turn_001",
+              "reason": "此历史记录在session前已存在，用户未重复说明，assistant推荐非玫瑰金类礼品时应用了该约束"
+            },
+            {
+              "memory": "给女朋友选礼物预算在 1000 元左右 (mem_fca199ba)",
+              "turn": "turn_001",
+              "reason": "此预算约束在session前已存在，用户未重复说明，assistant推荐的颈椎按摩仪价位可选空间大，隐含符合预算范围"
+            }
+          ],
+          "rejected_memory_savings": [
+            {
+              "memory": "女朋友的首饰类礼物偏好：首饰优先玫瑰金 (mem_420c1f7a)",
+              "reason": "此记忆虽被召回，但与mem_996dbab4的'不要首饰'约束存在语义冲突。assistant选择应用新约束而非旧偏好，但用户当前意图已转为非首饰，此记忆对当前任务非关键，不计入节省点"
+            },
+            {
+              "memory": "请复用之前已保存的信息，不要让我重复说明 (mem_f84aa7f0)",
+              "reason": "此记忆是元指令约束而非任务相关约束，不属于gift_planning领域的信息点，不计入任务节省评分"
+            }
+          ]
+        }
+      },
+      "scores": {
+        "reproducibility": 10,
+        "memory_extraction": 18,
+        "memory_application": 24,
+        "update_and_decay": 20,
+        "transparency": 10,
+        "result_quality": 15,
+        "total": 97
+      },
+      "score": 97
+    }
+  ]
+}
