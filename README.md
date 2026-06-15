@@ -47,6 +47,24 @@ Architecture boundary:
 - Agent Chat and automated eval share the same memory extraction, update, retrieval, deletion, and response path.
 - Workbench memories are persisted as Markdown files under `memories/workbench/`; automated eval uses an isolated in-memory store for reproducibility.
 
+## Setup
+
+Create a virtual environment, install the project with its test dependencies, then run the test suite:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r requirements.txt
+python3 -m pytest
+```
+
+Equivalent editable install:
+
+```bash
+python3 -m pip install -e ".[test]"
+python3 -m pytest
+```
+
 ## Memory Storage
 
 Runtime memory can be persisted as Markdown:
