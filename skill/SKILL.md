@@ -117,6 +117,24 @@ Mem0 Hosted:
 
 Mem0 operations must stay scoped to the configured `user_id`; never run a global reset when user-scoped deletion is available.
 
+Recommended local `.env` block for installed Skill memory persistence:
+
+```bash
+# Markdown memory persistence. Workbench defaults to memories/workbench.
+ASSIST_MEMORY_PERSIST=1
+ASSIST_MEMORY_DIR=memories/default
+ASSIST_MEMORY_BACKEND=mem0_hosted
+MEM0_PROJECT_NAME=test-self-improving-202606
+MEM0_BASE_URL=https://mem0-cnlfjzigaku8gczkzo.mem0.volces.com:8000
+MEM0_API_KEY=<fill-your-mem0-api-key>
+MEM0_USER_ID=workbench-user
+MEM0_APP_ID=assist-everything-betterandbetter-skill
+MEM0_TIMEOUT=15
+MEM0_PROJECT_ID=<fill-your-mem0-project-id>
+```
+
+Do not commit a real `MEM0_API_KEY` to git. Put real secrets in the local `.env` only.
+
 Privacy:
 
 - `ASSIST_PRIVACY_MARKERS=身份证,银行卡,token`

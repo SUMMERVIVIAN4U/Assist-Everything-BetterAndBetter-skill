@@ -3,7 +3,7 @@ let report = null;
     let selectedCaseKey = null;
     let selectedEvalGroupKey = null;
     let selectedEvalRoundKey = null;
-    let expandedEvalRoundKey = null;
+    const expandedEvalRoundKeys = new Set();
     const expandedLedgerKeys = new Set();
     const evalGroupPages = new Map();
     let chatEvalReport = null;
@@ -736,7 +736,7 @@ let report = null;
     function selectCase(key) {
       selectedEvalGroupKey = key;
       selectedEvalRoundKey = null;
-      expandedEvalRoundKey = null;
+      expandedEvalRoundKeys.clear();
       expandedLedgerKeys.clear();
       renderCases();
     }
@@ -769,7 +769,7 @@ let report = null;
       const chronologicalRound = group.rows.length - absoluteIndex;
       const isLatest = absoluteIndex === 0;
       const effort = row.c.user_effort || {};
-      const expanded = expandedEvalRoundKey === row.key;
+      const expanded = expandedEvalRoundKeys.has(row.key);
       return `<article class="eval-round-card ${expanded ? 'active' : ''}">
         <div class="eval-round-card-head">
           <div>
@@ -846,14 +846,16 @@ let report = null;
       </div>`;
     }
     function toggleEvalRoundDetail(rowKey) {
-      expandedEvalRoundKey = expandedEvalRoundKey === rowKey ? null : rowKey;
+      if (expandedEvalRoundKeys.has(rowKey)) expandedEvalRoundKeys.delete(rowKey);
+      else expandedEvalRoundKeys.add(rowKey);
       selectedEvalRoundKey = rowKey;
       renderCases();
     }
     function selectEvalRound(groupKey, rowKey) {
       selectedEvalGroupKey = groupKey;
       selectedEvalRoundKey = rowKey;
-      expandedEvalRoundKey = expandedEvalRoundKey === rowKey ? null : rowKey;
+      if (expandedEvalRoundKeys.has(rowKey)) expandedEvalRoundKeys.delete(rowKey);
+      else expandedEvalRoundKeys.add(rowKey);
       renderCases();
     }
     function changeEvalGroupPage(groupKey, delta) {
@@ -864,7 +866,7 @@ let report = null;
       evalGroupPages.set(groupKey, next);
       const firstRowOnPage = group?.rows[next * 3];
       if (firstRowOnPage) selectedEvalRoundKey = firstRowOnPage.key;
-      expandedEvalRoundKey = null;
+      expandedEvalRoundKeys.clear();
       expandedLedgerKeys.clear();
       renderCases();
     }
