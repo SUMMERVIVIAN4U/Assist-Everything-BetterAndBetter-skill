@@ -102,14 +102,14 @@
     </section>
     <section id="cases" class="hidden">
       <div class="cases-layout">
-        <aside class="panel">
+        <aside class="panel history-sidebar">
           <div class="case-head">
             <div><h2>History Evals</h2><div id="historyHint" class="muted">按最新 Eval 优先；同一测试任务会聚合展示多轮变化。</div></div>
             <button onclick="clearHistoryEvals()">清空</button>
           </div>
           <div id="caseList" class="case-list"></div>
         </aside>
-        <article id="caseDetail" class="panel muted">暂无历史 eval。</article>
+        <article id="caseDetail" class="panel history-detail muted">暂无历史 eval。</article>
       </div>
     </section>
     <section id="performance" class="hidden">
@@ -246,6 +246,22 @@
       </div>
     </section>
   </main>
+  <div id="sessionResetModal" class="session-reset-modal hidden" role="dialog" aria-modal="true" aria-labelledby="sessionResetTitle">
+    <div class="session-reset-card">
+      <button class="session-reset-close" data-reset-choice="cancel" aria-label="取消">×</button>
+      <div class="session-reset-head">
+        <div class="eval-empty-mark">E</div>
+        <div>
+          <h2 id="sessionResetTitle">上一个 Session 还没有 Eval</h2>
+          <div class="muted">新开 Session 会清空当前对话画布。你可以先评估上一轮，也可以跳过 Eval 直接开始新 Session。</div>
+        </div>
+      </div>
+      <div class="session-reset-actions">
+        <button class="primary" data-reset-choice="eval">确定，开始 Eval</button>
+        <button data-reset-choice="skip">跳过 Eval，直接新开 Session</button>
+      </div>
+    </div>
+  </div>
   <script src="/static/workbench.js"></script>
 
 </body>

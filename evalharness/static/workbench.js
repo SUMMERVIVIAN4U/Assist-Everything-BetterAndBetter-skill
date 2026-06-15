@@ -3,6 +3,8 @@ let report = null;
     let selectedCaseKey = null;
     let selectedEvalGroupKey = null;
     let selectedEvalRoundKey = null;
+    let expandedEvalRoundKey = null;
+    const expandedLedgerKeys = new Set();
     const evalGroupPages = new Map();
     let chatEvalReport = null;
     let performanceReport = null;
@@ -501,21 +503,54 @@ let report = null;
         btn.textContent = 'Run LLM Eval';
       }
     }
-    async function resetSession(opts = {}) {
-      if (!opts.force && currentSessionDirty && !currentSessionEvaled) {
+    function askSessionResetAction() {
+      const modal = document.getElementById('sessionResetModal');
+      if (!modal) {
         const shouldEval = window.confirm('上一个 Session 还没有 Eval。点击“确定”先 Eval，再新开 Session；点击“取消”留在当前 Session。');
-        if (!shouldEval) return false;
-        const evalOk = await runChatEval();
-        if (!evalOk) {
-          const skipEval = window.confirm('Eval 失败或没有可评估内容。是否跳过 Eval，直接新开 Session？');
-          if (!skipEval) return false;
+        return Promise.resolve(shouldEval ? 'eval' : 'cancel');
+      }
+      modal.classList.remove('hidden');
+      const buttons = Array.from(modal.querySelectorAll('[data-reset-choice]'));
+      return new Promise(resolve => {
+        const cleanup = choice => {
+          buttons.forEach(button => button.removeEventListener('click', onClick));
+          document.removeEventListener('keydown', onKeydown);
+          modal.classList.add('hidden');
+          resolve(choice);
+        };
+        const onClick = event => cleanup(event.currentTarget.dataset.resetChoice || 'cancel');
+        const onKeydown = event => {
+          if (event.key === 'Escape') cleanup('cancel');
+        };
+        buttons.forEach(button => button.addEventListener('click', onClick));
+        document.addEventListener('keydown', onKeydown);
+      });
+    }
+    async function resetSession(opts = {}) {
+      let keepPreviousEval = false;
+      if (!opts.force && currentSessionDirty && !currentSessionEvaled) {
+        const action = await askSessionResetAction();
+        if (action === 'cancel') return false;
+        if (action === 'eval') {
+          const evalOk = await runChatEval();
+          if (!evalOk) {
+            const skipEval = window.confirm('Eval 失败或没有可评估内容。是否跳过 Eval，直接新开 Session？');
+            if (!skipEval) return false;
+          } else {
+            keepPreviousEval = true;
+          }
         }
       }
       await fetch('/api/reset-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})});
       document.getElementById('chatlog').innerHTML = '';
-      document.getElementById('chatEvalStatus').textContent = opts.reason || 'Session 已重置；memory 保持不变。';
-      document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
-      clearEvalDrawerState();
+      if (keepPreviousEval) {
+        document.getElementById('chatEvalStatus').textContent = '上一轮 Eval 已完成并保存到 History Evals；Session 已重置。';
+        openEvalDrawer({hasEval: true});
+      } else {
+        document.getElementById('chatEvalStatus').textContent = opts.reason || 'Session 已重置；memory 保持不变。';
+        document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
+        clearEvalDrawerState();
+      }
       currentSessionDirty = false;
       currentSessionEvaled = false;
       refreshChatMemory();
@@ -657,8 +692,8 @@ let report = null;
       const groups = evalGroups();
       const list = document.getElementById('caseList');
       if (!groups.length) {
-        list.innerHTML = '<div class="muted">暂无历史 eval。</div>';
-        document.getElementById('caseDetail').innerHTML = '暂无历史 eval。';
+        list.innerHTML = '<div class="history-empty"><b>暂无历史 Eval</b><div class="muted">运行一次 Agent Chat Eval 后会出现在这里。</div></div>';
+        document.getElementById('caseDetail').innerHTML = '<div class="history-empty history-empty-detail"><b>暂无历史 Eval</b><div class="muted">在 Agent Chat 运行 Run LLM Eval 后，会按测试任务聚合显示在这里。</div></div>';
         return;
       }
       if (!selectedEvalGroupKey || !groups.find(group => group.key === selectedEvalGroupKey)) selectedEvalGroupKey = groups[0].key;
@@ -670,9 +705,10 @@ let report = null;
         const latest = group.latest;
         return `
         <button class="case-btn ${group.key === selectedEvalGroupKey ? 'active' : ''}" onclick="selectCase('${escapeAttr(group.key)}')">
-          <div class="case-head"><b>${escapeHtml(group.name)}</b><span class="score">${latest.c.score}</span></div>
-          <div class="muted">Chat ${formatTime(chatStartedAt(latest.c)) || '-'} · Eval ${formatTime(latest.run.created_at)}</div>
-          <div class="chips"><span class="chip">${group.rows.length} 轮</span><span class="chip">费力度 ${latest.c.user_effort?.final_score ?? '-'}</span><span class="chip good">记忆节省信息点 ${latest.c.user_effort?.memory_saving_points ?? latest.c.user_effort?.saved_score ?? 0}</span></div>
+          <div class="history-case-title">${escapeHtml(group.name)}</div>
+          <div class="history-case-meta">Chat ${formatTime(chatStartedAt(latest.c)) || '-'}</div>
+          <div class="history-case-meta">Eval ${formatTime(latest.run.created_at) || '-'}</div>
+          <div class="history-case-rounds">${group.rows.length} 轮</div>
         </button>`;
       }).join('');
       const selected = groups.find(group => group.key === selectedEvalGroupKey);
@@ -681,31 +717,124 @@ let report = null;
     function selectCase(key) {
       selectedEvalGroupKey = key;
       selectedEvalRoundKey = null;
+      expandedEvalRoundKey = null;
+      expandedLedgerKeys.clear();
       renderCases();
     }
     function renderEvalGroup(group) {
       if (!group) return '暂无历史 eval。';
-      const selectedRound = group.rows.find(row => row.key === selectedEvalRoundKey) || group.latest;
       const pageSize = 3;
       const pageCount = Math.max(1, Math.ceil(group.rows.length / pageSize));
       const page = Math.min(evalGroupPages.get(group.key) || 0, pageCount - 1);
       const start = page * pageSize;
       const visibleRows = group.rows.slice(start, start + pageSize);
+      const end = Math.min(start + visibleRows.length, group.rows.length);
       return `
-        <div>
-          <div class="case-head"><div><h2>${escapeHtml(group.name)}</h2><div class="muted">最新 Eval ${formatTime(group.latest.run.created_at)} · Chat ${formatTime(chatStartedAt(group.latest.c)) || '-'}</div></div><span class="score">${group.latest.c.score ?? '-'}/100</span></div>
-          <h3>多轮变化</h3>
-          <div class="metrics eval-round-grid">${visibleRows.map((row, index) => `
-            <button class="metric eval-round-card ${row.key === selectedRound.key ? 'active' : ''}" onclick="selectEvalRound('${escapeAttr(group.key)}', '${escapeAttr(row.key)}')"><span class="muted">第 ${start + index + 1} 条 · 最新优先</span><b class="round-title">${escapeHtml(caseDisplayName(row.c))}</b><div class="muted">总分 ${row.c.score ?? '-'} · 费力度 ${row.c.user_effort?.final_score ?? '-'} · 记忆节省信息点 ${row.c.user_effort?.memory_saving_points ?? row.c.user_effort?.saved_score ?? 0}</div><div class="muted">Eval ${formatTime(row.run.created_at)}</div></button>
-          `).join('')}</div>
-          ${group.rows.length > pageSize ? `<div class="pager"><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', -1)" ${page <= 0 ? 'disabled' : ''}>上一页</button><span class="muted">第 ${page + 1} / ${pageCount} 页，每页 ${pageSize} 条</span><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', 1)" ${page >= pageCount - 1 ? 'disabled' : ''}>下一页</button></div>` : ''}
-          <h3>本轮详情</h3>
-          ${renderEvalCase(selectedRound.c, {run: selectedRound.run})}
+        <div class="history-group">
+          <div class="eval-group-head">
+            <div>
+              <h2>${escapeHtml(group.name)}</h2>
+              <div class="muted">最新 Eval ${formatTime(group.latest.run.created_at) || '-'} · Chat ${formatTime(chatStartedAt(group.latest.c)) || '-'} · 共 ${group.rows.length} 轮 · 第 ${page + 1} / ${pageCount} 页，每页 ${pageSize} 轮</div>
+            </div>
+          </div>
+          <div class="eval-round-section-head">
+            <h3>多轮对比</h3>
+            <div class="muted">费力度越低越好；记忆节省信息点只统计正确复用且用户没有重复说明的信息。</div>
+          </div>
+          <div class="eval-round-board">${visibleRows.map((row, index) => renderEvalRoundCard(group, row, start, index)).join('')}</div>
+          ${group.rows.length > pageSize ? `<div class="pager history-pager"><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', -1)" ${page <= 0 ? 'disabled' : ''}>上一页</button><span class="muted">第 ${page + 1} / ${pageCount} 页 · 当前显示 ${start + 1}-${end} / ${group.rows.length} 轮</span><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', 1)" ${page >= pageCount - 1 ? 'disabled' : ''}>下一页</button></div>` : ''}
         </div>`;
+    }
+    function renderEvalRoundCard(group, row, start, index) {
+      const absoluteIndex = start + index;
+      const chronologicalRound = group.rows.length - absoluteIndex;
+      const isLatest = absoluteIndex === 0;
+      const effort = row.c.user_effort || {};
+      const expanded = expandedEvalRoundKey === row.key;
+      return `<article class="eval-round-card ${expanded ? 'active' : ''}">
+        <div class="eval-round-card-head">
+          <div>
+            <div class="eval-round-kicker">第 ${chronologicalRound} 轮${isLatest ? ' · 最新' : ''}</div>
+            <h3>${escapeHtml(caseDisplayName(row.c))}</h3>
+          </div>
+          <div class="muted">Eval ${formatTime(row.run.created_at) || '-'}</div>
+        </div>
+        <div class="muted">Chat ${formatTime(chatStartedAt(row.c)) || '-'}</div>
+        <div class="metric-stack">
+          ${renderLedgerMetric(row, 'effort')}
+          ${isLedgerExpanded(row.key, 'effort') ? renderLedgerPanel(row, 'effort') : ''}
+          ${renderLedgerMetric(row, 'saved')}
+          ${isLedgerExpanded(row.key, 'saved') ? renderLedgerPanel(row, 'saved') : ''}
+        </div>
+        <button class="eval-round-toggle" onclick="toggleEvalRoundDetail('${escapeAttr(row.key)}')">${expanded ? '收起详情' : '展开详情'}</button>
+        ${expanded ? renderEvalRoundDetail(row) : ''}
+      </article>`;
+    }
+    function ledgerKey(rowKey, type) {
+      return `${rowKey}:${type}`;
+    }
+    function isLedgerExpanded(rowKey, type) {
+      return expandedLedgerKeys.has(ledgerKey(rowKey, type));
+    }
+    function toggleLedgerPanel(rowKey, type) {
+      const key = ledgerKey(rowKey, type);
+      if (expandedLedgerKeys.has(key)) expandedLedgerKeys.delete(key);
+      else expandedLedgerKeys.add(key);
+      selectedEvalRoundKey = rowKey;
+      renderCases();
+    }
+    function renderLedgerMetric(row, type) {
+      const effort = row.c.user_effort || {};
+      const isEffort = type === 'effort';
+      const label = isEffort ? '费力度' : '记忆节省信息点';
+      const value = isEffort ? (effort.final_score ?? '-') : memorySavingScore(effort);
+      const expanded = isLedgerExpanded(row.key, type);
+      return `<button class="ledger-trigger ${isEffort ? 'effort' : 'saved'}" aria-expanded="${expanded ? 'true' : 'false'}" onclick="toggleLedgerPanel('${escapeAttr(row.key)}', '${type}')">
+        <span>${label}</span>
+        <b>${value}</b>
+      </button>`;
+    }
+    function renderLedgerPanel(row, type) {
+      const timeline = row.c.eval_timeline || [];
+      const isEffort = type === 'effort';
+      const items = timeline.filter(t => {
+        const effort = t.effort || {};
+        if (isEffort) {
+          return effort.before !== undefined || effort.delta !== undefined || effort.after !== undefined || t.evaluation?.explanation;
+        }
+        return effort.saved_before !== undefined || effort.saved_delta !== undefined || effort.saved_after !== undefined || (effort.memory_saving_points || []).length;
+      });
+      if (!items.length) {
+        return `<div class="ledger-panel ${isEffort ? 'effort' : 'saved'}"><div class="muted">暂无逐轮累计说明。</div></div>`;
+      }
+      return `<div class="ledger-panel ${isEffort ? 'effort' : 'saved'}">
+        ${items.map(t => isEffort ? renderEffortLedgerItem(t) : renderSavedLedgerItem(t)).join('')}
+      </div>`;
+    }
+    function renderEffortLedgerItem(t) {
+      const effort = t.effort || {};
+      return `<div class="ledger-item">
+        <div class="ledger-item-head"><b>${escapeHtml(t.turn_id || '-')}</b><span>${effort.before ?? '-'} → +${effort.delta ?? 0} → ${effort.after ?? '-'}</span></div>
+        <div class="muted">${escapeHtml(t.evaluation?.explanation || '暂无本轮说明。')}</div>
+      </div>`;
+    }
+    function renderSavedLedgerItem(t) {
+      const effort = t.effort || {};
+      const points = effort.memory_saving_points || [];
+      return `<div class="ledger-item">
+        <div class="ledger-item-head"><b>${escapeHtml(t.turn_id || '-')}</b><span>${effort.saved_before ?? '-'} → +${effort.saved_delta ?? 0} → ${effort.saved_after ?? '-'}</span></div>
+        ${points.length ? `<div class="chips">${points.map(point => `<span class="chip good">${escapeHtml(point)}</span>`).join('')}</div>` : '<div class="muted">本轮无新增节省点。</div>'}
+      </div>`;
+    }
+    function toggleEvalRoundDetail(rowKey) {
+      expandedEvalRoundKey = expandedEvalRoundKey === rowKey ? null : rowKey;
+      selectedEvalRoundKey = rowKey;
+      renderCases();
     }
     function selectEvalRound(groupKey, rowKey) {
       selectedEvalGroupKey = groupKey;
       selectedEvalRoundKey = rowKey;
+      expandedEvalRoundKey = expandedEvalRoundKey === rowKey ? null : rowKey;
       renderCases();
     }
     function changeEvalGroupPage(groupKey, delta) {
@@ -716,7 +845,27 @@ let report = null;
       evalGroupPages.set(groupKey, next);
       const firstRowOnPage = group?.rows[next * 3];
       if (firstRowOnPage) selectedEvalRoundKey = firstRowOnPage.key;
+      expandedEvalRoundKey = null;
+      expandedLedgerKeys.clear();
       renderCases();
+    }
+    function memorySavingScore(effort = {}) {
+      return effort.memory_saving_points ?? effort.saved_score ?? effort.reduction ?? 0;
+    }
+    function renderEvalRoundDetail(row) {
+      const c = row.c || {};
+      const checks = c.checks || {};
+      return `<div class="eval-round-detail">
+        <div class="note">当前采用双账本：费力度和记忆节省信息点分别累计，不相互抵扣。节省信息点只统计被正确复用的信息，不把新增、删除或更新记忆本身当作节省。</div>
+        <div class="dims history-dims">${Object.entries(c.scores || {}).filter(([k])=>k!=='total').map(([k,v]) => `<div class="dim"><span class="muted">${dimNames[k] || k}</span><b>${v} / ${dimMax[k] || '-'}</b></div>`).join('') || '<div class="muted">暂无六维拆分。</div>'}</div>
+        <div class="chips">
+          <span class="chip">任务交付 ${checks.delivered_task_turns || 0}/${checks.task_turns || 0}</span>
+          <span class="chip">记忆动作 ${c.memory_events?.length || 0}</span>
+          <span class="chip ${checks.semantic_violations ? 'bad' : 'good'}">语义违规 ${checks.semantic_violations || 0}</span>
+          <span class="chip ${checks.repeated_memory_turns ? 'bad' : 'good'}">重复说明 ${checks.repeated_memory_turns || 0}</span>
+        </div>
+        <div class="turn-list history-turn-list">${(c.eval_timeline || []).map(timelineCard).join('') || '<div class="muted">暂无轨迹。</div>'}</div>
+      </div>`;
     }
     function chatStartedAt(c) { return c.script?.chat_started_at || c.turns?.[0]?.user?.timestamp || ''; }
     function renderEvalCase(c, opts = {}) {

@@ -2,7 +2,7 @@ import tempfile
 import unittest
 
 from assist_everything_betterandbetter_skill.memory import MemoryItem
-from assist_everything_betterandbetter_skill.skill import DECISION, AssistSkill
+from assist_everything_betterandbetter_skill.skill import DECISION, WORKFLOW, AssistSkill
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
 
@@ -314,6 +314,19 @@ class MemoryAdvantagesTest(unittest.TestCase):
         next_session = new_session.retrieve_relevant_memories("继续安排杭州亲子行程。")
         self.assertFalse(any("父亲不去" in item.content for item in next_session))
 
+    def test_expired_gift_budget_current_task_is_confirm_first_not_apply_now(self):
+        self.skill.process_message("预算1000元左右", context="user: 帮我给女朋友选个生日礼物。")
+
+        new_session = AssistSkill(memory_dir=self.tmp.name, persist=True)
+        applied = new_session.retrieve_relevant_memories("帮我给女朋友选个生日礼物。")
+        pack = new_session.relevant_memory_pack("帮我给女朋友选个生日礼物。", applied)
+
+        self.assertFalse(any(item.predicate == "budget_limit" for item in applied))
+        self.assertTrue(any("预算在 1000 元左右" in item["content"] for item in pack["confirm_first"]))
+        budget_item = next(item for item in pack["confirm_first"] if "预算在 1000 元左右" in item["content"])
+        self.assertTrue(budget_item["needs_confirmation"])
+        self.assertEqual("expired_current_task_confirm_first", budget_item["reason"])
+
     def test_proactively_corrects_prior_memory_from_negative_feedback(self):
         self.skill.process_message(
             "动物园，小孩3-4岁",
@@ -464,6 +477,31 @@ class MemoryAdvantagesTest(unittest.TestCase):
         add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
         self.assertFalse(any("明白吗" in detail for detail in add_details))
         self.assertTrue(any("复述某个候选名称" in detail for detail in add_details))
+
+    def test_gift_correction_selected_means_stop_recommending_other_options_becomes_workflow(self):
+        response = self.skill.process_message(
+            "我已经选中爱马仕入门丝巾了，不必再提其他",
+            context=(
+                "user: 不是，我想换个非首饰品类。\n"
+                "assistant: 1. 小众包袋\n2. 真丝丝巾/方巾 — 500-1000元，爱马仕入门丝巾、郁金香或上海故事"
+            ),
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertTrue(any("复述某个候选名称" in detail and "不要继续追问或发散推荐" in detail for detail in add_details))
+        self.assertIn("本次给收礼人的礼物已选定为爱马仕入门丝巾", add_details)
+        active = self.skill.memory.active()
+        self.assertTrue(any(item.type == WORKFLOW and "不要继续追问或发散推荐" in item.content for item in active))
+        self.assertTrue(any(item.type == DECISION and "爱马仕入门丝巾" in item.content for item in active))
+
+    def test_gift_initial_task_request_is_not_recorded_as_selected_candidate(self):
+        response = self.skill.process_message(
+            "帮我给女朋友选个生日礼物。",
+            context="assistant: 推荐：玫瑰金细手链。",
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertFalse(any("已选定为帮我给女朋友选个生日礼物" in detail for detail in add_details))
 
     def test_gift_rhetorical_previous_gift_question_does_not_pollute_history(self):
         response = self.skill.process_message(

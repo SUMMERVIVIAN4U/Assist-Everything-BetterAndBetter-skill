@@ -4,6 +4,7 @@ from evalharness.agent import (
     HarnessAgent,
     _conversation_context_blocked_terms,
     _llm_response_is_usable,
+    _response_directives,
     _sanitize_llm_output,
     _suppression_context_from_actions,
     _violates_memory_context_constraints,
@@ -71,6 +72,26 @@ def test_sanitize_llm_output_preserves_literal_double_asterisks():
     assert "`2 ** 3`" in cleaned
     assert "`**/*.py`" in cleaned
     assert "**加粗**" in cleaned
+
+
+def test_confirm_first_budget_directive_confirms_and_recommends():
+    memory_context = {
+        "apply_now": [],
+        "confirm_first": [
+            {
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元左右",
+                "reason": "expired_current_task_confirm_first",
+            }
+        ],
+    }
+
+    directives = _response_directives("帮我给女朋友选个生日礼物。", memory_context)
+
+    text = "\n".join(directives)
+    assert "不要再问“有预算吗”" in text
+    assert "如果这次还沿用这个预算" in text
+    assert "直接按该预算给一个推荐" in text
 
 
 def test_memory_inspection_command_does_not_require_llm_rewrite():

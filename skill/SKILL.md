@@ -27,7 +27,7 @@ For installed Skill usage in any host agent, the host agent's own model is the a
 Normal task flow:
 
 1. Call `memory-pack` with the current user message and a concise recent conversation context.
-2. Use the host agent's own model to answer the user, applying only `apply_now` memories by default and using `confirm_first` memories as cautious reminders.
+2. Use the host agent's own model to answer the user, applying only `apply_now` memories by default and using `confirm_first` memories as cautious reminders. When `confirm_first` contains a previous same-scene budget or temporary constraint, do not ask an empty open-ended question; say “I saw last time it was X, if this still applies I’ll use it” and still give a concrete answer.
 3. If the user provides reusable preferences, constraints, history, choices, decisions, or corrections, call `memory-write` after answering or before the next turn.
 4. For commands like `展示当前记忆`, `删除...`, `降级...`, `清空记忆`, call `memory-manage` and return its text.
 
@@ -208,7 +208,7 @@ Ranking uses `retrieval_score` plus time:
 - user-approved bonus
 - final order: score descending, then update/create time descending
 
-The final LLM answer may only default-use `apply_now`; `confirm_first` is for cautious confirmation.
+The final LLM answer may only default-use `apply_now`; `confirm_first` is for cautious confirmation. For expired `current_task` memories such as a previous gift budget, the answer should confirm-and-proceed: mention the previous value as a tentative assumption and provide a recommendation under that assumption, instead of asking the user to repeat the value.
 
 ## Workbench
 

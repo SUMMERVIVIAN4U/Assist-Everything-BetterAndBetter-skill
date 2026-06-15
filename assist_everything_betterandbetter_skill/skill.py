@@ -344,9 +344,16 @@ class AssistSkill:
 
     def relevant_memory_pack(self, text: str, memories: list[MemoryItem], context: str = "") -> dict[str, Any]:
         scene = self._matching_scene_memories(text, context)
+        expired_current_task = self._matching_expired_current_task_memories(text, context, memories)
         return {
             "apply_now": [_memory_pack_item(item) for item in memories],
-            "confirm_first": [_memory_pack_item(item) for item in scene],
+            "confirm_first": [
+                *[_memory_pack_item(item) for item in scene],
+                *[
+                    _memory_pack_item(item, needs_confirmation=True, reason="expired_current_task_confirm_first")
+                    for item in expired_current_task
+                ],
+            ],
             "suppressed": [],
         }
 
@@ -381,6 +388,32 @@ class AssistSkill:
             and not self._current_task_resolves_scene_memory(item, active)
         ]
         return _rank_retrieved_memories(scene, text, context, limit=3)
+
+    def _matching_expired_current_task_memories(
+        self,
+        text: str,
+        context: str = "",
+        already_applied: list[MemoryItem] | None = None,
+    ) -> list[MemoryItem]:
+        scope = _infer_scope(text, context)
+        target = _infer_target(text, scope) or _infer_target(context, scope)
+        applied_ids = {item.id for item in already_applied or []}
+        if self.memory_backend == "mem0_hosted":
+            active = self._remote_active_items(self.mem0_client)
+        else:
+            active = self.memory.active()
+        candidates = [
+            item
+            for item in active
+            if item.id not in applied_ids
+            and _time_scope(item) == TIME_CURRENT_TASK
+            and item.validity.get("session_id") != self.session_id
+            and _is_confirmable_expired_current_task(item)
+            and not _is_polluted_memory_item(item)
+            and _memory_scope_matches(item, scope)
+            and _memory_target_matches(item, scope, target)
+        ]
+        return _rank_retrieved_memories(candidates, text, context, limit=3)
 
     def _current_task_resolves_scene_memory(self, scene_item: MemoryItem, active_items: list[MemoryItem]) -> bool:
         if not (scene_item.subject == "father" or "父亲" in scene_item.content or "爸爸" in scene_item.content):
@@ -1344,16 +1377,25 @@ def _scene_confirmation_question(item: MemoryItem) -> str:
     return f"之前有过这条场景记忆：{item.content}。这次还适用吗？"
 
 
-def _memory_pack_item(item: MemoryItem) -> dict[str, Any]:
-    return {
+def _is_confirmable_expired_current_task(item: MemoryItem) -> bool:
+    if item.predicate == "budget_limit":
+        return True
+    return False
+
+
+def _memory_pack_item(item: MemoryItem, *, needs_confirmation: bool | None = None, reason: str = "") -> dict[str, Any]:
+    payload = {
         "id": item.id,
         "content": item.content,
         "scope": item.scope,
         "type": item.type,
         "time_scope": _time_scope(item),
         "score": item.validity.get("retrieval_score"),
-        "needs_confirmation": bool(item.validity.get("needs_confirmation")),
+        "needs_confirmation": bool(item.validity.get("needs_confirmation")) if needs_confirmation is None else needs_confirmation,
     }
+    if reason:
+        payload["reason"] = reason
+    return payload
 
 
 def _is_temporary_override(text: str) -> bool:
@@ -1590,6 +1632,12 @@ def _has_contextual_task_fact(text: str, context: str = "") -> bool:
             "买了",
             "下单",
             "选定",
+            "选中",
+            "锁定",
+            "不必再提其他",
+            "不用再提其他",
+            "不要再提其他",
+            "不要发散",
             "程序员",
             "养花",
             "养草",
@@ -1630,9 +1678,19 @@ def _looks_like_gift_candidate_reference(text: str, context: str = "") -> bool:
         return False
     if _contains_any(stripped, ["为什么", "怎么", "明白吗", "懂吗", "气死", "你还", "不是", "不要", "不用"]):
         return False
+    if _is_gift_task_request_text(stripped):
+        return False
     if not _contains_any(context, ["assistant:", "推荐", "方案", "首选", "备选", "选项"]):
         return False
     return stripped in context or _contains_any(stripped, ["潘多拉", "Pandora", "万事利", "Wensli", "拍立得", "方巾", "手链", "耳钉", "音箱", "包"])
+
+
+def _is_gift_task_request_text(text: str) -> bool:
+    return (
+        _contains_any(text, ["帮我", "给我", "想", "需要"])
+        and _contains_any(text, ["选", "挑", "买", "推荐"])
+        and _contains_any(text, ["礼物", "生日礼物", "送礼"])
+    )
 
 
 def _is_parent_identity_fact(text: str) -> bool:
@@ -2128,9 +2186,10 @@ def _extract_previous_gifts(text: str) -> str:
 
 
 def _extract_gift_decision(text: str, context: str = "") -> str:
-    if _is_gift_selection_teaching(text):
+    if _is_gift_selection_teaching(text) and not _contains_any(text, ["已经选中", "已选中", "已经选定", "已选定", "选中了"]):
         return ""
     patterns = [
+        r"(?:我)?(?:已经|已)?选中(?:了)?(.+?)(?:，|,|。|；|$)",
         r"(?:已经|刚刚|刚才)?(?:买了|下单了|入手了)(.+?)(?:。|；|$)",
         r"(?:礼物)?(?:选定|定了|决定买|确认送)(?:为|了)?(.+?)(?:。|；|$)",
         r"就(.+?)(?:吧|了|。|；|$)",
@@ -2168,7 +2227,12 @@ def _is_gift_metatalk(text: str) -> bool:
 
 
 def _is_gift_selection_teaching(text: str) -> bool:
-    return _contains_any(text, ["多个选项", "某个选项", "推荐的多个"]) and _contains_any(text, ["代表我选", "就代表", "选好了", "锁定"])
+    if _contains_any(text, ["多个选项", "某个选项", "推荐的多个"]) and _contains_any(text, ["代表我选", "就代表", "选好了", "锁定"]):
+        return True
+    return _contains_any(text, ["已经选中", "已选中", "已经选定", "已选定", "选中了", "锁定"]) and _contains_any(
+        text,
+        ["不必再提其他", "不用再提其他", "不要再提其他", "不必推荐其他", "不用推荐其他", "不要推荐其他", "不要发散", "别发散"],
+    )
 
 
 def _extract_last_gift_recommendation(context: str) -> str:
@@ -2252,6 +2316,7 @@ def _clean_gift_fragment(text: str) -> str:
     cleaned = text.strip(" ，,。：:")
     cleaned = re.sub(r"^(他|她)?还比较满意$", "", cleaned)
     cleaned = re.sub(r"^(他|她)?比较满意$", "", cleaned)
+    cleaned = re.sub(r"了$", "", cleaned)
     return cleaned.strip(" ，,。：:")
 
 

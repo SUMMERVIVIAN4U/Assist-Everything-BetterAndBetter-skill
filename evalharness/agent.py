@@ -468,6 +468,7 @@ def _system_prompt() -> str:
         "不得把这些语义作为推荐理由、主方案核心或默认假设。"
         "如果被删除的是颜色偏好，后续不要推荐该颜色、不要把该颜色作为搭配理由；即使历史已选礼物名称含该颜色，也只称“已选礼物/已选方巾”，不要复述该颜色词。"
         "只能默认使用 memory_context.apply_now 里的记忆；memory_context.confirm_first 只能作为需要确认的提示，不能直接当作已生效约束。"
+        "如果 confirm_first 里有上次同类任务的预算、临时约束或上下文，不要空问用户有没有这些信息；应该说“我看到上次是...，如果这次仍沿用，我先按这个给方案”，然后直接给可执行结果。"
         "你的回复不能为空；对任务请求必须直接给完整可用结果，不能只说需要更多材料。"
         "信息不足时也要先基于合理假设给 2-4 个可执行候选，并明确默认假设；不要把第一反应变成追问。"
         "处理偏好时要区分广义偏好和窄域/条件偏好：窄域条件优先于广义偏好。"
@@ -572,6 +573,11 @@ def _response_directives(
         )
         if not _contains_any(user_text, ["香氛", "香水", "香薰", "扩香", "蜡烛", "香味"]):
             directives.append("本轮不要推荐香氛、香水、香薰、扩香或蜡烛类礼物。")
+    confirm_budget = _confirm_first_budget(memory_context)
+    if _is_gift_task_request(user_text) and confirm_budget:
+        directives.append(
+            f"confirm_first 里有上次同类送礼预算：{confirm_budget}。不要再问“有预算吗”；请用“如果这次还沿用这个预算”来确认，并直接按该预算给一个推荐。"
+        )
     return directives
 
 
@@ -597,6 +603,16 @@ def _memory_context_contains(memory_context: dict[str, Any], term: str) -> bool:
             if isinstance(item, dict) and term in str(item.get("content") or ""):
                 return True
     return False
+
+
+def _confirm_first_budget(memory_context: dict[str, Any]) -> str:
+    for item in memory_context.get("confirm_first", []) or []:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content") or "")
+        if item.get("type") == "constraint" and "预算" in content:
+            return content
+    return ""
 
 
 def _memory_context_blocked_terms(memory_context: dict[str, Any]) -> list[str]:
@@ -1046,6 +1062,13 @@ def _is_gift_new_recommendation_request(text: str) -> bool:
         value,
         ["购买渠道", "链接", "包装", "尺寸", "下单", "贺卡"],
     )
+
+
+def _is_gift_task_request(text: str) -> bool:
+    value = str(text or "")
+    if _contains_any(value, ["购买渠道", "链接", "包装", "尺寸", "下单", "贺卡"]):
+        return False
+    return _contains_any(value, ["礼物", "生日礼物", "送礼", "选礼", "买礼物", "挑礼物"])
 
 
 def _gift_selection_phrase(text: str) -> str:
