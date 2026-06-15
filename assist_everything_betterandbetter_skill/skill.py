@@ -926,6 +926,24 @@ class AssistSkill:
     def _rule_memory_candidates(self, normalized: str, context: str, scope: str) -> list[MemoryItem]:
         if not _has_memory_signal(normalized, context):
             return []
+        workflow_instruction = _workflow_instruction_content(normalized)
+        if workflow_instruction:
+            return [
+                MemoryItem(
+                    WORKFLOW,
+                    workflow_instruction,
+                    scope=scope,
+                    subject="user",
+                    target=_infer_target(normalized, scope),
+                    object=_infer_object(normalized, scope),
+                    predicate="uses_workflow",
+                    source="chat_feedback",
+                    evidence=[normalized],
+                    applies_when=[scope],
+                    tags=_keywords(workflow_instruction),
+                    validity={"time_scope": TIME_LONG_TERM},
+                )
+            ]
         if scope == "gift_planning":
             return _gift_memory_candidates(normalized, context)
         if scope == "life_family_travel":
@@ -1563,6 +1581,23 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
     return False
 
 
+def _workflow_instruction_content(text: str) -> str:
+    stripped = text.strip(" \n\t。！？!?")
+    if not stripped:
+        return ""
+    if not re.search(r"以后(?:要|不要|不用|别|如果|遇到|再|都|只要)", stripped):
+        return ""
+    if any(token in stripped for token in ["请记住", "记住"]):
+        stripped = re.sub(r"^(?:请)?记住[:：,，\s]*", "", stripped)
+    content = stripped
+    content = re.sub(r"^以后(?:要|都要|请|记得)?", "", content).strip(" ，,：:")
+    if not content:
+        return ""
+    if len(content) < 4 or _is_plain_task_request(content):
+        return ""
+    return f"以后处理同类任务时，{content}"
+
+
 def _semantic_extraction_gate(text: str, context: str, scope: str) -> bool:
     if scope == "general" or not context.strip():
         return False
@@ -1598,6 +1633,17 @@ def _prepare_semantic_candidate(item: MemoryItem, text: str, scope: str) -> Memo
     if item.type not in {PREFERENCE, CONSTRAINT, WORKFLOW, DECISION, HISTORY, CONTEXT_FACT}:
         item.type = _infer_memory_type(text, item.scope)
     if item.scope == "gift_planning" and item.type == DECISION and _is_gift_selection_teaching(text):
+        return None
+    if (
+        item.scope == "gift_planning"
+        and item.type == DECISION
+        and item.predicate == "selected"
+        and _extract_budget(text)
+        and not _is_gift_decision_text(text)
+        and not _looks_like_gift_candidate_reference(text, "")
+    ):
+        return None
+    if item.scope == "gift_planning" and item.type == DECISION and "预算" in item.content and _extract_budget(item.content):
         return None
     if not item.evidence:
         item.evidence = [text]

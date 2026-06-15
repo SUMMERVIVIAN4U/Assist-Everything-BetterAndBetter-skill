@@ -112,7 +112,8 @@ class MemoryStore:
         return item
 
     def delete(self, memory_id_or_query: str, reason: str = "user_requested_delete") -> list[MemoryItem]:
-        matches = self.find(memory_id_or_query, include_inactive=True)
+        exact = self.get(memory_id_or_query.strip(), include_inactive=True)
+        matches = [exact] if exact else self.find(memory_id_or_query, include_inactive=True)
         if not matches:
             normalized = _normalize_query(memory_id_or_query)
             matches = self.find(normalized, include_inactive=True)

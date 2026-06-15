@@ -1,5 +1,4 @@
 from pathlib import Path
-import tomllib
 
 
 def test_pyproject_declares_pytest_test_extra():
@@ -9,8 +8,11 @@ def test_pyproject_declares_pytest_test_extra():
     assert pyproject.exists(), "pyproject.toml must document installable test dependencies"
     assert requirements.exists(), "requirements.txt must provide a simple setup path"
 
-    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-    test_deps = data["project"]["optional-dependencies"]["test"]
+    pyproject_text = pyproject.read_text(encoding="utf-8")
+    requirements_text = requirements.read_text(encoding="utf-8")
 
-    assert any(dep.lower().startswith("pytest") for dep in test_deps)
-    assert ".[test]" in requirements.read_text(encoding="utf-8")
+    assert 'requires-python = ">=3.9"' in pyproject_text
+    assert "[project.optional-dependencies]" in pyproject_text
+    assert "test = [" in pyproject_text
+    assert '"pytest>=8,<10"' in pyproject_text
+    assert ".[test]" in requirements_text

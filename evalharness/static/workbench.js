@@ -432,7 +432,7 @@ let report = null;
       return document.getElementById('llmProvider').value || 'minimax';
     }
     function providerDisplayName(provider) {
-      const labels = {minimax:'MiniMax'};
+      const labels = {minimax:'MiniMax', deepseek_pro:'DeepSeek V4 Pro', deepseek_flash:'DeepSeek V4 Flash'};
       return labels[provider] || provider || 'MiniMax';
     }
     async function saveAgentProvider(opts = {}) {
@@ -892,11 +892,16 @@ let report = null;
       const checks = c.checks || {};
       const isCompact = !!opts.compact;
       if (isCompact) {
+        const savingPoints = memorySavingScore(effort);
         return `
           <div class="chat-eval-compact">
             <div class="case-head"><div><h2>${escapeHtml(caseDisplayName(c))}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div></div>
             <div class="dims">${Object.entries(c.scores || {}).filter(([k])=>k!=='total').map(([k,v]) => `<div class="dim"><span class="muted">${dimNames[k] || k}</span><b>${v} / ${dimMax[k] || '-'}</b></div>`).join('') || '<div class="muted">暂无六维拆分。</div>'}</div>
-            <div class="note">Agent Chat 当前只展示六维评分；多轮总览、费力度和记忆节省信息点请到 History Evals 查看。</div>
+            <div class="metrics chat-eval-ledgers">
+              <div class="metric"><span class="muted">费力度</span><b>${effort.final_score ?? '-'}</b><div class="muted">越低越省力。</div></div>
+              <div class="metric"><span class="muted">记忆节省信息点</span><b>${savingPoints}</b><div class="muted">正确复用且用户未重复说明的信息点。</div></div>
+            </div>
+            <div class="note">Agent Chat 当前展示六维评分、费力度和记忆节省信息点；多轮横向对比请到 History Evals 查看。</div>
             <div class="chips">
               <span class="chip">任务交付 ${checks.delivered_task_turns || 0}/${checks.task_turns || 0}</span>
               <span class="chip">记忆动作 ${c.memory_events?.length || 0}</span>

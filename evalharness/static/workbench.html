@@ -16,6 +16,8 @@
     <div>
       <select id="llmProvider" onchange="saveAgentProvider({silent:false})">
         <option value="minimax" selected>MiniMax</option>
+        <option value="deepseek_pro">DeepSeek V4 Pro</option>
+        <option value="deepseek_flash">DeepSeek V4 Flash</option>
       </select>
       <button onclick="checkProviderHealth()">Check Provider</button>
       <span id="llmHealth" class="muted"></span>

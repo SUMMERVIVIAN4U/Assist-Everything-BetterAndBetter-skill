@@ -7,7 +7,7 @@ name = "assist-everything-betterandbetter-skill"
 version = "0.1.0"
 description = "Adaptive memory collaboration skill and eval workbench."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = []
 
 [project.optional-dependencies]

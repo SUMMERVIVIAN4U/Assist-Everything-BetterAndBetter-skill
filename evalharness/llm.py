@@ -17,7 +17,7 @@ LLM_PROVIDER_LABELS = {
     "deepseek_pro": "DeepSeek V4 Pro",
     "deepseek_flash": "DeepSeek V4 Flash",
 }
-PUBLIC_LLM_PROVIDERS = ("minimax",)
+PUBLIC_LLM_PROVIDERS = ("minimax", "deepseek_pro", "deepseek_flash")
 LLM_PROVIDER_ALIASES = {
     "deepseek": "deepseek_pro",
     "deepseek-pro": "deepseek_pro",

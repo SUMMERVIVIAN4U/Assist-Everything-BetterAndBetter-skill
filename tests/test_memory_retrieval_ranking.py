@@ -7,6 +7,18 @@ from assist_everything_betterandbetter_skill.skill import AssistSkill
 
 
 class MemoryRetrievalRankingTest(unittest.TestCase):
+    def test_delete_exact_memory_id_does_not_delete_related_memories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(memory_dir=tmp, persist=True)
+            budget = skill.memory.add(MemoryItem("constraint", "给女朋友选礼物预算在 1000 元左右", scope="gift_planning"))
+            decision = skill.memory.add(MemoryItem("decision", "本次给女朋友的礼物已选定为手作体验", scope="gift_planning"))
+
+            deleted = skill.memory.delete(budget.id)
+
+            self.assertEqual([budget.id], [item.id for item in deleted])
+            self.assertEqual("deleted", skill.memory.get(budget.id, include_inactive=True).status)
+            self.assertEqual("active", skill.memory.get(decision.id).status)
+
     def test_local_retrieval_ranks_by_score_then_time(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill = AssistSkill(memory_dir=tmp, persist=True)

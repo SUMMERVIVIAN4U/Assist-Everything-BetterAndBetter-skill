@@ -258,6 +258,43 @@ class MemoryAdvantagesTest(unittest.TestCase):
         response = skill.process_message("预算1000元左右", context="user: 帮我给女朋友选个生日礼物。")
 
         self.assertTrue(any("预算在 1000 元左右" in action.get("detail", "") for action in response.memory_actions))
+        self.assertFalse(any(item.type == DECISION and "预算" in item.content for item in skill.memory.active()))
+
+    def test_semantic_budget_candidate_cannot_be_saved_as_selected_decision(self):
+        def extractor(text, context, scope, active):
+            return [
+                MemoryItem(
+                    DECISION,
+                    "本次给女朋友的礼物已选定为预算 1000 元",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="selected",
+                    source="llm_semantic_extractor",
+                    confidence=0.95,
+                    evidence=[text],
+                    applies_when=["gift_planning"],
+                    validity={"time_scope": "current_task"},
+                )
+            ]
+
+        skill = AssistSkill(memory_dir=self.tmp.name, persist=False, semantic_extractor=extractor)
+        response = skill.process_message(
+            "预算 1000 元",
+            context="user: 帮我给女朋友选个生日礼物。\nassistant: 推荐小众香氛礼盒，并询问预算。",
+        )
+
+        self.assertFalse(any("已选定为预算" in action.get("detail", "") for action in response.memory_actions))
+        self.assertFalse(any(item.type == DECISION and "预算" in item.content for item in skill.memory.active()))
+
+    def test_future_instruction_is_recorded_as_workflow_experience(self):
+        response = self.skill.process_message(
+            "以后要在用户说已经选中了之后，不要继续推荐其他选项",
+            context="user: 帮我给女朋友选个礼物。\nassistant: 推荐了多个礼物方向。",
+        )
+
+        active = self.skill.memory.active()
+        self.assertTrue(any(item.type == WORKFLOW and "不要继续推荐其他选项" in item.content for item in active))
+        self.assertTrue(any(action["action"] == "add" and "不要继续推荐其他选项" in action["detail"] for action in response.memory_actions))
 
     def test_initial_study_request_delivers_plan(self):
         response = self.skill.process_message("帮我做一个 7 天英语复习计划。")
