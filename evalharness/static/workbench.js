@@ -12,6 +12,7 @@ let report = null;
     let expandedScenarioId = 'GIFT';
     let currentSessionDirty = false;
     let currentSessionEvaled = false;
+    let savedProvider = 'minimax';
     const dimNames = {reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用', update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'};
     const dimMax = {reproducibility:10, memory_extraction:20, memory_application:25, update_and_decay:20, transparency:10, result_quality:15};
     const memoryBackendLabels = {local:'本地JSON', mem0_hosted:'Mem0 Hosted'};
@@ -25,10 +26,16 @@ let report = null;
           <option value="${escapeAttr(provider.value)}">${escapeHtml(provider.label)}${provider.configured ? '' : ' · 未配置'}</option>
         `).join('');
       }
-      providerSelect.value = cfg.llm_provider || cfg.default_llm_provider || 'deepseek_pro';
+      const desiredProvider = cfg.llm_provider || cfg.default_llm_provider || 'minimax';
+      providerSelect.value = Array.from(providerSelect.options).some(option => option.value === desiredProvider)
+        ? desiredProvider
+        : 'minimax';
+      savedProvider = providerSelect.value;
       const health = document.getElementById('llmHealth');
       if (cfg.llm_configured === false) {
         health.textContent = 'Provider 未配置，Agent Chat 和 Eval 会要求真实 LLM。';
+      } else {
+        health.textContent = `当前 Provider：${providerSelect.options[providerSelect.selectedIndex]?.textContent || providerSelect.value}`;
       }
     }
     async function fetchReport() {
@@ -46,7 +53,7 @@ let report = null;
     }
     async function fetchSettings() {
       settings = await (await fetch('/api/settings')).json();
-      document.getElementById('settingsAgent').textContent = `llm_provider=${settings.llm_provider || settings.agent_mode || 'deepseek_pro'} · eval=real_llm_only`;
+      document.getElementById('settingsAgent').textContent = `llm_provider=${providerDisplayName(settings.llm_provider || settings.agent_mode || 'minimax')} · eval=real_llm_only`;
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
       document.getElementById('identityText').value = settings.persona?.identity || '';
       document.getElementById('soulText').value = settings.persona?.soul || '';
@@ -133,11 +140,11 @@ let report = null;
       document.getElementById('privacyReport').textContent = JSON.stringify(settings?.privacy_report || {}, null, 2);
     }
     function renderConfigSummaries() {
-      const provider = settings?.llm_provider || settings?.agent_mode || 'deepseek_pro';
+      const provider = settings?.llm_provider || settings?.agent_mode || 'minimax';
       document.getElementById('agentPersonaSummary').textContent = JSON.stringify({
         identity: '真实任务协作助手；不预设用户身份、性别或关系。',
         soul: '短、直接、像可靠朋友；默认交付方案，不在正文解释工具动作。',
-        llm_provider: provider,
+        llm_provider: providerDisplayName(provider),
         eval: '真实 LLM chat + 真实 LLM judge'
       }, null, 2);
       document.getElementById('skillConfigSummary').textContent = JSON.stringify({
@@ -422,23 +429,35 @@ let report = null;
       try { return JSON.parse(text); } catch { return fallback; }
     }
     function selectedProvider() {
-      return document.getElementById('llmProvider').value || 'deepseek_pro';
+      return document.getElementById('llmProvider').value || 'minimax';
     }
-    async function saveAgentProvider() {
+    function providerDisplayName(provider) {
+      const labels = {minimax:'MiniMax'};
+      return labels[provider] || provider || 'MiniMax';
+    }
+    async function saveAgentProvider(opts = {}) {
       const el = document.getElementById('llmHealth');
-      el.textContent = 'saving provider...';
-      const data = await (await fetch('/api/settings/agent', {
-        method:'POST',
-        headers:{'content-type':'application/json'},
-        body:JSON.stringify({provider:selectedProvider()})
-      })).json();
-      if (!data.ok) {
-        el.textContent = data.error || 'Provider 保存失败';
-        return;
+      const provider = selectedProvider();
+      const providerLabel = document.getElementById('llmProvider').options[document.getElementById('llmProvider').selectedIndex]?.textContent || provider;
+      if (provider === savedProvider && opts.silent !== false) return;
+      el.textContent = `正在切换 Provider：${providerLabel}`;
+      try {
+        const data = await (await fetch('/api/settings/agent', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({provider})
+        })).json();
+        if (!data.ok) {
+          el.textContent = data.error || 'Provider 切换失败';
+          return;
+        }
+        settings = data.settings;
+        savedProvider = settings.llm_provider || provider;
+        el.textContent = `当前 Provider：${providerLabel}`;
+        renderConfigSummaries();
+      } catch (err) {
+        el.textContent = `Provider 切换失败 · ${err.message}`;
       }
-      settings = data.settings;
-      el.textContent = `Provider 已保存：${settings.llm_provider || selectedProvider()}`;
-      renderConfigSummaries();
     }
     async function checkProviderHealth() {
       const el = document.getElementById('llmHealth');
@@ -487,7 +506,7 @@ let report = null;
         }
         report = chatEvalReport;
         const c = chatEvalReport.cases?.[0];
-        status.textContent = c ? `完成：${c.score}/100` : '没有可评估 eval。';
+        status.textContent = c ? '完成：已生成六维评分。' : '没有可评估 eval。';
         panel.innerHTML = c ? renderEvalCase(c, {compact:true}) : '<div class="muted">当前对话为空。</div>';
         currentSessionEvaled = !!c;
         setEvalDrawerHasEval(true);
@@ -871,6 +890,23 @@ let report = null;
     function renderEvalCase(c, opts = {}) {
       const effort = c.user_effort || {};
       const checks = c.checks || {};
+      const isCompact = !!opts.compact;
+      if (isCompact) {
+        return `
+          <div class="chat-eval-compact">
+            <div class="case-head"><div><h2>${escapeHtml(caseDisplayName(c))}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div></div>
+            <div class="dims">${Object.entries(c.scores || {}).filter(([k])=>k!=='total').map(([k,v]) => `<div class="dim"><span class="muted">${dimNames[k] || k}</span><b>${v} / ${dimMax[k] || '-'}</b></div>`).join('') || '<div class="muted">暂无六维拆分。</div>'}</div>
+            <div class="note">Agent Chat 当前只展示六维评分；多轮总览、费力度和记忆节省信息点请到 History Evals 查看。</div>
+            <div class="chips">
+              <span class="chip">任务交付 ${checks.delivered_task_turns || 0}/${checks.task_turns || 0}</span>
+              <span class="chip">记忆动作 ${c.memory_events?.length || 0}</span>
+              <span class="chip ${checks.semantic_violations ? 'bad' : 'good'}">语义违规 ${checks.semantic_violations || 0}</span>
+              <span class="chip ${checks.repeated_memory_turns ? 'bad' : 'good'}">重复说明 ${checks.repeated_memory_turns || 0}</span>
+            </div>
+            <h3>统一轨迹</h3>
+            <div class="turn-list">${(c.eval_timeline || []).map(timelineCard).join('') || '<div class="muted">暂无轨迹。</div>'}</div>
+          </div>`;
+      }
       return `
         <div>
           <div class="case-head"><div><h2>${escapeHtml(caseDisplayName(c))}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div><span class="score">${c.score ?? '-'}/100</span></div>

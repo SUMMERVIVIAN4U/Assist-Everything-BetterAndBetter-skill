@@ -53,7 +53,7 @@ class MemoryAdapterTest(unittest.TestCase):
         self.assertEqual([{"user_id": "u1", "kwargs": {}}], fake.delete_all_calls)
         self.assertEqual({"deleted": True}, result["result"])
 
-    def test_mem0_sdk_client_defaults_to_minimax_and_fastembed_when_mimo_is_configured(self):
+    def test_mem0_sdk_client_defaults_to_minimax_and_fastembed_when_legacy_mimo_is_configured(self):
         captured = {}
 
         class FakeMemoryFactory:
@@ -78,6 +78,32 @@ class MemoryAdapterTest(unittest.TestCase):
         self.assertEqual("fastembed", captured["config"]["embedder"]["provider"])
         self.assertEqual(1024, captured["config"]["vector_store"]["config"]["embedding_model_dims"])
         self.assertIn("mem0_sdk_qdrant", captured["config"]["vector_store"]["config"]["path"])
+
+    def test_mem0_sdk_client_prefers_minimax_env_over_legacy_mimo_env(self):
+        captured = {}
+
+        class FakeMemoryFactory:
+            @classmethod
+            def from_config(cls, config):
+                captured["config"] = config
+                return "fake-memory"
+
+        env = {
+            "MINIMAX_API_KEY": "minimax-key",
+            "MINIMAX_BASE_URL": "https://api.minimax.example/v1",
+            "MINIMAX_MODEL": "MiniMax-New",
+            "MIMO_API_KEY": "mimo-key",
+            "MIMO_BASE_URL": "https://api.mimo.example/v1",
+            "MIMO_MODEL": "mimo-old",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            with patch.dict("sys.modules", {"mem0": type("FakeMem0Module", (), {"Memory": FakeMemoryFactory})}):
+                client = Mem0SdkClient(Mem0Config(enabled=True, user_id="u1"))
+
+        self.assertEqual("fake-memory", client.memory)
+        self.assertEqual("minimax-key", captured["config"]["llm"]["config"]["api_key"])
+        self.assertEqual("https://api.minimax.example/v1", captured["config"]["llm"]["config"]["minimax_base_url"])
+        self.assertEqual("MiniMax-New", captured["config"]["llm"]["config"]["model"])
 
     def test_hosted_mem0_backend_uses_local_strategy_and_keeps_local_store_empty(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -9,7 +9,7 @@ python3 -m evalharness.cli run --judge heuristic --agent local --output /tmp/ass
 Workbench real LLM run:
 
 ```bash
-python3 -m evalharness.cli serve --port 8787 --agent deepseek_pro
+python3 -m evalharness.cli serve --port 8787 --agent minimax
 ```
 
 Then open `http://127.0.0.1:8787` and use `Run Scenarios` or `Run LLM Eval`.
@@ -24,4 +24,4 @@ The Scenario Library executes:
 
 Each case covers reset, first task, feedback, memory view, second task, preference change, third task, delete retest, six-dimension scoring, and user-effort trajectory scoring.
 
-Workbench eval is real LLM only. The default provider is DeepSeek V4 Pro, with DeepSeek V4 Flash and Mimo also selectable in the Workbench. Local + heuristic remains available only as an engineering smoke/contract check.
+Workbench eval is real LLM only. The default provider is MiniMax. Local + heuristic remains available only as an engineering smoke/contract check.

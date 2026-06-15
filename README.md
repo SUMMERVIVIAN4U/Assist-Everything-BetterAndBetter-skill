@@ -38,7 +38,7 @@ Key features:
 - Three-round eval flow with delete retest
 - Agent harness that drives the skill through conversation turns
 - Trace-based eval with memory snapshots and tool calls
-- Offline judge by default, with configurable Mimo agent/judge adapters
+- Offline judge by default, with configurable MiniMax agent/judge adapters
 
 Architecture boundary:
 
@@ -138,7 +138,7 @@ python3 scripts/verify_eval.py
 
 ## Optional External LLM Provider
 
-Both the workbench Agent Chat and eval judge can use an OpenAI-compatible chat endpoint. Workbench defaults to DeepSeek V4 Pro and also supports DeepSeek V4 Flash and Mimo.
+Both the workbench Agent Chat and eval judge use an OpenAI-compatible chat endpoint. The judge-facing default setup uses MiniMax.
 
 ```bash
 cp .env.example .env
@@ -147,36 +147,30 @@ cp .env.example .env
 Then edit `.env`:
 
 ```dotenv
-DEEPSEEK_API_KEY=...
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-DEEPSEEK_PRO_MODEL=deepseek-v4-pro
-DEEPSEEK_FLASH_MODEL=deepseek-v4-flash
-DEEPSEEK_TIMEOUT=120
-
-MIMO_API_KEY=...
-MIMO_BASE_URL=https://api.mimo.chat/v1
-MIMO_MODEL=mimo-v1
-MIMO_TIMEOUT=60
+MINIMAX_API_KEY=...
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_MODEL=MiniMax-M2.7
+MINIMAX_TIMEOUT=60
 ```
 
 Run with the default `.env`:
 
 ```bash
-python3 -m evalharness.cli serve --port 8787 --agent deepseek_pro
-python3 -m evalharness.cli run --agent deepseek_pro --judge deepseek_pro
+python3 -m evalharness.cli serve --port 8787 --agent minimax
+python3 -m evalharness.cli run --agent minimax --judge minimax
 ```
 
 Or pass a custom env file:
 
 ```bash
-python3 -m evalharness.cli --env-file .env.local run --agent deepseek_flash --judge deepseek_flash
+python3 -m evalharness.cli --env-file .env.local run --agent minimax --judge minimax
 ```
 
 Defaults:
 
 - no LLM env in CLI run: local deterministic agent plus offline trace judge
-- `--agent deepseek_pro|deepseek_flash|mimo`: run memory tools first, then ask the selected provider to produce the final assistant wording from the tool trace
-- `--judge deepseek_pro|deepseek_flash|mimo`: ask the selected provider to score the case trace against the six competition dimensions
+- `--agent minimax`: run memory tools first, then ask MiniMax to produce the final assistant wording from the tool trace
+- `--judge minimax`: ask MiniMax to score the case trace against the six competition dimensions
 
 Set `EVALHARNESS_JUDGE_CMD` to a command that reads case-run JSON from stdin and returns score JSON:
 

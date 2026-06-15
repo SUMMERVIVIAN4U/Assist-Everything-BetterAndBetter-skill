@@ -63,7 +63,7 @@ local + heuristic 是 smoke/contract test，不是比赛评分或产品演示。
 
 ### 当前问题
 
-V4 当前 UI 和代码主要围绕 Mimo 命名。后续如果接 DeepSeek、OpenAI-compatible、其他厂商，会导致 Workbench 语义和单一供应商绑定。
+V4 当前 UI 和代码主要围绕旧 provider 命名。比赛提交版统一使用 MiniMax 命名，避免 Provider 配置和页面展示不一致。
 
 ### 改造方向
 
@@ -80,13 +80,12 @@ Timeout
 首期实现：
 
 ```text
-Mimo provider
+MiniMax provider
 ```
 
 Roadmap 预留：
 
 ```text
-DeepSeek provider
 OpenAI-compatible provider
 External command provider
 ```
@@ -360,10 +359,10 @@ Local / Mem0 Hosted 对比
 
 ### Phase 2：Provider 抽象
 
-- Workbench 文案从 Mimo 命名改成 LLM Provider。
-- Mimo 作为首个 provider。
-- 为 DeepSeek/OpenAI-compatible 预留配置结构。
-- Provider health check 替代单一 Check Mimo。
+- Workbench 文案从旧 provider 命名改成 MiniMax。
+- MiniMax 作为比赛提交版默认 provider。
+- 为 OpenAI-compatible provider 预留兼容结构。
+- Provider health check 替代单一厂商检查。
 
 ### Phase 3：Scenario Library
 

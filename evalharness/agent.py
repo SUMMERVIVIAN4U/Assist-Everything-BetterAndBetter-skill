@@ -451,7 +451,16 @@ def _workbench_llm_client(provider: str) -> OpenAICompatibleClient:
     timeout = float(
         os.getenv(
             "EVALHARNESS_AGENT_LLM_TIMEOUT",
-            os.getenv("EVALHARNESS_AGENT_MIMO_TIMEOUT", os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120")),
+            os.getenv(
+                "EVALHARNESS_AGENT_MINIMAX_TIMEOUT",
+                os.getenv(
+                    "EVALHARNESS_MINIMAX_TIMEOUT",
+                    os.getenv(
+                        "EVALHARNESS_AGENT_MIMO_TIMEOUT",
+                        os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120"),
+                    ),
+                ),
+            ),
         )
     )
     return llm_client_from_env(provider, timeout=timeout)

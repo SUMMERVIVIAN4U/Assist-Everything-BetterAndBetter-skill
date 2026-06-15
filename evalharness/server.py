@@ -20,7 +20,15 @@ from assist_everything_betterandbetter_skill.skill import PRIVATE_MARKERS
 
 from .agent import HarnessAgent
 from .evaluation import HISTORY_DIR, build_report, evaluate_case_run, save_report, with_history
-from .llm import DEFAULT_LLM_PROVIDER, llm_client_from_env, llm_config_from_env, llm_configured, normalize_llm_provider, supported_llm_providers
+from .llm import (
+    DEFAULT_LLM_PROVIDER,
+    PUBLIC_LLM_PROVIDERS,
+    llm_client_from_env,
+    llm_config_from_env,
+    llm_configured,
+    normalize_llm_provider,
+    supported_llm_providers,
+)
 from .mem0_performance import (
     DEMO_USER_ID,
     config_for_demo_user,
@@ -292,7 +300,10 @@ def _new_workbench_agent(agent_mode: str) -> HarnessAgent:
 
 def _normalize_workbench_provider(value: Any = None) -> str:
     runtime = load_runtime_config()
-    return normalize_llm_provider(str(value or runtime["agent"]["provider"] or WORKBENCH_LLM_PROVIDER))
+    if value:
+        return normalize_llm_provider(str(value))
+    provider = normalize_llm_provider(str(runtime["agent"]["provider"] or WORKBENCH_LLM_PROVIDER))
+    return provider if provider in PUBLIC_LLM_PROVIDERS else WORKBENCH_LLM_PROVIDER
 
 
 def _provider_from_body(body: dict[str, Any]) -> str:
@@ -573,7 +584,7 @@ def _normalize_privacy_items(items: list[str]) -> list[str]:
 def _provider_config_error(provider: str) -> str:
     if provider in {"deepseek_pro", "deepseek_flash"}:
         return "Workbench 需要真实 LLM provider。请在 .env 中配置 DEEPSEEK_API_KEY/DEEPSEEK_BASE_URL/DEEPSEEK_PRO_MODEL/DEEPSEEK_FLASH_MODEL 后重试。"
-    return "Workbench 需要真实 LLM provider。请在 .env 中配置 MIMO_API_KEY/MIMO_BASE_URL/MIMO_MODEL 后重试。"
+    return "Workbench 需要真实 LLM provider。请在 .env 中配置 MINIMAX_API_KEY/MINIMAX_BASE_URL/MINIMAX_MODEL 后重试。"
 
 
 def _run_workbench_scenarios(provider: str) -> dict[str, Any]:

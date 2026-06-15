@@ -88,14 +88,10 @@ Installed Skill mode and Workbench Agent Chat use the `default` profile unless e
 
 Standalone / Workbench / Eval LLM only:
 
-- `ASSIST_AGENT_PROVIDER=deepseek_pro|deepseek_flash|mimo`
-- `DEEPSEEK_API_KEY`
-- `DEEPSEEK_BASE_URL`
-- `DEEPSEEK_PRO_MODEL=deepseek-v4-pro`
-- `DEEPSEEK_FLASH_MODEL=deepseek-v4-flash`
-- `MIMO_API_KEY`
-- `MIMO_BASE_URL`
-- `MIMO_MODEL`
+- `ASSIST_AGENT_PROVIDER=minimax`
+- `MINIMAX_API_KEY`
+- `MINIMAX_BASE_URL`
+- `MINIMAX_MODEL`
 
 These provider settings are not required for installed Skill memory tools.
 
@@ -128,7 +124,7 @@ Privacy:
 Show effective config:
 
 ```bash
-python3 -m assist_everything_betterandbetter_skill.cli --env-file .env config --provider deepseek_pro
+python3 -m assist_everything_betterandbetter_skill.cli --env-file .env config --provider minimax
 ```
 
 The output includes `config_path`. For the shared config this should be `memories/config/runtime.json`.
@@ -217,7 +213,7 @@ Workbench is the visual shell around the same Agent chain.
 Run:
 
 ```bash
-python3 -m evalharness.cli --env-file .env serve --port 8787 --agent deepseek_pro
+python3 -m evalharness.cli --env-file .env serve --port 8787 --agent minimax
 ```
 
 Current Workbench modules:
@@ -247,7 +243,7 @@ Removed or disabled:
 CLI eval still exists for reproducible testing:
 
 ```bash
-python3 -m evalharness.cli --env-file .env run --agent deepseek_pro --judge deepseek_pro
+python3 -m evalharness.cli --env-file .env run --agent minimax --judge minimax
 ```
 
 The competition demo should use manual multi-session replay in Agent Chat:

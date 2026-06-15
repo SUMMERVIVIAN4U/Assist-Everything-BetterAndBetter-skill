@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import evalharness.server as workbench_server
 from evalharness.agent import HarnessAgent
+from evalharness.llm import llm_config_from_env
 from evalharness.schemas import Message
 
 from assist_everything_betterandbetter_skill.direct_agent import (
@@ -16,10 +17,41 @@ from assist_everything_betterandbetter_skill.direct_agent import (
     save_agent_session,
     session_path,
 )
-from assist_everything_betterandbetter_skill.runtime_config import load_runtime_config, update_runtime_config
+from assist_everything_betterandbetter_skill.runtime_config import load_runtime_config, normalize_provider, update_runtime_config
 
 
 class RuntimeConfigTest(unittest.TestCase):
+    def test_minimax_alias_is_canonical_provider_key(self):
+        self.assertEqual("minimax", normalize_provider("minimax"))
+        self.assertEqual("minimax", normalize_provider("MiniMax"))
+        self.assertEqual("minimax", normalize_provider("mimo"))
+
+    def test_minimax_env_takes_precedence_over_legacy_mimo_env(self):
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            os.chdir(tmp)
+            try:
+                with patch.dict(
+                    os.environ,
+                    {
+                        "MINIMAX_API_KEY": "minimax-key",
+                        "MINIMAX_BASE_URL": "https://api.minimax.example/v1",
+                        "MINIMAX_MODEL": "MiniMax-New",
+                        "MIMO_API_KEY": "mimo-key",
+                        "MIMO_BASE_URL": "https://api.mimo.example/v1",
+                        "MIMO_MODEL": "mimo-old",
+                    },
+                    clear=True,
+                ):
+                    config = llm_config_from_env("minimax")
+
+                self.assertEqual("minimax-key", config.api_key)
+                self.assertEqual("https://api.minimax.example/v1", config.base_url)
+                self.assertEqual("MiniMax-New", config.model)
+                self.assertEqual("MiniMax", config.label)
+            finally:
+                os.chdir(cwd)
+
     def test_shared_runtime_config_is_used_by_direct_agent(self):
         cwd = os.getcwd()
         with tempfile.TemporaryDirectory() as tmp:
@@ -28,7 +60,7 @@ class RuntimeConfigTest(unittest.TestCase):
                 with patch.dict(os.environ, {}, clear=True):
                     update_runtime_config(
                         {
-                            "agent": {"provider": "deepseek_flash"},
+                            "agent": {"provider": "minimax"},
                             "memory": {"backend": "mem0_hosted", "enabled": False, "dir": "memories/shared"},
                             "mem0": {"user_id": "shared-user"},
                             "privacy": {"items": ["secret-marker"]},
@@ -37,7 +69,7 @@ class RuntimeConfigTest(unittest.TestCase):
 
                     config = direct_agent_config(require_llm=False)
 
-                self.assertEqual("deepseek_flash", config.provider)
+                self.assertEqual("minimax", config.provider)
                 self.assertEqual("mem0_hosted", config.memory_backend)
                 self.assertFalse(config.memory_enabled)
                 self.assertEqual("memories/shared", config.memory_dir)
@@ -50,14 +82,14 @@ class RuntimeConfigTest(unittest.TestCase):
             os.chdir(tmp)
             try:
                 with patch.dict(os.environ, {}, clear=True):
-                    update_runtime_config({"agent": {"provider": "deepseek_pro"}, "memory": {"backend": "local"}})
+                    update_runtime_config({"agent": {"provider": "minimax"}, "memory": {"backend": "local"}})
 
                     config = direct_agent_config(provider="mimo", memory_backend="mem0_hosted", require_llm=False)
                     saved = load_runtime_config()
 
-                self.assertEqual("mimo", config.provider)
+                self.assertEqual("minimax", config.provider)
                 self.assertEqual("mem0_hosted", config.memory_backend)
-                self.assertEqual("deepseek_pro", saved["agent"]["provider"])
+                self.assertEqual("minimax", saved["agent"]["provider"])
                 self.assertEqual("local", saved["memory"]["backend"])
             finally:
                 os.chdir(cwd)
@@ -67,7 +99,7 @@ class RuntimeConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             os.chdir(tmp)
             try:
-                config = direct_agent_config(provider="mimo", memory_dir="memories/test", require_llm=False)
+                config = direct_agent_config(provider="minimax", memory_dir="memories/test", require_llm=False)
                 agent = HarnessAgent(llm_mode="local", persist_memory=False)
                 agent.session.messages = [
                     Message(role="user", content="帮我给女朋友选生日礼物"),
@@ -96,7 +128,7 @@ class RuntimeConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             os.chdir(tmp)
             try:
-                config = direct_agent_config(provider="mimo", memory_dir="memories/test", require_llm=False)
+                config = direct_agent_config(provider="minimax", memory_dir="memories/test", require_llm=False)
                 agent = HarnessAgent(llm_mode="local", persist_memory=False)
                 agent.session.messages = [Message(role="user" if idx % 2 == 0 else "assistant", content=f"msg-{idx}") for idx in range(30)]
                 agent._context_start_index = 20

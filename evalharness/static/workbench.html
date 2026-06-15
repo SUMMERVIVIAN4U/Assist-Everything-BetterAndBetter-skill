@@ -14,13 +14,10 @@
       <div class="muted">Agent Chat 负责手动回放；每个 session 单独 Eval；History Evals 用来比较多轮表现。</div>
     </div>
     <div>
-      <select id="llmProvider">
-        <option value="deepseek_pro" selected>DeepSeek V4 Pro</option>
-        <option value="deepseek_flash">DeepSeek V4 Flash</option>
-        <option value="mimo">Mimo</option>
+      <select id="llmProvider" onchange="saveAgentProvider({silent:false})">
+        <option value="minimax" selected>MiniMax</option>
       </select>
       <button onclick="checkProviderHealth()">Check Provider</button>
-      <button onclick="saveAgentProvider()">保存 Provider</button>
       <span id="llmHealth" class="muted"></span>
     </div>
   </header>
