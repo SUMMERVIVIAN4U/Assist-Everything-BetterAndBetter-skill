@@ -68,6 +68,36 @@ let report = null;
       el.classList.add('active');
       if (id === 'memory') refreshVisibleMemoryStore();
     }
+    function chatStageElement() {
+      return document.getElementById('chatStage');
+    }
+    function openEvalDrawer(opts = {}) {
+      const stage = chatStageElement();
+      if (!stage) return;
+      if (opts.hasEval) stage.classList.add('has-eval');
+      stage.classList.add('eval-open');
+    }
+    function closeEvalDrawer() {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.remove('eval-open');
+    }
+    function toggleEvalDrawer() {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.toggle('eval-open');
+    }
+    function setEvalDrawerHasEval(hasEval) {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.toggle('has-eval', !!hasEval);
+    }
+    function clearEvalDrawerState() {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.remove('eval-open');
+      stage.classList.remove('has-eval');
+    }
     function privacyItemsFromInput() {
       return document.getElementById('privacyItems').value.split(/\n+/).map(item => item.trim()).filter(Boolean);
     }
@@ -425,6 +455,7 @@ let report = null;
       const text = input.value.trim();
       if (!text) return;
       input.value = '';
+      clearEvalDrawerState();
       appendMsg('user', text);
       currentSessionDirty = true;
       currentSessionEvaled = false;
@@ -444,6 +475,7 @@ let report = null;
       const panel = document.getElementById('chatEvalPanel');
       btn.disabled = true;
       btn.textContent = 'Scoring...';
+      openEvalDrawer({hasEval: true});
       status.innerHTML = '<span class="loading-row"><span class="spinner"></span><span>正在统一 eval 当前会话...</span></span>';
       panel.innerHTML = '';
       try {
@@ -456,11 +488,13 @@ let report = null;
         status.textContent = c ? `完成：${c.score}/100` : '没有可评估 eval。';
         panel.innerHTML = c ? renderEvalCase(c, {compact:true}) : '<div class="muted">当前对话为空。</div>';
         currentSessionEvaled = !!c;
+        setEvalDrawerHasEval(true);
         renderCases();
         return currentSessionEvaled;
       } catch (err) {
         status.textContent = '打分失败。';
         panel.innerHTML = `<div class="note" style="color:var(--bad)">ERROR: ${escapeHtml(err.message)}</div>`;
+        setEvalDrawerHasEval(true);
         return false;
       } finally {
         btn.disabled = false;
@@ -481,6 +515,7 @@ let report = null;
       document.getElementById('chatlog').innerHTML = '';
       document.getElementById('chatEvalStatus').textContent = opts.reason || 'Session 已重置；memory 保持不变。';
       document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
+      clearEvalDrawerState();
       currentSessionDirty = false;
       currentSessionEvaled = false;
       refreshChatMemory();
@@ -506,6 +541,7 @@ let report = null;
         ? `当前记忆引擎已重置${remote.ok === false ? '失败' : ''}。`
         : 'Mem0 未启用或未配置。';
       document.getElementById('chatEvalStatus').textContent = `Memory 已重置；${remoteText} Run LLM Eval 后刷新评分。`;
+      clearEvalDrawerState();
       refreshVisibleMemoryStore();
     }
     function renderScenarioLibrary(runHint = '') {

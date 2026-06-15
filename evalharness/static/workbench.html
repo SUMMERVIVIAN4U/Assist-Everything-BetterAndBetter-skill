@@ -33,8 +33,42 @@
   <main>
     <section id="chat">
       <div class="chat-layout">
-        <div>
-          <div id="chatlog" class="chatlog"></div>
+        <div id="chatStage" class="chat-stage">
+          <div class="chat-stage-head">
+            <div>
+              <h2>Agent Chat</h2>
+              <div class="muted">当前 session 的真实 LLM 对话与评估入口。</div>
+            </div>
+            <span class="status-pill">Session active</span>
+          </div>
+          <div class="chat-body">
+            <div id="chatlog" class="chatlog"></div>
+
+            <button id="chatEvalHandle" class="eval-handle" type="button" onclick="toggleEvalDrawer()" aria-label="打开或收起 Eval">
+              <span class="eval-handle-mark" aria-hidden="true"></span>
+              <span class="eval-handle-text">Eval</span>
+            </button>
+
+            <aside id="chatEvalDrawer" class="eval-drawer" aria-label="当前对话 Eval">
+              <div class="eval-drawer-head">
+                <div>
+                  <h2>当前对话 Eval</h2>
+                  <div id="chatEvalStatus" class="muted">点击 Run LLM Eval 后显示当前会话评分。</div>
+                </div>
+                <button type="button" class="icon-button" onclick="closeEvalDrawer()" aria-label="收起 Eval">×</button>
+              </div>
+              <div class="eval-content">
+                <div id="chatEvalEmpty" class="eval-empty">
+                  <div class="eval-empty-card">
+                    <div class="eval-empty-mark">E</div>
+                    <strong>暂无 Eval 结果</strong>
+                    <div>点击 Run LLM Eval 后，这里会自动展开并显示当前会话评分。</div>
+                  </div>
+                </div>
+                <div id="chatEvalPanel" class="muted">暂无评分。</div>
+              </div>
+            </aside>
+          </div>
           <div class="composer">
             <input id="chatInput" placeholder="输入当前对话，例如：帮我规划一个周末任务">
             <button class="primary" onclick="sendChat()">Send</button>
@@ -52,10 +86,6 @@
               </div>
             </div>
             <div id="scenarioLibrary" class="scenario-list"><div class="muted">loading...</div></div>
-          </div>
-          <div class="panel">
-            <div class="case-head"><div><h2>当前对话 Eval</h2><div id="chatEvalStatus" class="muted">点击 Run LLM Eval 后显示当前会话评分。</div></div></div>
-            <div id="chatEvalPanel" class="muted">暂无评分。</div>
           </div>
           <div class="panel">
             <div class="case-head">
