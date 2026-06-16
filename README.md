@@ -272,6 +272,8 @@ Continue naturally in the same conversation:
 退出 skill
 ```
 
+To start a new session while keeping long-term memory, use two user turns: first ask to reset the current session, wait for the agent to confirm, then send the next task.
+
 ### Direct Skill Step Flow
 
 ```mermaid

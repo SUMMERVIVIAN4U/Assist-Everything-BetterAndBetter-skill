@@ -58,6 +58,125 @@ class MemoryRetrievalRankingTest(unittest.TestCase):
             self.assertEqual([same_score_newer.id, high_score_old.id, low_score_recent.id], [item.id for item in results])
             self.assertGreaterEqual(results[0].validity["retrieval_score"], results[1].validity["retrieval_score"])
 
+    def test_generic_followup_uses_single_active_scene_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = AssistSkill(memory_dir=tmp, persist=True)
+            first.process_message(
+                "预算1000元左右；她喜欢紫色；如果是首饰，她喜欢玫瑰金；以前送过玫瑰金项链，送过的不要再送。",
+                context="user: 帮我给女朋友选个生日礼物。",
+            )
+            first.process_message(
+                "不是，我想换个非首饰品类。",
+                context="user: 给我一个礼物推荐。\nassistant: 推荐玫瑰金手链。",
+            )
+
+            next_session = AssistSkill(memory_dir=tmp, persist=True)
+            results = next_session.retrieve_relevant_memories("那再给一个推荐。")
+            pack = next_session.relevant_memory_pack("那再给一个推荐。", results)
+
+            contents = [item.content for item in results]
+            self.assertTrue(any("女朋友" in content or "礼物" in content or "首饰" in content for content in contents))
+            self.assertTrue(all(item.scope == "gift_planning" for item in results))
+            self.assertTrue(any("预算在 1000 元左右" in item["content"] for item in pack["confirm_first"]))
+            self.assertTrue(any("不要首饰" in item["content"] for item in pack["confirm_first"]))
+
+    def test_generic_followup_does_not_guess_scope_when_multiple_scenes_exist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(memory_dir=tmp, persist=True)
+            skill.memory.add(MemoryItem("constraint", "给女朋友选礼物预算在 1000 元左右", scope="gift_planning"))
+            skill.memory.add(MemoryItem("constraint", "避开人挤人的网红点", scope="life_family_travel"))
+
+            results = skill.retrieve_relevant_memories("那再给一个推荐。")
+
+            self.assertEqual([], results)
+
+    def test_gift_history_lookup_includes_selected_decisions_from_previous_sessions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = AssistSkill(memory_dir=tmp, persist=True)
+            first.memory.add(
+                MemoryItem(
+                    "history",
+                    "以前送过女朋友玫瑰金项链，送过的不要再送",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="previously_given",
+                    validity={"time_scope": "past"},
+                )
+            )
+            for content in [
+                "本次给女朋友的礼物已选定为找时间最近的一次，直接回答我",
+                "本次给女朋友的礼物已选定为玫瑰金手链 APM Monaco",
+                "本次给女朋友的礼物已选定为演唱会 / 音乐会门票",
+                "本次给女朋友的礼物已选定为Diptyque香氛蜡烛礼盒",
+            ]:
+                first.memory.add(
+                    MemoryItem(
+                        "decision",
+                        content,
+                        scope="gift_planning",
+                        target="女朋友",
+                        predicate="selected",
+                        validity={"time_scope": "current_task", "session_id": "old_session"},
+                    )
+                )
+
+            next_session = AssistSkill(memory_dir=tmp, persist=True)
+            results = next_session.retrieve_relevant_memories("最近我已经送过女朋友什么礼物")
+
+            contents = [item.content for item in results]
+            self.assertTrue(any("玫瑰金项链" in content for content in contents))
+            self.assertTrue(any("玫瑰金手链 APM Monaco" in content for content in contents))
+            self.assertTrue(any("演唱会 / 音乐会门票" in content for content in contents))
+            self.assertTrue(any("Diptyque香氛蜡烛礼盒" in content for content in contents))
+            self.assertFalse(any("直接回答我" in content for content in contents))
+
+    def test_llm_retrieval_intent_can_expand_natural_gift_history_lookup(self):
+        calls = []
+
+        def classifier(text, context, active_items):
+            calls.append({"text": text, "context": context, "count": len(active_items)})
+            return {
+                "intent": "gift_history_lookup",
+                "scope": "gift_planning",
+                "target": "女朋友",
+                "include_types": ["history", "decision"],
+                "include_expired_current_task": True,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            first = AssistSkill(memory_dir=tmp, persist=True)
+            first.memory.add(
+                MemoryItem(
+                    "history",
+                    "以前送过女朋友玫瑰金项链，送过的不要再送",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="previously_given",
+                    validity={"time_scope": "past"},
+                )
+            )
+            first.memory.add(
+                MemoryItem(
+                    "decision",
+                    "本次给女朋友的礼物已选定为演唱会 / 音乐会门票",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="selected",
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+
+            next_session = AssistSkill(memory_dir=tmp, persist=True, retrieval_intent_classifier=classifier)
+            results = next_session.retrieve_relevant_memories(
+                "我给她置办过的生日东西都有哪些",
+                context="user: 帮我给女朋友选生日礼物。",
+            )
+
+            contents = [item.content for item in results]
+            self.assertTrue(calls)
+            self.assertTrue(any("玫瑰金项链" in content for content in contents))
+            self.assertTrue(any("演唱会 / 音乐会门票" in content for content in contents))
+
     def test_hosted_mem0_retrieval_uses_same_score_time_ranking(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill = AssistSkill(

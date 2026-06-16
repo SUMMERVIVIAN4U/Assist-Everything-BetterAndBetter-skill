@@ -39,6 +39,7 @@ class HarnessAgent:
         self.require_llm = require_llm
         self._context_start_index = 0
         semantic_extractor = self._semantic_extractor() if toolbox is None else None
+        retrieval_intent_classifier = self._retrieval_intent_classifier() if toolbox is None else None
         self.toolbox = toolbox or MemoryToolbox(
             memory_dir=memory_dir,
             persist=persist_memory,
@@ -46,6 +47,7 @@ class HarnessAgent:
             memory_enabled=memory_enabled,
             memory_backend=memory_backend,
             semantic_extractor=semantic_extractor,
+            retrieval_intent_classifier=retrieval_intent_classifier,
         )
 
     def reply(self, user_text: str, *, stage: str = "chat") -> TurnTrace:
@@ -103,8 +105,12 @@ class HarnessAgent:
         snapshot = self.toolbox.snapshot()
         memory_context = _rewrite_memory_context(snapshot, memory_pack or {}, applied_memories)
         memory_actions = _compact_memory_actions(current_memory_actions or self.toolbox.skill.memory.events[-8:], snapshot=snapshot)
+        memory_write_result = _memory_write_result(user_text, memory_actions)
         selected_gift = _selected_gift_from_actions(memory_actions) or _gift_selection_phrase(user_text)
         suppression_context = _suppression_context_from_actions(memory_actions, snapshot=snapshot, user_text=user_text, context=context)
+        def finish(text: str) -> str:
+            return _enforce_memory_write_consistency(_finalize_user_visible_output(text), memory_write_result)
+
         messages = [
             {
                 "role": "system",
@@ -120,6 +126,7 @@ class HarnessAgent:
                         "applied_memory_ids": applied_memories,
                         "memory_context": memory_context,
                         "memory_actions": memory_actions,
+                        "memory_write_result": memory_write_result,
                         "suppression_context": suppression_context,
                         "response_directives": _response_directives(
                             user_text,
@@ -143,7 +150,7 @@ class HarnessAgent:
                 memory_context=memory_context,
                 conversation_context=context,
             ):
-                return rewritten
+                return finish(rewritten)
             retry_messages = [
                 messages[0],
                 {
@@ -156,6 +163,7 @@ class HarnessAgent:
                             "applied_memory_ids": applied_memories,
                             "memory_context": memory_context,
                             "memory_actions": memory_actions,
+                            "memory_write_result": memory_write_result,
                             "suppression_context": suppression_context,
                             "response_directives": _response_directives(
                                 user_text,
@@ -187,14 +195,14 @@ class HarnessAgent:
                 memory_context=memory_context,
                 conversation_context=context,
             ):
-                return rewritten
+                return finish(rewritten)
             blocked_terms = (
                 _suppression_blocked_terms(suppression_context)
                 + _memory_context_blocked_terms(memory_context)
                 + _conversation_context_blocked_terms(user_text, context)
             )
             if not blocked_terms and not _has_unresolved_choice(rewritten):
-                return rewritten or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
+                return finish(rewritten) or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
             final_retry_messages = [
                 messages[0],
                 {
@@ -207,6 +215,7 @@ class HarnessAgent:
                             "applied_memory_ids": applied_memories,
                             "memory_context": memory_context,
                             "memory_actions": memory_actions,
+                            "memory_write_result": memory_write_result,
                             "suppression_context": suppression_context,
                             "blocked_terms": blocked_terms,
                             "response_directives": _response_directives(
@@ -237,7 +246,7 @@ class HarnessAgent:
                 memory_context=memory_context,
                 conversation_context=context,
             ):
-                return rewritten
+                return finish(rewritten)
             for _ in range(2):
                 violation_terms = _blocked_terms_used_in_answer(rewritten, blocked_terms)
                 if (
@@ -264,6 +273,7 @@ class HarnessAgent:
                                 "conversation_context": context,
                                 "memory_context": memory_context,
                                 "memory_actions": memory_actions,
+                                "memory_write_result": memory_write_result,
                                 "suppression_context": suppression_context,
                                 "blocked_terms": blocked_terms,
                                 "previous_rewrite": rewritten,
@@ -289,8 +299,8 @@ class HarnessAgent:
                     memory_context=memory_context,
                     conversation_context=context,
                 ):
-                    return rewritten
-            return rewritten or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
+                    return finish(rewritten)
+            return finish(rewritten) or "真实 LLM 返回空内容，已拒绝回退到本地业务回答。"
         except Exception as exc:
             if self.require_llm:
                 raise RuntimeError(f"真实 LLM 调用失败，Workbench 不允许回退到本地业务回答（provider={provider}）：{exc}") from exc
@@ -324,6 +334,17 @@ class HarnessAgent:
         if self.llm_client is not None and not hasattr(self.llm_client, "json_chat"):
             return None
         return LLMSemanticMemoryExtractor(lambda: self.llm_client or _workbench_llm_client(self._provider()))
+
+    def _retrieval_intent_classifier(self) -> "LLMRetrievalIntentClassifier | None":
+        extractor_enabled = bool(load_runtime_config()["memory"].get("llm_extractor", True))
+        env_disabled = os.getenv("ASSIST_MEMORY_LLM_EXTRACTOR", "1").strip().lower() in {"0", "false", "off", "no"}
+        if not extractor_enabled or env_disabled:
+            return None
+        if not self._use_llm():
+            return None
+        if self.llm_client is not None and not hasattr(self.llm_client, "json_chat"):
+            return None
+        return LLMRetrievalIntentClassifier(lambda: self.llm_client or _workbench_llm_client(self._provider()))
 
 
 class LLMSemanticMemoryExtractor:
@@ -399,6 +420,53 @@ class LLMSemanticMemoryExtractor:
         return output
 
 
+class LLMRetrievalIntentClassifier:
+    """LLM-assisted memory recall intent classifier. It never writes memory."""
+
+    def __init__(self, client_factory: Any) -> None:
+        self.client_factory = client_factory
+
+    def __call__(self, text: str, context: str, active_items: list[MemoryItem]) -> dict[str, Any]:
+        payload = {
+            "user_message": text,
+            "conversation_context": _compact_context(context, max_chars=1200),
+            "active_memory_summary": [
+                {
+                    "type": item.type,
+                    "scope": item.scope,
+                    "target": item.target,
+                    "predicate": item.predicate,
+                    "time_scope": item.validity.get("time_scope"),
+                    "content": item.content,
+                }
+                for item in active_items[:12]
+            ],
+            "schema": {
+                "intent": "gift_history_lookup|memory_lookup|task_request|other",
+                "scope": "gift_planning|life_family_travel|study_plan|work_report|research_review|general",
+                "target": "optional target such as 女朋友",
+                "include_types": ["history", "decision"],
+                "include_expired_current_task": False,
+            },
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是记忆召回意图分类器，只返回 JSON。"
+                    "判断 user_message 是不是在查询、盘点或回顾已保存的记忆。"
+                    "如果用户问最近/以前/已经送过、买过、选过哪些礼物，或者问给某个收礼人送过什么礼物，"
+                    "intent 必须是 gift_history_lookup，scope=gift_planning，include_types 必须包含 history 和 decision，"
+                    "include_expired_current_task=true，因为已选定的礼物可能以 decision/current_task 保存。"
+                    "如果只是要新推荐，intent=task_request。不要编造记忆内容。"
+                ),
+            },
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ]
+        data = self.client_factory().json_chat(messages, temperature=0.0)
+        return data if isinstance(data, dict) else {}
+
+
 def _compact_context(context: str, *, max_chars: int = 2400) -> str:
     lines = [line for line in str(context or "").splitlines() if line.strip()]
     compact = "\n".join(lines[-10:])
@@ -470,6 +538,8 @@ def _system_prompt() -> str:
     base = (
         "你是安装了 assist-everything-betterandbetter-skill 的 agent。"
         "记忆工具已经完成提取、更新、删除和检索。"
+        "memory_actions 和 memory_write_result 是记忆状态的唯一事实源；只有 committed=true 或存在成功 add/update/downgrade/delete/reset/dedupe 时，才允许说已记住、已保存或已更新。"
+        "如果用户要求写入/更新记忆但 memory_write_result.committed=false，必须友好说明没有成功写入，并提示用户补充要保存的具体内容；不要口头承诺已经记住。"
         "必须尊重 memory_context，不要虚构或使用 deleted/superseded 记忆。"
         "如果用户本轮删除或否定了某条偏好，该删除/否定优先级高于 conversation_context 中更早的说法，后续回答不得继续使用被删除偏好。"
         "如果用户显式要求删除/忘掉某条记忆，回复开头要用一句话确认删除或说明此前已删除，然后继续完成用户同一句里的任务。"
@@ -494,6 +564,7 @@ def _system_prompt() -> str:
         "不要在已交付方案末尾追加“需要我帮你查”“选A还是B”这类泛泛追问。"
         "如果用户要求安排行程/路线，必须直接选择一个默认主路线并给出时间安排；备选可以简短列出，但不能把主任务变成“哪个方向”的选择题。"
         "默认用中文短答，像正常人说话；不要主动解释记忆工具、记忆变更和推理链路。"
+        "不要预设用户或收礼人的年龄、性别气质、身份标签、消费风格；只能使用用户已给出的关系和偏好。"
         "不要使用 Markdown 加粗符号 **，不要用过度模板化的 AI 口吻。"
     )
     persona_dir = Path(__file__).resolve().parent / "persona"
@@ -509,6 +580,39 @@ def _sanitize_llm_output(text: str) -> str:
     cleaned = re.sub(r"<think\b[^>]*>.*?</think>", "", str(text or ""), flags=re.IGNORECASE | re.DOTALL)
     cleaned = re.sub(r"^\s*(?:思考|推理)\s*[:：].*?(?=\n\n|\n[^。\n]{0,20}[:：]|\Z)", "", cleaned, flags=re.DOTALL)
     return cleaned.strip()
+
+
+def _finalize_user_visible_output(text: str) -> str:
+    cleaned = _strip_memory_tool_section(str(text or ""))
+    cleaned = _strip_generated_markdown_bold(cleaned)
+    return cleaned.strip()
+
+
+def _strip_memory_tool_section(text: str) -> str:
+    lines = str(text or "").splitlines()
+    kept: list[str] = []
+    skipping = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("记忆处理"):
+            skipping = True
+            continue
+        if skipping:
+            if not stripped or stripped.startswith("- ") or "记忆" in stripped:
+                continue
+            skipping = False
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def _strip_generated_markdown_bold(text: str) -> str:
+    lines = []
+    for line in str(text or "").splitlines():
+        if "`" in line or "Markdown" in line or "markdown" in line:
+            lines.append(line)
+        else:
+            lines.append(line.replace("**", ""))
+    return "\n".join(lines)
 
 
 def _remove_trailing_generic_question(text: str) -> str:
@@ -582,11 +686,25 @@ def _response_directives(
         )
         if not _contains_any(user_text, ["香氛", "香水", "香薰", "扩香", "蜡烛", "香味"]):
             directives.append("本轮不要推荐香氛、香水、香薰、扩香或蜡烛类礼物。")
+    if _is_gift_history_lookup(user_text):
+        directives.append(
+            "用户在盘点最近送过/选过的礼物；必须同时使用 memory_context.apply_now 中的 history/previously_given 和 decision/selected，"
+            "以及 memory_context.gift_selected_exclusions 中的已选礼物。不要只回答以前送过的历史项。"
+        )
     confirm_budget = _confirm_first_budget(memory_context)
     if _is_gift_task_request(user_text) and confirm_budget:
         directives.append(
             f"confirm_first 里有上次同类送礼预算：{confirm_budget}。不要再问“有预算吗”；请用“如果这次还沿用这个预算”来确认，并直接按该预算给一个推荐。"
         )
+    confirm_constraints = _confirm_first_constraints(memory_context)
+    if confirm_constraints:
+        directives.append(
+            "confirm_first 里有上次同类任务的临时约束："
+            + "；".join(confirm_constraints[:3])
+            + "。不要把它当成永久事实；请用“如果这次仍沿用”来轻确认，并先按这些约束给可执行结果。"
+        )
+        if any(_contains_any(item, ["不要首饰", "非首饰", "不考虑首饰"]) for item in confirm_constraints):
+            directives.append("如果这次仍沿用非首饰约束，本轮不得推荐首饰、耳钉、耳环、项链、手链或戒指。")
     return directives
 
 
@@ -624,11 +742,34 @@ def _confirm_first_budget(memory_context: dict[str, Any]) -> str:
     return ""
 
 
+def _confirm_first_constraints(memory_context: dict[str, Any]) -> list[str]:
+    constraints: list[str] = []
+    for item in memory_context.get("confirm_first", []) or []:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content") or "")
+        if item.get("type") == "constraint" and "预算" not in content:
+            constraints.append(content)
+        elif item.get("time_scope") == "current_task" and content and "预算" not in content:
+            constraints.append(content)
+    return constraints
+
+
 def _memory_context_blocked_terms(memory_context: dict[str, Any]) -> list[str]:
     terms: list[str] = []
     if _memory_context_contains(memory_context, "网红"):
         terms.extend(["夫子庙", "老门东", "新街口", "网红", "打卡街区", "热门游客街区"])
+    if _memory_context_has_non_jewelry_constraint(memory_context):
+        terms.extend(["首饰", "耳钉", "耳环", "项链", "手链", "戒指", "吊坠"])
     return terms
+
+
+def _memory_context_has_non_jewelry_constraint(memory_context: dict[str, Any]) -> bool:
+    for key in ["apply_now", "confirm_first"]:
+        for item in memory_context.get(key, []) or []:
+            if isinstance(item, dict) and _contains_any(str(item.get("content") or ""), ["不要首饰", "非首饰", "不考虑首饰"]):
+                return True
+    return False
 
 
 def _conversation_context_blocked_terms(user_text: str, conversation_context: str) -> list[str]:
@@ -692,10 +833,111 @@ def _compact_memory_actions(actions: list[dict[str, Any]], *, snapshot: dict[str
                 "scope": memory_item.get("scope") if memory_item else action.get("scope"),
                 "predicate": memory_item.get("predicate") if memory_item else action.get("predicate"),
                 "ok": action.get("ok", True),
+                "reason": action.get("reason"),
+                "error": action.get("error"),
                 "extractor": action.get("extractor"),
             }
         )
     return output
+
+
+def _memory_write_result(user_text: str, memory_actions: list[dict[str, Any]]) -> dict[str, Any]:
+    committed_names = {"add", "update", "downgrade", "delete", "reset", "archive", "dedupe"}
+    blocking_names = {"reject", "ask", "propose"}
+    committed = [
+        action
+        for action in memory_actions
+        if action.get("action") in committed_names and action.get("ok", True) is not False
+    ]
+    blocked = [action for action in memory_actions if action.get("action") in blocking_names or action.get("ok") is False]
+    write_intent = _memory_write_intent(user_text) or bool(committed) or bool(blocked)
+    return {
+        "write_intent": write_intent,
+        "committed": bool(committed),
+        "committed_actions": [
+            {
+                "action": action.get("action"),
+                "detail": action.get("detail") or action.get("memory_content") or action.get("memory_id"),
+                "memory_id": action.get("memory_id"),
+            }
+            for action in committed[:6]
+        ],
+        "blocked_actions": [
+            {
+                "action": action.get("action"),
+                "detail": action.get("detail") or action.get("memory_content") or action.get("memory_id"),
+                "reason": action.get("reason") or action.get("error"),
+            }
+            for action in blocked[:4]
+        ],
+    }
+
+
+def _memory_write_intent(text: str) -> bool:
+    value = str(text or "")
+    return _contains_any(
+        value,
+        [
+            "记住",
+            "保存",
+            "加入记忆",
+            "写入记忆",
+            "更新记忆",
+            "补上",
+            "删除记忆",
+            "清除记忆",
+            "忘掉",
+            "不再记",
+            "降级",
+            "归档",
+        ],
+    )
+
+
+def _enforce_memory_write_consistency(text: str, memory_write_result: dict[str, Any]) -> str:
+    output = str(text or "").strip()
+    if not memory_write_result.get("write_intent"):
+        return output
+    if memory_write_result.get("committed"):
+        return output
+    return _memory_write_failure_message(memory_write_result)
+
+
+def _claims_memory_committed(text: str) -> bool:
+    return _contains_any(
+        str(text or ""),
+        [
+            "已记住",
+            "记住了",
+            "已经记住",
+            "已保存",
+            "已经保存",
+            "已更新记忆",
+            "更新记忆",
+            "已更新",
+            "已加入记忆",
+            "加入记忆",
+            "已写入",
+            "已经写入",
+            "下次会记住",
+            "我会记住",
+            "后续会按",
+        ],
+    )
+
+
+def _memory_write_failure_message(memory_write_result: dict[str, Any]) -> str:
+    blocked = memory_write_result.get("blocked_actions") or []
+    reason = ""
+    if blocked:
+        reason = str(blocked[0].get("reason") or "")
+    if reason == "temporary_instruction":
+        return "我理解你想更新记忆，但这条没有成功写入。请把要保存的内容直接说完整一点，例如：“记住：本次给谁的礼物已选定为哪个具体商品”。"
+    if reason == "private_or_sensitive":
+        return "这条没有写入记忆，因为可能包含隐私或敏感信息。你可以换成不含敏感细节的版本让我保存。"
+    if blocked:
+        return "我理解你想更新记忆，但这条没有成功写入。请直接说出要保存的具体内容，我会再写入。"
+    return "我理解你想更新记忆，但这轮没有识别出可写入的具体内容，所以还没有保存。请直接说：“记住：……”后面接要保存的内容。"
 
 
 def _memory_lookup(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -975,6 +1217,11 @@ def _violates_memory_context_constraints(
         for term in tourist_terms:
             if term in body and not _contains_any(body, [f"避开{term}", f"不去{term}", f"不要{term}", f"不安排{term}", f"非{term}"]):
                 return True
+    if _memory_context_has_non_jewelry_constraint(memory_context):
+        jewelry_terms = ["首饰", "耳钉", "耳环", "项链", "手链", "戒指", "吊坠"]
+        for term in jewelry_terms:
+            if _suppressed_term_used_as_plan(body, term):
+                return True
     return False
 
 
@@ -1051,6 +1298,11 @@ def _suppressed_term_used_as_plan(body: str, term: str) -> bool:
     if not _contains_any(body, plan_markers):
         return False
     negated_patterns = [
+        f"不要{term}",
+        f"不用{term}",
+        f"不选{term}",
+        f"不碰{term}",
+        f"不考虑{term}",
         f"不推荐{term}",
         f"不再推荐{term}",
         f"不安排{term}",
@@ -1058,7 +1310,9 @@ def _suppressed_term_used_as_plan(body: str, term: str) -> bool:
         f"不再按{term}",
         f"避开{term}",
         f"不去{term}",
+        f"排除{term}",
         f"删除{term}",
+        f"非{term}",
     ]
     if any(pattern in body for pattern in negated_patterns):
         return False
@@ -1078,6 +1332,29 @@ def _is_gift_task_request(text: str) -> bool:
     if _contains_any(value, ["购买渠道", "链接", "包装", "尺寸", "下单", "贺卡"]):
         return False
     return _contains_any(value, ["礼物", "生日礼物", "送礼", "选礼", "买礼物", "挑礼物"])
+
+
+def _is_gift_history_lookup(text: str) -> bool:
+    value = str(text or "")
+    return _contains_any(value, ["礼物", "送", "买", "女朋友", "男朋友", "老公", "老婆", "妈妈", "爸爸"]) and _contains_any(
+        value,
+        [
+            "最近送",
+            "最近买",
+            "已经送过",
+            "已经买过",
+            "送过什么",
+            "买过什么",
+            "送过哪些",
+            "买过哪些",
+            "送了哪些",
+            "买了哪些",
+            "礼物有哪些",
+            "什么礼物",
+            "已选礼物",
+            "选过哪些",
+        ],
+    )
 
 
 def _gift_selection_phrase(text: str) -> str:

@@ -351,6 +351,23 @@ class MemoryAdvantagesTest(unittest.TestCase):
         next_session = new_session.retrieve_relevant_memories("继续安排杭州亲子行程。")
         self.assertFalse(any("父亲不去" in item.content for item in next_session))
 
+    def test_travel_current_task_context_fact_is_saved_and_visible(self):
+        self.skill.process_message(
+            "以后家庭出行请记住：父亲膝盖不好，步行要少；孩子喜欢自然和动物；我不喜欢人挤人的网红点。"
+        )
+
+        response = self.skill.process_message(
+            "这次父亲不去，只有我和孩子",
+            context="user: 帮我安排杭州3天亲子旅行。\nassistant: 杭州3天亲子行程。",
+        )
+        shown = self.skill.show_memory()
+
+        self.assertTrue(any(action["action"] == "add" and "这次父亲不去，只有我和孩子" in action["detail"] for action in response.memory_actions))
+        self.assertIn("这次父亲不去，只有我和孩子", shown.text)
+        current_task = [item for item in self.skill.memory.active() if item.content == "这次父亲不去，只有我和孩子"]
+        self.assertEqual(1, len(current_task))
+        self.assertEqual("current_task", current_task[0].validity.get("time_scope"))
+
     def test_expired_gift_budget_current_task_is_confirm_first_not_apply_now(self):
         self.skill.process_message("预算1000元左右", context="user: 帮我给女朋友选个生日礼物。")
 
@@ -593,6 +610,34 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertEqual("decision", active[0].type)
         self.assertEqual("selected", active[0].predicate)
 
+    def test_contextual_confirmed_gift_updates_specific_selected_item(self):
+        self.skill.process_message(
+            "紫色丝巾/披肩 — 质感好的桑蚕丝款",
+            context="user: 帮我给女朋友选个生日礼物。\nassistant: 推荐几个非首饰方向：紫色丝巾/披肩 — 质感好的桑蚕丝款。",
+        )
+        context = "\n".join(
+            [
+                "user: 紫色丝巾/披肩 — 质感好的桑蚕丝款",
+                "assistant: 已选礼物：紫色桑蚕丝丝巾/披肩，1000预算能拿不错的品牌。",
+                "user: 野兽派：设计感强，包装精致，直接送礼省心",
+                "assistant: 好，锁定野兽派。野兽派丝巾礼盒，材质选100%桑蚕丝，紫色选偏深或灰调。",
+                "user: 下次要记住我具体选择的是哪个礼物，具体到礼物本身，不是方向",
+                "assistant: 明白，以后记录到具体商品名称，不只记品类。这次已确认的礼物是野兽派丝巾礼盒，材质选100%桑蚕丝。",
+            ]
+        )
+
+        response = self.skill.process_message("把本次确认的礼物也加入记忆", context=context)
+
+        add_details = [action.get("detail", "") for action in response.memory_actions if action.get("action") == "add"]
+        self.assertIn("本次给女朋友的礼物已选定为野兽派丝巾礼盒", add_details)
+        active_decisions = [
+            item.content
+            for item in self.skill.memory.active()
+            if item.type == DECISION and item.predicate == "selected"
+        ]
+        self.assertIn("本次给女朋友的礼物已选定为野兽派丝巾礼盒", active_decisions)
+        self.assertFalse(any("紫色丝巾/披肩" in content for content in active_decisions))
+
     def test_gift_deictic_selection_records_actual_recommended_gift(self):
         response = self.skill.process_message(
             "就这个吧",
@@ -602,6 +647,28 @@ class MemoryAdvantagesTest(unittest.TestCase):
         add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
         self.assertIn("本次给女朋友的礼物已选定为小型复古蓝牙音箱", add_details)
         self.assertNotIn("本次给女朋友的礼物已选定为这个", add_details)
+
+    def test_gift_lookup_instruction_is_not_recorded_as_selected_gift(self):
+        response = self.skill.process_message(
+            "找时间最近的一次，直接回答我",
+            context="user: 她喜欢周杰伦，帮我找最近一次的演唱会。\nassistant: 推荐演唱会 / 音乐会门票。",
+        )
+
+        add_details = [action.get("detail", "") for action in response.memory_actions if action.get("action") == "add"]
+        self.assertFalse(any("已选定为找时间最近的一次" in detail for detail in add_details))
+        self.assertFalse(any(item.type == DECISION and "直接回答我" in item.content for item in self.skill.memory.active()))
+
+    def test_gift_concert_lookup_instruction_becomes_workflow_memory(self):
+        response = self.skill.process_message(
+            "她喜欢周杰伦，帮我找最近一次的演唱会。以后当我定好歌手和演唱会，你就找时间最近的一次，直接回答我",
+            context="user: 给我找周杰伦的演唱会，我和她一起去看",
+        )
+
+        workflows = [item for item in self.skill.memory.active() if item.type == WORKFLOW]
+        self.assertTrue(workflows)
+        self.assertEqual("gift_planning", workflows[0].scope)
+        self.assertIn("找时间最近的一次，直接回答我", workflows[0].content)
+        self.assertFalse(any(item.type == DECISION and "直接回答我" in item.content for item in self.skill.memory.active()))
 
     def test_retrieval_filters_cross_scope_memories(self):
         self.skill.process_message("以后学习计划请先看例题再讲知识点。")
