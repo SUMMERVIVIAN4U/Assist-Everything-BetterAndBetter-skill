@@ -238,6 +238,11 @@ Suggested Workbench check:
 4. Open `History Evals`.
 5. Compare cognitive load, memory saving points, and quality dimensions across sessions.
 
+For reproducible validation scripts and manual test conversations, use
+[TEST_SAMPLES.md](TEST_SAMPLES.md). It contains the current Workbench preset
+scenarios in UI order, plus additional gift-selection and workflow-learning
+cases that can be replayed in both Workbench and Direct Skill.
+
 ## Use Direct Skill
 
 The Direct Skill installation entry is:
@@ -273,6 +278,11 @@ Continue naturally in the same conversation:
 ```
 
 To start a new session while keeping long-term memory, use two user turns: first ask to reset the current session, wait for the agent to confirm, then send the next task.
+
+The same validation conversations used in Workbench can also be replayed after
+triggering the installed skill. See [TEST_SAMPLES.md](TEST_SAMPLES.md) for the
+exact turns and expected memory behavior, including cross-session gift recall
+and learned workflow handling for short follow-up queries such as "销售渠道".
 
 ### Direct Skill Step Flow
 
@@ -320,6 +330,15 @@ python3 scripts/verify_eval.py
 These scripts are helper tools, not the main Workbench or Direct Skill entry point.
 
 ## What To Verify
+
+Start with [TEST_SAMPLES.md](TEST_SAMPLES.md) when validating a fresh clone.
+It is the source-of-truth checklist for manual replay:
+
+- the four Workbench preset scenarios, in the same order as the UI
+- the three-round girlfriend gift scenario for add/update/delete memory behavior
+- cross-session recall of selected gifts
+- workflow self-learning after user correction
+- equivalent Direct Skill runtime checks
 
 Workbench path:
 

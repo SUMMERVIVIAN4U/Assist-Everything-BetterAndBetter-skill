@@ -1,4 +1,4 @@
-# 参赛验证测试样例
+# 测试样例与复现步骤
 
 本文档整理当前分支已经确认可跑通的验证样例，覆盖 Workbench 和 Agent Skill 两条路径。
 
@@ -364,4 +364,3 @@ python3 -m assist_everything_betterandbetter_skill.cli memory-pack \
 - `memory-write` 能保存 `decision/selected`：`本次给女朋友的礼物已选定为拍立得相机配相册`。
 - `memory-write` 能保存 `workflow`：选定礼物后，短问销售渠道时直接给渠道和下单建议，不再重新推荐。
 - `memory-pack "销售渠道"` 能同时召回 selected gift 和 workflow 规则。
-
