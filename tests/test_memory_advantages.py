@@ -610,6 +610,92 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertEqual("decision", active[0].type)
         self.assertEqual("selected", active[0].predicate)
 
+    def test_gift_explicit_current_selected_gift_is_not_blocked_as_temporary_instruction(self):
+        response = self.skill.process_message(
+            "本次给女朋友的礼物已选定为 Jo Malone London 祖玛珑英国梨与小苍兰 30ml 古龙水礼盒",
+            context="user: 帮我给女朋友选个生日礼物。",
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("本次给女朋友的礼物已选定为Jo Malone London 祖玛珑英国梨与小苍兰 30ml 古龙水礼盒", add_details)
+        self.assertFalse(any(action["action"] == "reject" and action.get("reason") == "temporary_instruction" for action in response.memory_actions))
+
+    def test_gift_oral_choice_records_selected_fragrance(self):
+        response = self.skill.process_message(
+            "好的我选择祖马龙这个香水",
+            context=(
+                "user: 删除女朋友喜欢紫色后再推荐一个不是首饰类的\n"
+                "assistant: 推荐：Jo Malone London 祖玛珑 英国梨与小苍兰 30ml 古龙水礼盒。"
+            ),
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertTrue(any("祖马龙这个香水" in detail or "祖玛珑" in detail for detail in add_details))
+        self.assertFalse(any("好的我选择" in detail for detail in add_details))
+        self.assertTrue(any(item.type == DECISION and item.predicate == "selected" for item in self.skill.memory.active()))
+
+    def test_gift_i_choose_candidate_records_selected_gift(self):
+        response = self.skill.process_message(
+            "我选索尼 WH-CH720N 无线降噪耳机",
+            context=(
+                "user: 删除 她喜欢紫色。然后：再给一个不重复的礼物方向。\n"
+                "assistant: 1. 索尼 WH-CH720N 无线降噪耳机 —— 续航长、佩戴轻，通勤或者在家听歌追剧都用得上，参考价 700-900 元。"
+            ),
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("本次给收礼人的礼物已选定为索尼 WH-CH720N 无线降噪耳机", add_details)
+        self.assertTrue(any("索尼 WH-CH720N 无线降噪耳机" in item.content for item in self.skill.memory.active()))
+
+    def test_gift_numbered_candidate_selection_records_selected_gift(self):
+        context = (
+            "user: 删除 她喜欢紫色。然后：再给一个不重复的礼物方向。\n"
+            "assistant: 1. 索尼 WH-CH720N 无线降噪耳机 —— 续航长、佩戴轻，参考价 700-900 元。\n"
+            "2. 乐高花卉系列花束套装（10280）—— 拼完当桌面装饰。\n"
+            "3. Fujifilm instax mini Link 2 手机照片打印机 + 两包相纸 —— 随拍随打。"
+        )
+
+        response = self.skill.process_message("第一款", context=context)
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("本次给收礼人的礼物已选定为索尼 WH-CH720N 无线降噪耳机", add_details)
+
+    def test_gift_partial_candidate_selection_records_selected_gift(self):
+        context = (
+            "user: 删除 她喜欢紫色。然后：再给一个不重复的礼物方向。\n"
+            "assistant: 1. 索尼 WH-CH720N 无线降噪耳机 —— 续航长、佩戴轻，参考价 700-900 元。"
+        )
+
+        response = self.skill.process_message("就那个 WH-CH720N", context=context)
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("本次给收礼人的礼物已选定为索尼 WH-CH720N 无线降噪耳机", add_details)
+
+    def test_gift_numbered_selection_uses_latest_assistant_candidates(self):
+        context = (
+            "user: 帮我给女朋友选个生日礼物。\n"
+            "assistant: 1. 首饰\n2. 包包\n"
+            "user: 删除 她喜欢紫色。然后：再给一个不重复的礼物方向。\n"
+            "assistant: 1. 轻奢包包 —— 1000元可以选小众质感款。\n"
+            "2. 功效型护肤礼盒 —— 选她用惯的品牌。\n"
+            "3. 体验类 —— 餐厅约会或 spa 套餐。"
+        )
+
+        response = self.skill.process_message("第一款", context=context)
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertIn("本次给女朋友的礼物已选定为轻奢包包", add_details)
+        self.assertFalse(any(detail.endswith("首饰") for detail in add_details))
+
+    def test_generic_gift_category_is_not_saved_as_selected_gift(self):
+        response = self.skill.process_message(
+            "第一款",
+            context="user: 帮我给女朋友选个生日礼物。\nassistant: 1. 首饰\n2. 包包\n3. 体验类",
+        )
+
+        add_details = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+        self.assertFalse(any("已选定为首饰" in detail for detail in add_details))
+
     def test_contextual_confirmed_gift_updates_specific_selected_item(self):
         self.skill.process_message(
             "紫色丝巾/披肩 — 质感好的桑蚕丝款",

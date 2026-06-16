@@ -19,6 +19,47 @@ class MemoryRetrievalRankingTest(unittest.TestCase):
             self.assertEqual("deleted", skill.memory.get(budget.id, include_inactive=True).status)
             self.assertEqual("active", skill.memory.get(decision.id).status)
 
+    def test_delete_color_preference_does_not_delete_selected_gift_or_constraints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(memory_dir=tmp, persist=True)
+            purple = skill.memory.add(
+                MemoryItem(
+                    "preference",
+                    "女朋友的礼物颜色偏好：喜欢紫色",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="likes",
+                    tags=["紫色"],
+                )
+            )
+            selected = skill.memory.add(
+                MemoryItem(
+                    "decision",
+                    "本次给女朋友的礼物已选定为潘多拉玫瑰金紫水晶耳钉/手链",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="selected",
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+            budget = skill.memory.add(
+                MemoryItem(
+                    "constraint",
+                    "给女朋友选礼物预算在 1000 元左右",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="budget_limit",
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+
+            response = skill.process_message("删除 女朋友喜欢紫色")
+
+            self.assertEqual([purple.id], [action["memory_id"] for action in response.memory_actions if action["action"] == "delete"])
+            self.assertEqual("deleted", skill.memory.get(purple.id, include_inactive=True).status)
+            self.assertEqual("active", skill.memory.get(selected.id).status)
+            self.assertEqual("active", skill.memory.get(budget.id).status)
+
     def test_local_retrieval_ranks_by_score_then_time(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill = AssistSkill(memory_dir=tmp, persist=True)
@@ -129,6 +170,46 @@ class MemoryRetrievalRankingTest(unittest.TestCase):
             self.assertTrue(any("演唱会 / 音乐会门票" in content for content in contents))
             self.assertTrue(any("Diptyque香氛蜡烛礼盒" in content for content in contents))
             self.assertFalse(any("直接回答我" in content for content in contents))
+
+    def test_short_previous_gift_lookup_includes_selected_decisions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = AssistSkill(memory_dir=tmp, persist=True)
+            first.memory.add(
+                MemoryItem(
+                    "decision",
+                    "本次给女朋友的礼物已选定为Jo Malone London 祖玛珑英国梨与小苍兰 30ml 古龙水礼盒",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="selected",
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+
+            next_session = AssistSkill(memory_dir=tmp, persist=True)
+            results = next_session.retrieve_relevant_memories("以前送过什么?")
+
+            contents = [item.content for item in results]
+            self.assertTrue(any("祖玛珑" in content for content in contents))
+
+    def test_previous_selected_gift_lookup_with_pronoun_includes_decisions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = AssistSkill(memory_dir=tmp, persist=True)
+            first.memory.add(
+                MemoryItem(
+                    "decision",
+                    "本次给女朋友的礼物已选定为索尼 WH-CH720N 无线降噪耳机",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="selected",
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+
+            next_session = AssistSkill(memory_dir=tmp, persist=True)
+            results = next_session.retrieve_relevant_memories("我之前给她选过什么？")
+
+            contents = [item.content for item in results]
+            self.assertTrue(any("索尼 WH-CH720N 无线降噪耳机" in content for content in contents))
 
     def test_llm_retrieval_intent_can_expand_natural_gift_history_lookup(self):
         calls = []

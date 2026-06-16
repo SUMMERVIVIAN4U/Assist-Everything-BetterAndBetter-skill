@@ -590,6 +590,8 @@ class AssistSkill:
         for item in self.extract_memory_candidates(text, context):
             self._fill_selected_refinement_target(item)
             self._prepare_memory_item(item)
+            if _should_skip_memory_candidate(item):
+                continue
             confidence, confidence_reason = _confidence_for_memory(text, item)
             item.confidence = confidence
             if confidence < 0.5:
@@ -708,6 +710,8 @@ class AssistSkill:
         for item in self.extract_memory_candidates(text, context):
             self._fill_selected_refinement_target(item, active_items=remote_active)
             self._prepare_memory_item(item)
+            if _should_skip_memory_candidate(item):
+                continue
             confidence, confidence_reason = _confidence_for_memory(text, item)
             item.confidence = confidence
             if confidence < 0.5:
@@ -837,7 +841,10 @@ class AssistSkill:
     def _delete_matching_memories(self, query: str) -> tuple[list[MemoryItem], list[dict[str, Any]]]:
         if self.memory_backend == "mem0_hosted":
             return self._delete_remote_memories(self.mem0_client, "mem0_hosted", query)
-        deleted = self.memory.delete(query)
+        matches = _match_memory_items(query, [item for item in self.memory.items if item.status != DELETED])
+        deleted: list[MemoryItem] = []
+        for item in matches:
+            deleted.extend(self.memory.delete(item.id))
         actions = self.memory.events[-len(deleted) :] if deleted else []
         return deleted, actions
 
@@ -1345,6 +1352,12 @@ def _memory_block_reason(text: str, private_markers: list[str] | tuple[str, ...]
 
 
 def _is_current_task_memory_signal(text: str) -> bool:
+    if any(marker in text for marker in ["礼物已选定", "已选定为", "已选礼物", "确认的礼物", "本次给"]) and any(
+        marker in text for marker in ["礼物", "选定", "选择", "确认"]
+    ):
+        return True
+    if any(marker in text for marker in ["我选择", "我选", "锁定", "就选", "就定"]) and _infer_scope(text, "") == "gift_planning":
+        return True
     return any(
         marker in text
         for marker in [
@@ -1437,6 +1450,10 @@ def _confidence_for_memory(text: str, item: MemoryItem) -> tuple[float, str]:
         reasons.append("temporary_marker")
     score = max(0.0, min(1.0, score))
     return round(score, 2), ", ".join(reasons) if reasons else "weak_signal"
+
+
+def _should_skip_memory_candidate(item: MemoryItem) -> bool:
+    return item.scope == "gift_planning" and item.type == DECISION and item.predicate == "selected" and _is_generic_gift_category_decision(item.content)
 
 
 def _retention_reason(item: dict[str, Any]) -> str:
@@ -1572,27 +1589,34 @@ def _is_generic_continuation_request(text: str) -> bool:
 
 def _is_gift_history_lookup(text: str) -> bool:
     value = str(text or "")
-    if not _is_gift_planning_context(value, ""):
+    markers = [
+        "最近送",
+        "最近买",
+        "以前送",
+        "以前买",
+        "之前送",
+        "之前买",
+        "已经送过",
+        "已经买过",
+        "送过什么",
+        "买过什么",
+        "送过哪些",
+        "买过哪些",
+        "送了哪些",
+        "买了哪些",
+        "礼物有哪些",
+        "什么礼物",
+        "已选礼物",
+        "选过什么",
+        "选过哪些",
+        "给她选过什么",
+        "给他选过什么",
+    ]
+    if not _contains_any(value, markers):
         return False
-    return _contains_any(
-        value,
-        [
-            "最近送",
-            "最近买",
-            "已经送过",
-            "已经买过",
-            "送过什么",
-            "买过什么",
-            "送过哪些",
-            "买过哪些",
-            "送了哪些",
-            "买了哪些",
-            "礼物有哪些",
-            "什么礼物",
-            "已选礼物",
-            "选过哪些",
-        ],
-    )
+    if _is_gift_planning_context(value, ""):
+        return True
+    return _contains_any(value, ["送过什么", "买过什么", "选过什么", "以前送", "以前买", "之前送", "之前买", "已经送过", "已经买过"])
 
 
 def _memory_scope_matches(item: MemoryItem, scope: str) -> bool:
@@ -1782,6 +1806,10 @@ def _is_plain_task_request(text: str) -> bool:
             "改成",
             "保留",
             "不适用",
+            "我选",
+            "我选择",
+            "选择了",
+            "锁定",
             "选定",
             "选了",
             "定了",
@@ -1838,6 +1866,10 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
         "可复现",
         "不要夸大",
         "预算",
+        "我选",
+        "我选择",
+        "选择了",
+        "锁定",
         "选定",
         "选了",
         "选过",
@@ -1858,6 +1890,8 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
     if any(signal in text for signal in signals):
         return True
     if _has_contextual_task_fact(text, context):
+        return True
+    if _infer_scope(text, context) == "gift_planning" and _extract_gift_candidate_selection_from_context(text, context):
         return True
     if _infer_scope(text, context) == "gift_planning" and _looks_like_gift_candidate_reference(text, context):
         return True
@@ -1892,7 +1926,7 @@ def _semantic_extraction_gate(text: str, context: str, scope: str) -> bool:
     if scope == "gift_planning":
         if _looks_like_gift_candidate_reference(stripped, context):
             return True
-        return bool(re.search(r"^(?:就)?(?:选|买|送|定|下单|换)(?!礼物|一个|个)(.{1,30})$", stripped)) or stripped in {
+        return bool(re.search(r"^(?:我)?(?:就)?(?:选|选择|买|送|定|下单|换)(?!礼物|一个|个)(.{1,40})$", stripped)) or stripped in {
             "就这个",
             "就它",
             "这个可以",
@@ -1927,6 +1961,8 @@ def _prepare_semantic_candidate(item: MemoryItem, text: str, scope: str) -> Memo
     ):
         return None
     if item.scope == "gift_planning" and item.type == DECISION and "预算" in item.content and _extract_budget(item.content):
+        return None
+    if item.scope == "gift_planning" and item.type == DECISION and item.predicate == "selected" and _is_generic_gift_category_decision(item.content):
         return None
     if not item.evidence:
         item.evidence = [text]
@@ -2011,7 +2047,10 @@ def _looks_like_gift_candidate_reference(text: str, context: str = "") -> bool:
         return False
     if not _contains_any(context, ["assistant:", "推荐", "方案", "首选", "备选", "选项"]):
         return False
-    return stripped in context or _contains_any(stripped, ["潘多拉", "Pandora", "万事利", "Wensli", "拍立得", "方巾", "手链", "耳钉", "音箱", "包"])
+    return stripped in context or _contains_any(
+        stripped,
+        ["潘多拉", "Pandora", "万事利", "Wensli", "拍立得", "方巾", "手链", "耳钉", "音箱", "包", "祖玛珑", "祖马龙", "Jo Malone", "香水", "香氛", "古龙水"],
+    )
 
 
 def _is_gift_task_request_text(text: str) -> bool:
@@ -2303,6 +2342,21 @@ def _gift_memory_candidates(text: str, context: str = "") -> list[MemoryItem]:
             )
         )
 
+    ledger_decision = _extract_gift_candidate_selection_from_context(text, context)
+    if ledger_decision:
+        candidates.append(
+            _memory_item(
+                DECISION,
+                f"本次给{target or '收礼人'}的礼物已选定为{ledger_decision}",
+                scope,
+                text,
+                target,
+                "selected",
+                _keywords(ledger_decision),
+                {"time_scope": "current_task"},
+            )
+        )
+
     candidate_reference = _extract_gift_candidate_reference_decision(text, context)
     if candidate_reference:
         candidates.append(
@@ -2437,6 +2491,7 @@ def _dedupe_memory_candidates(candidates: list[MemoryItem]) -> list[MemoryItem]:
 
 def _match_memory_items(query: str, items: list[MemoryItem]) -> list[MemoryItem]:
     q = _normalize_query(query)
+    anchors = _delete_query_anchors(query)
     output: list[MemoryItem] = []
     for item in items:
         haystack = _normalize_query(
@@ -2454,17 +2509,58 @@ def _match_memory_items(query: str, items: list[MemoryItem]) -> list[MemoryItem]
                 ]
             )
         )
-        if any(term in q for term in ["紫色", "动物", "可复现性"]) and not any(
-            term in haystack for term in ["紫色", "动物", "可复现性"] if term in q
-        ):
+        if not q:
             continue
-        parts = [part for part in q.split() if len(part) >= 2]
-        compact_hit = q and q in haystack
-        token_hit = parts and any(part in haystack for part in parts)
-        char_hit = q and len(q) >= 4 and any(q[i : i + 4] in haystack for i in range(max(1, len(q) - 3)))
-        if not q or compact_hit or token_hit or char_hit:
+        if item.id and item.id in q:
+            output.append(item)
+            continue
+        compact_hit = q in haystack
+        content_hit = _normalize_query(item.content) and _normalize_query(item.content) in q
+        anchor_hit = anchors and any(anchor in haystack for anchor in anchors)
+        if compact_hit or content_hit or anchor_hit:
             output.append(item)
     return output
+
+
+def _delete_query_anchors(query: str) -> list[str]:
+    cleaned = str(query or "")
+    for token in [
+        "删除",
+        "忘掉",
+        "这条记忆",
+        "这条",
+        "记忆",
+        "当前",
+        "本次",
+        "这次",
+        "给女朋友",
+        "给男朋友",
+        "给老公",
+        "给老婆",
+        "给收礼人",
+        "女朋友",
+        "男朋友",
+        "收礼人",
+        "礼物",
+        "已选定为",
+        "已选定",
+        "选定为",
+        "选定",
+        "约束",
+        "偏好",
+        "喜欢",
+        "她",
+        "他",
+    ]:
+        cleaned = cleaned.replace(token, " ")
+    terms = set(_keywords(query))
+    for part in re.split(r"[\s/、，,。；;：:（）()\\[\\]【】\"']+", cleaned):
+        part = part.strip()
+        if len(part) >= 2:
+            terms.add(part)
+    generic = {"预算", "首饰", "品类", "不要", "不再", "以前", "送过", "买过", "方向"}
+    normalized = [_normalize_query(term) for term in terms if term and term not in generic]
+    return [term for term in normalized if len(term) >= 2]
 
 
 def _filter_deleted_memory_matches(items: list[MemoryItem], deleted: list[MemoryItem]) -> list[MemoryItem]:
@@ -2540,12 +2636,18 @@ def _extract_previous_gifts(text: str) -> str:
 
 
 def _extract_gift_decision(text: str, context: str = "") -> str:
+    if _is_gift_task_request_text(text):
+        return ""
     if _is_gift_selection_teaching(text) and not _contains_any(text, ["已经选中", "已选中", "已经选定", "已选定", "选中了"]):
         return ""
     patterns = [
         r"(?:我)?(?:已经|已)?选中(?:了)?(.+?)(?:，|,|。|；|$)",
         r"(?:已经|刚刚|刚才)?(?:买了|下单了|入手了)(.+?)(?:。|；|$)",
         r"(?:礼物)?(?:选定|定了|决定买|确认送)(?:为|了)?(.+?)(?:。|；|$)",
+        r"(?:好的|好|行|可以)?(?:我)?选择(?:了)?(.+?)(?:，|,|。|；|$)",
+        r"(?:好的|好|行|可以)?我选(?:了)?(.+?)(?:，|,|。|；|$)",
+        r"(?:好的|好|行|可以)?选了(.+?)(?:，|,|。|；|$)",
+        r"(?:好的|好|行|可以)?锁定(?:了)?(.+?)(?:，|,|。|；|$)",
         r"就(.+?)(?:吧|了|。|；|$)",
     ]
     for pattern in patterns:
@@ -2554,7 +2656,7 @@ def _extract_gift_decision(text: str, context: str = "") -> str:
             decision = _clean_gift_fragment(match.group(1))
             if _is_deictic_gift_decision(decision):
                 decision = _extract_last_gift_recommendation(context)
-            if decision and "推荐" not in decision and not _is_gift_metatalk(decision):
+            if decision and "推荐" not in decision and not _is_gift_metatalk(decision) and not _is_gift_task_request_text(decision):
                 return decision
     return ""
 
@@ -2609,8 +2711,113 @@ def _clean_contextual_gift_decision(text: str) -> str:
     return cleaned
 
 
+def _extract_gift_candidate_selection_from_context(text: str, context: str = "") -> str:
+    candidates = _extract_numbered_gift_candidates(context)
+    if not candidates:
+        return ""
+    stripped = text.strip(" 。！？!?，,")
+    index = _selected_candidate_index(stripped)
+    if index is not None and 0 <= index < len(candidates):
+        return candidates[index]
+    cleaned = _normalize_candidate_selection_text(stripped)
+    if len(cleaned) < 2:
+        return ""
+    cleaned_norm = _normalize_query(cleaned)
+    for candidate in candidates:
+        candidate_norm = _normalize_query(candidate)
+        if cleaned_norm and (cleaned_norm in candidate_norm or candidate_norm in cleaned_norm):
+            return candidate
+        meaningful_parts = [part for part in re.split(r"\\s+", cleaned_norm) if len(part) >= 3]
+        if meaningful_parts and any(part in candidate_norm for part in meaningful_parts):
+            return candidate
+    return ""
+
+
+def _extract_numbered_gift_candidates(context: str) -> list[str]:
+    candidates: list[str] = []
+    for line in _latest_assistant_block(context).splitlines():
+        content = re.sub(r"^assistant:\s*", "", line.strip())
+        match = re.match(r"^(?:[-*]\s*)?(?:([1-9]\d*)|([一二三四五六七八九十]+))[.、)]\s*(.+)$", content)
+        if not match:
+            match = re.match(r"^方案([一二三四五六七八九十]+)[:：]\s*(.+)$", content)
+            if not match:
+                continue
+            raw = match.group(2)
+        else:
+            raw = match.group(3)
+        candidate = _clean_candidate_from_list_item(raw)
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
+
+
+def _latest_assistant_block(context: str) -> str:
+    latest: list[str] = []
+    current: list[str] = []
+    in_assistant = False
+    for raw_line in context.splitlines():
+        line = raw_line.rstrip()
+        if line.startswith("user:"):
+            if current:
+                latest = current
+            current = []
+            in_assistant = False
+            continue
+        if line.startswith("assistant:"):
+            if current:
+                latest = current
+            current = [line]
+            in_assistant = True
+            continue
+        if in_assistant:
+            current.append(line)
+    if current:
+        latest = current
+    return "\n".join(latest)
+
+
+def _clean_candidate_from_list_item(text: str) -> str:
+    cleaned = text.strip(" \t-—：:，,。")
+    cleaned = re.split(r"\s+[—–-]\s+|——|：|:", cleaned, maxsplit=1)[0].strip()
+    cleaned = re.sub(r"（参考价.*$", "", cleaned).strip()
+    cleaned = re.sub(r"\(参考价.*$", "", cleaned).strip()
+    if len(cleaned) > 80:
+        cleaned = cleaned[:80].strip()
+    return _clean_gift_fragment(cleaned)
+
+
+def _selected_candidate_index(text: str) -> int | None:
+    normalized = text.strip().lower()
+    if normalized in {"1", "一", "第1个", "第一个", "第一款", "第一项", "1号", "一号", "选第一个", "选第一款", "就第一个", "就第一款"}:
+        return 0
+    if normalized in {"2", "二", "第2个", "第二个", "第二款", "第二项", "2号", "二号", "选第二个", "选第二款", "就第二个", "就第二款"}:
+        return 1
+    if normalized in {"3", "三", "第3个", "第三个", "第三款", "第三项", "3号", "三号", "选第三个", "选第三款", "就第三个", "就第三款"}:
+        return 2
+    match = re.search(r"(?:第|选第|就第)([一二三123])(?:个|款|项)?", normalized)
+    if match:
+        return {"一": 0, "1": 0, "二": 1, "2": 1, "三": 2, "3": 2}.get(match.group(1))
+    return None
+
+
+def _normalize_candidate_selection_text(text: str) -> str:
+    cleaned = text.strip(" 。！？!?，,")
+    cleaned = re.sub(r"^(?:好的|好|行|可以|那)?(?:我)?(?:就)?(?:选|选择|定|锁定|要|买|送)(?:了)?", "", cleaned).strip()
+    cleaned = re.sub(r"^(?:就)?(?:这个|那个|这款|那款)", "", cleaned).strip()
+    cleaned = re.sub(r"(?:这个|这个礼物|这个方向|这款|那款)$", "", cleaned).strip()
+    return cleaned.strip(" ：:，,。")
+
+
+def _is_generic_gift_category_decision(content: str) -> bool:
+    value = str(content or "")
+    value = re.sub(r"^本次给.*?的礼物已选定为", "", value).strip(" ：:，,。")
+    return value in {"首饰", "首饰类", "首饰方向", "非首饰", "非首饰类", "非首饰品类", "包包", "护肤", "彩妆", "体验类", "香氛", "配饰"}
+
+
 def _extract_gift_candidate_reference_decision(text: str, context: str = "") -> str:
     if re.match(r"^(?:就)?(?:选|买|送|定|下单|换)", text.strip()):
+        return ""
+    if _contains_any(text, ["我选择", "我选", "选择了", "选了", "锁定", "已经选中", "已选中", "已经选定", "已选定"]):
         return ""
     if not _looks_like_gift_candidate_reference(text, context):
         return ""
