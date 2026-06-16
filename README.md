@@ -44,16 +44,16 @@ scripts/
 
 ```mermaid
 flowchart LR
-  User[User] --> Host[Host Agent]
-  Host --> Skill[skill/SKILL.md]
-  Skill --> Runtime[Shared Python Runtime]
-  Runtime --> Memory[Memory Core]
-  Memory --> Local[(Local JSON)]
-  Memory --> Mem0[(Mem0 Hosted)]
+  User["User"] --> Host["Host Agent"]
+  Host --> Skill["Skill entry"]
+  Skill --> Runtime["Shared Python runtime"]
+  Runtime --> Memory["Memory core"]
+  Memory --> Local[("Local JSON")]
+  Memory --> Mem0[("Mem0 Hosted")]
 
-  User --> Workbench[Workbench UI]
+  User --> Workbench["Workbench UI"]
   Workbench --> Runtime
-  Runtime --> Eval[Evaluation]
+  Runtime --> Eval["Evaluation"]
 ```
 
 The diagram is intentionally simple:
@@ -182,19 +182,19 @@ Validity layers:
 
 ```mermaid
 flowchart TD
-  U[User message] --> S[Scope and intent detection]
-  S --> R[Rule extraction]
-  S --> L[LLM semantic extraction]
-  R --> V[Validate and classify memory]
+  U["User message"] --> S["Scope and intent detection"]
+  S --> R["Rule extraction"]
+  S --> L["LLM semantic extraction"]
+  R --> V["Validate and classify memory"]
   L --> V
-  V --> D[Deduplicate and resolve conflicts]
-  D --> W[Write active / superseded / archived / deleted memory]
+  V --> D["Deduplicate and resolve conflicts"]
+  D --> W["Write memory state"]
 
-  Q[New task query] --> F[Filter by status, scope, target, privacy]
-  F --> K[Rank by confidence, layer, entity hits, recency]
-  K --> A[apply_now]
-  K --> C[confirm_first]
-  A --> Ans[Answer with reused memory]
+  Q["New task query"] --> F["Filter by status and scope"]
+  F --> K["Rank by confidence and recency"]
+  K --> A["apply_now"]
+  K --> C["confirm_first"]
+  A --> Ans["Answer with reused memory"]
   C --> Ans
 ```
 
@@ -288,19 +288,19 @@ and learned workflow handling for short follow-up queries such as "销售渠道"
 
 ```mermaid
 flowchart TD
-  A[User triggers skill] --> B[Agent checks config]
-  B --> C[Show memory authorization notice]
-  C --> D{User allows memory?}
-  D -- no --> E[Exit skill flow]
-  D -- yes --> F[Call memory-pack]
-  F --> G[Host agent answers]
-  G --> H{Reusable info or correction?}
-  H -- yes --> I[Call memory-write]
-  H -- no --> J[Continue conversation]
+  A["User triggers skill"] --> B["Agent checks config"]
+  B --> C["Show memory authorization notice"]
+  C --> D{"User allows memory"}
+  D -->|No| E["Exit skill flow"]
+  D -->|Yes| F["Call memory pack"]
+  F --> G["Host agent answers"]
+  G --> H{"Reusable info or correction"}
+  H -->|Yes| I["Call memory write"]
+  H -->|No| J["Continue conversation"]
   I --> J
-  J --> K{Memory command?}
-  K -- yes --> L[Call memory-manage]
-  K -- no --> F
+  J --> K{"Memory command"}
+  K -->|Yes| L["Call memory manage"]
+  K -->|No| F
 ```
 
 ## Eval
