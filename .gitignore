@@ -1,9 +1,16 @@
 .DS_Store
 __pycache__/
 *.pyc
+*.egg-info/
 .venv/
 .superpowers/
 eval/output/verify_run_*/
+eval/output/history/agent_chat_session-*.json
+agent_chat_*_demo.html
+history_evals_*_demo.html
+history_evals_round_paged_*.html
+workbench_history_evals_*_demo.html
+docs/*宣传视频脚本与素材清单.docx
 .env
 .env.local
 1.env

@@ -278,10 +278,10 @@ class LLMJudge:
 
 
 class MimoJudge(LLMJudge):
-    """Backward-compatible Mimo judge wrapper."""
+    """Backward-compatible MiniMax judge wrapper."""
 
     def __init__(self, client: OpenAICompatibleClient | None = None) -> None:
-        super().__init__("mimo", client=client)
+        super().__init__("minimax", client=client)
 
 
 def build_judge(mode: str = "auto") -> HeuristicJudge | ExternalCommandJudge | LLMJudge:
@@ -309,5 +309,10 @@ def score_with_fallback(case_run: dict[str, Any], mode: str = "heuristic", *, al
 
 
 def _judge_llm_client(provider: str) -> OpenAICompatibleClient:
-    timeout = float(os.getenv("EVALHARNESS_JUDGE_TIMEOUT", os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120")))
+    timeout = float(
+        os.getenv(
+            "EVALHARNESS_JUDGE_TIMEOUT",
+            os.getenv("EVALHARNESS_MINIMAX_TIMEOUT", os.getenv("EVALHARNESS_MIMO_TIMEOUT", "120")),
+        )
+    )
     return llm_client_from_env(provider, timeout=timeout)

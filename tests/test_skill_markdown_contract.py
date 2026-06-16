@@ -5,6 +5,8 @@ from pathlib import Path
 class SkillMarkdownContractTest(unittest.TestCase):
     def setUp(self):
         self.text = Path("skill/SKILL.md").read_text(encoding="utf-8")
+        docs = sorted(Path("skill/docs").glob("*.md"))
+        self.package_text = self.text + "\n" + "\n".join(path.read_text(encoding="utf-8") for path in docs)
 
     def test_workbench_features_are_documented_in_skill(self):
         required = [
@@ -23,7 +25,7 @@ class SkillMarkdownContractTest(unittest.TestCase):
         ]
         for token in required:
             with self.subTest(token=token):
-                self.assertIn(token, self.text)
+                self.assertIn(token, self.package_text)
 
     def test_workbench_memory_backend_options_use_clear_chinese_labels(self):
         html = Path("evalharness/static/workbench.html").read_text(encoding="utf-8")
@@ -80,7 +82,7 @@ class SkillMarkdownContractTest(unittest.TestCase):
         ]
         for token in required:
             with self.subTest(token=token):
-                self.assertIn(token, self.text)
+                self.assertIn(token, self.package_text)
 
 
 if __name__ == "__main__":

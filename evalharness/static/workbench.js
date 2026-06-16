@@ -3,6 +3,8 @@ let report = null;
     let selectedCaseKey = null;
     let selectedEvalGroupKey = null;
     let selectedEvalRoundKey = null;
+    const expandedEvalRoundKeys = new Set();
+    const expandedLedgerKeys = new Set();
     const evalGroupPages = new Map();
     let chatEvalReport = null;
     let performanceReport = null;
@@ -10,6 +12,7 @@ let report = null;
     let expandedScenarioId = 'GIFT';
     let currentSessionDirty = false;
     let currentSessionEvaled = false;
+    let savedProvider = 'minimax';
     const dimNames = {reproducibility:'可复测', memory_extraction:'提取', memory_application:'应用', update_and_decay:'更新淘汰', transparency:'透明', result_quality:'质量'};
     const dimMax = {reproducibility:10, memory_extraction:20, memory_application:25, update_and_decay:20, transparency:10, result_quality:15};
     const memoryBackendLabels = {local:'本地JSON', mem0_hosted:'Mem0 Hosted'};
@@ -23,10 +26,16 @@ let report = null;
           <option value="${escapeAttr(provider.value)}">${escapeHtml(provider.label)}${provider.configured ? '' : ' · 未配置'}</option>
         `).join('');
       }
-      providerSelect.value = cfg.llm_provider || cfg.default_llm_provider || 'deepseek_pro';
+      const desiredProvider = cfg.llm_provider || cfg.default_llm_provider || 'minimax';
+      providerSelect.value = Array.from(providerSelect.options).some(option => option.value === desiredProvider)
+        ? desiredProvider
+        : 'minimax';
+      savedProvider = providerSelect.value;
       const health = document.getElementById('llmHealth');
       if (cfg.llm_configured === false) {
         health.textContent = 'Provider 未配置，Agent Chat 和 Eval 会要求真实 LLM。';
+      } else {
+        health.textContent = `当前 Provider：${providerSelect.options[providerSelect.selectedIndex]?.textContent || providerSelect.value}`;
       }
     }
     async function fetchReport() {
@@ -44,7 +53,7 @@ let report = null;
     }
     async function fetchSettings() {
       settings = await (await fetch('/api/settings')).json();
-      document.getElementById('settingsAgent').textContent = `llm_provider=${settings.llm_provider || settings.agent_mode || 'deepseek_pro'} · eval=real_llm_only`;
+      document.getElementById('settingsAgent').textContent = `llm_provider=${providerDisplayName(settings.llm_provider || settings.agent_mode || 'minimax')} · eval=real_llm_only`;
       document.getElementById('privacyItems').value = (settings.privacy_items || []).join('\n');
       document.getElementById('identityText').value = settings.persona?.identity || '';
       document.getElementById('soulText').value = settings.persona?.soul || '';
@@ -67,6 +76,36 @@ let report = null;
       document.querySelectorAll('.settings-tab').forEach(tab => tab.classList.remove('active'));
       el.classList.add('active');
       if (id === 'memory') refreshVisibleMemoryStore();
+    }
+    function chatStageElement() {
+      return document.getElementById('chatStage');
+    }
+    function openEvalDrawer(opts = {}) {
+      const stage = chatStageElement();
+      if (!stage) return;
+      if (opts.hasEval) stage.classList.add('has-eval');
+      stage.classList.add('eval-open');
+    }
+    function closeEvalDrawer() {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.remove('eval-open');
+    }
+    function toggleEvalDrawer() {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.toggle('eval-open');
+    }
+    function setEvalDrawerHasEval(hasEval) {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.toggle('has-eval', !!hasEval);
+    }
+    function clearEvalDrawerState() {
+      const stage = chatStageElement();
+      if (!stage) return;
+      stage.classList.remove('eval-open');
+      stage.classList.remove('has-eval');
     }
     function privacyItemsFromInput() {
       return document.getElementById('privacyItems').value.split(/\n+/).map(item => item.trim()).filter(Boolean);
@@ -101,11 +140,11 @@ let report = null;
       document.getElementById('privacyReport').textContent = JSON.stringify(settings?.privacy_report || {}, null, 2);
     }
     function renderConfigSummaries() {
-      const provider = settings?.llm_provider || settings?.agent_mode || 'deepseek_pro';
+      const provider = settings?.llm_provider || settings?.agent_mode || 'minimax';
       document.getElementById('agentPersonaSummary').textContent = JSON.stringify({
         identity: '真实任务协作助手；不预设用户身份、性别或关系。',
         soul: '短、直接、像可靠朋友；默认交付方案，不在正文解释工具动作。',
-        llm_provider: provider,
+        llm_provider: providerDisplayName(provider),
         eval: '真实 LLM chat + 真实 LLM judge'
       }, null, 2);
       document.getElementById('skillConfigSummary').textContent = JSON.stringify({
@@ -390,23 +429,35 @@ let report = null;
       try { return JSON.parse(text); } catch { return fallback; }
     }
     function selectedProvider() {
-      return document.getElementById('llmProvider').value || 'deepseek_pro';
+      return document.getElementById('llmProvider').value || 'minimax';
     }
-    async function saveAgentProvider() {
+    function providerDisplayName(provider) {
+      const labels = {minimax:'MiniMax', deepseek_pro:'DeepSeek V4 Pro', deepseek_flash:'DeepSeek V4 Flash'};
+      return labels[provider] || provider || 'MiniMax';
+    }
+    async function saveAgentProvider(opts = {}) {
       const el = document.getElementById('llmHealth');
-      el.textContent = 'saving provider...';
-      const data = await (await fetch('/api/settings/agent', {
-        method:'POST',
-        headers:{'content-type':'application/json'},
-        body:JSON.stringify({provider:selectedProvider()})
-      })).json();
-      if (!data.ok) {
-        el.textContent = data.error || 'Provider 保存失败';
-        return;
+      const provider = selectedProvider();
+      const providerLabel = document.getElementById('llmProvider').options[document.getElementById('llmProvider').selectedIndex]?.textContent || provider;
+      if (provider === savedProvider && opts.silent !== false) return;
+      el.textContent = `正在切换 Provider：${providerLabel}`;
+      try {
+        const data = await (await fetch('/api/settings/agent', {
+          method:'POST',
+          headers:{'content-type':'application/json'},
+          body:JSON.stringify({provider})
+        })).json();
+        if (!data.ok) {
+          el.textContent = data.error || 'Provider 切换失败';
+          return;
+        }
+        settings = data.settings;
+        savedProvider = settings.llm_provider || provider;
+        el.textContent = `当前 Provider：${providerLabel}`;
+        renderConfigSummaries();
+      } catch (err) {
+        el.textContent = `Provider 切换失败 · ${err.message}`;
       }
-      settings = data.settings;
-      el.textContent = `Provider 已保存：${settings.llm_provider || selectedProvider()}`;
-      renderConfigSummaries();
     }
     async function checkProviderHealth() {
       const el = document.getElementById('llmHealth');
@@ -425,6 +476,7 @@ let report = null;
       const text = input.value.trim();
       if (!text) return;
       input.value = '';
+      clearEvalDrawerState();
       appendMsg('user', text);
       currentSessionDirty = true;
       currentSessionEvaled = false;
@@ -444,6 +496,7 @@ let report = null;
       const panel = document.getElementById('chatEvalPanel');
       btn.disabled = true;
       btn.textContent = 'Scoring...';
+      openEvalDrawer({hasEval: true});
       status.innerHTML = '<span class="loading-row"><span class="spinner"></span><span>正在统一 eval 当前会话...</span></span>';
       panel.innerHTML = '';
       try {
@@ -453,34 +506,70 @@ let report = null;
         }
         report = chatEvalReport;
         const c = chatEvalReport.cases?.[0];
-        status.textContent = c ? `完成：${c.score}/100` : '没有可评估 eval。';
+        status.textContent = c ? '完成：已生成六维评分。' : '没有可评估 eval。';
         panel.innerHTML = c ? renderEvalCase(c, {compact:true}) : '<div class="muted">当前对话为空。</div>';
         currentSessionEvaled = !!c;
+        setEvalDrawerHasEval(true);
         renderCases();
         return currentSessionEvaled;
       } catch (err) {
         status.textContent = '打分失败。';
         panel.innerHTML = `<div class="note" style="color:var(--bad)">ERROR: ${escapeHtml(err.message)}</div>`;
+        setEvalDrawerHasEval(true);
         return false;
       } finally {
         btn.disabled = false;
         btn.textContent = 'Run LLM Eval';
       }
     }
-    async function resetSession(opts = {}) {
-      if (!opts.force && currentSessionDirty && !currentSessionEvaled) {
+    function askSessionResetAction() {
+      const modal = document.getElementById('sessionResetModal');
+      if (!modal) {
         const shouldEval = window.confirm('上一个 Session 还没有 Eval。点击“确定”先 Eval，再新开 Session；点击“取消”留在当前 Session。');
-        if (!shouldEval) return false;
-        const evalOk = await runChatEval();
-        if (!evalOk) {
-          const skipEval = window.confirm('Eval 失败或没有可评估内容。是否跳过 Eval，直接新开 Session？');
-          if (!skipEval) return false;
+        return Promise.resolve(shouldEval ? 'eval' : 'cancel');
+      }
+      modal.classList.remove('hidden');
+      const buttons = Array.from(modal.querySelectorAll('[data-reset-choice]'));
+      return new Promise(resolve => {
+        const cleanup = choice => {
+          buttons.forEach(button => button.removeEventListener('click', onClick));
+          document.removeEventListener('keydown', onKeydown);
+          modal.classList.add('hidden');
+          resolve(choice);
+        };
+        const onClick = event => cleanup(event.currentTarget.dataset.resetChoice || 'cancel');
+        const onKeydown = event => {
+          if (event.key === 'Escape') cleanup('cancel');
+        };
+        buttons.forEach(button => button.addEventListener('click', onClick));
+        document.addEventListener('keydown', onKeydown);
+      });
+    }
+    async function resetSession(opts = {}) {
+      let keepPreviousEval = false;
+      if (!opts.force && currentSessionDirty && !currentSessionEvaled) {
+        const action = await askSessionResetAction();
+        if (action === 'cancel') return false;
+        if (action === 'eval') {
+          const evalOk = await runChatEval();
+          if (!evalOk) {
+            const skipEval = window.confirm('Eval 失败或没有可评估内容。是否跳过 Eval，直接新开 Session？');
+            if (!skipEval) return false;
+          } else {
+            keepPreviousEval = true;
+          }
         }
       }
       await fetch('/api/reset-chat', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({provider:selectedProvider()})});
       document.getElementById('chatlog').innerHTML = '';
-      document.getElementById('chatEvalStatus').textContent = opts.reason || 'Session 已重置；memory 保持不变。';
-      document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
+      if (keepPreviousEval) {
+        document.getElementById('chatEvalStatus').textContent = '上一轮 Eval 已完成并保存到 History Evals；Session 已重置。';
+        openEvalDrawer({hasEval: true});
+      } else {
+        document.getElementById('chatEvalStatus').textContent = opts.reason || 'Session 已重置；memory 保持不变。';
+        document.getElementById('chatEvalPanel').innerHTML = '暂无评分。';
+        clearEvalDrawerState();
+      }
       currentSessionDirty = false;
       currentSessionEvaled = false;
       refreshChatMemory();
@@ -506,6 +595,7 @@ let report = null;
         ? `当前记忆引擎已重置${remote.ok === false ? '失败' : ''}。`
         : 'Mem0 未启用或未配置。';
       document.getElementById('chatEvalStatus').textContent = `Memory 已重置；${remoteText} Run LLM Eval 后刷新评分。`;
+      clearEvalDrawerState();
       refreshVisibleMemoryStore();
     }
     function renderScenarioLibrary(runHint = '') {
@@ -621,8 +711,8 @@ let report = null;
       const groups = evalGroups();
       const list = document.getElementById('caseList');
       if (!groups.length) {
-        list.innerHTML = '<div class="muted">暂无历史 eval。</div>';
-        document.getElementById('caseDetail').innerHTML = '暂无历史 eval。';
+        list.innerHTML = '<div class="history-empty"><b>暂无历史 Eval</b><div class="muted">运行一次 Agent Chat Eval 后会出现在这里。</div></div>';
+        document.getElementById('caseDetail').innerHTML = '<div class="history-empty history-empty-detail"><b>暂无历史 Eval</b><div class="muted">在 Agent Chat 运行 Run LLM Eval 后，会按测试任务聚合显示在这里。</div></div>';
         return;
       }
       if (!selectedEvalGroupKey || !groups.find(group => group.key === selectedEvalGroupKey)) selectedEvalGroupKey = groups[0].key;
@@ -634,9 +724,10 @@ let report = null;
         const latest = group.latest;
         return `
         <button class="case-btn ${group.key === selectedEvalGroupKey ? 'active' : ''}" onclick="selectCase('${escapeAttr(group.key)}')">
-          <div class="case-head"><b>${escapeHtml(group.name)}</b><span class="score">${latest.c.score}</span></div>
-          <div class="muted">Chat ${formatTime(chatStartedAt(latest.c)) || '-'} · Eval ${formatTime(latest.run.created_at)}</div>
-          <div class="chips"><span class="chip">${group.rows.length} 轮</span><span class="chip">费力度 ${latest.c.user_effort?.final_score ?? '-'}</span><span class="chip good">记忆节省信息点 ${latest.c.user_effort?.memory_saving_points ?? latest.c.user_effort?.saved_score ?? 0}</span></div>
+          <div class="history-case-title">${escapeHtml(group.name)}</div>
+          <div class="history-case-meta">Chat ${formatTime(chatStartedAt(latest.c)) || '-'}</div>
+          <div class="history-case-meta">Eval ${formatTime(latest.run.created_at) || '-'}</div>
+          <div class="history-case-rounds">${group.rows.length} 轮</div>
         </button>`;
       }).join('');
       const selected = groups.find(group => group.key === selectedEvalGroupKey);
@@ -645,31 +736,126 @@ let report = null;
     function selectCase(key) {
       selectedEvalGroupKey = key;
       selectedEvalRoundKey = null;
+      expandedEvalRoundKeys.clear();
+      expandedLedgerKeys.clear();
       renderCases();
     }
     function renderEvalGroup(group) {
       if (!group) return '暂无历史 eval。';
-      const selectedRound = group.rows.find(row => row.key === selectedEvalRoundKey) || group.latest;
       const pageSize = 3;
       const pageCount = Math.max(1, Math.ceil(group.rows.length / pageSize));
       const page = Math.min(evalGroupPages.get(group.key) || 0, pageCount - 1);
       const start = page * pageSize;
       const visibleRows = group.rows.slice(start, start + pageSize);
+      const end = Math.min(start + visibleRows.length, group.rows.length);
       return `
-        <div>
-          <div class="case-head"><div><h2>${escapeHtml(group.name)}</h2><div class="muted">最新 Eval ${formatTime(group.latest.run.created_at)} · Chat ${formatTime(chatStartedAt(group.latest.c)) || '-'}</div></div><span class="score">${group.latest.c.score ?? '-'}/100</span></div>
-          <h3>多轮变化</h3>
-          <div class="metrics eval-round-grid">${visibleRows.map((row, index) => `
-            <button class="metric eval-round-card ${row.key === selectedRound.key ? 'active' : ''}" onclick="selectEvalRound('${escapeAttr(group.key)}', '${escapeAttr(row.key)}')"><span class="muted">第 ${start + index + 1} 条 · 最新优先</span><b class="round-title">${escapeHtml(caseDisplayName(row.c))}</b><div class="muted">总分 ${row.c.score ?? '-'} · 费力度 ${row.c.user_effort?.final_score ?? '-'} · 记忆节省信息点 ${row.c.user_effort?.memory_saving_points ?? row.c.user_effort?.saved_score ?? 0}</div><div class="muted">Eval ${formatTime(row.run.created_at)}</div></button>
-          `).join('')}</div>
-          ${group.rows.length > pageSize ? `<div class="pager"><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', -1)" ${page <= 0 ? 'disabled' : ''}>上一页</button><span class="muted">第 ${page + 1} / ${pageCount} 页，每页 ${pageSize} 条</span><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', 1)" ${page >= pageCount - 1 ? 'disabled' : ''}>下一页</button></div>` : ''}
-          <h3>本轮详情</h3>
-          ${renderEvalCase(selectedRound.c, {run: selectedRound.run})}
+        <div class="history-group">
+          <div class="eval-group-head">
+            <div>
+              <h2>${escapeHtml(group.name)}</h2>
+              <div class="muted">最新 Eval ${formatTime(group.latest.run.created_at) || '-'} · Chat ${formatTime(chatStartedAt(group.latest.c)) || '-'} · 共 ${group.rows.length} 轮 · 第 ${page + 1} / ${pageCount} 页，每页 ${pageSize} 轮</div>
+            </div>
+          </div>
+          <div class="eval-round-section-head">
+            <h3>多轮对比</h3>
+            <div class="muted">费力度越低越好；记忆节省信息点只统计正确复用且用户没有重复说明的信息。</div>
+          </div>
+          <div class="eval-round-board">${visibleRows.map((row, index) => renderEvalRoundCard(group, row, start, index)).join('')}</div>
+          ${group.rows.length > pageSize ? `<div class="pager history-pager"><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', -1)" ${page <= 0 ? 'disabled' : ''}>上一页</button><span class="muted">第 ${page + 1} / ${pageCount} 页 · 当前显示 ${start + 1}-${end} / ${group.rows.length} 轮</span><button onclick="changeEvalGroupPage('${escapeAttr(group.key)}', 1)" ${page >= pageCount - 1 ? 'disabled' : ''}>下一页</button></div>` : ''}
         </div>`;
+    }
+    function renderEvalRoundCard(group, row, start, index) {
+      const absoluteIndex = start + index;
+      const chronologicalRound = group.rows.length - absoluteIndex;
+      const isLatest = absoluteIndex === 0;
+      const effort = row.c.user_effort || {};
+      const expanded = expandedEvalRoundKeys.has(row.key);
+      return `<article class="eval-round-card ${expanded ? 'active' : ''}">
+        <div class="eval-round-card-head">
+          <div>
+            <div class="eval-round-kicker">第 ${chronologicalRound} 轮${isLatest ? ' · 最新' : ''}</div>
+            <h3>${escapeHtml(caseDisplayName(row.c))}</h3>
+          </div>
+          <div class="muted">Eval ${formatTime(row.run.created_at) || '-'}</div>
+        </div>
+        <div class="muted">Chat ${formatTime(chatStartedAt(row.c)) || '-'}</div>
+        <div class="metric-stack">
+          ${renderLedgerMetric(row, 'effort')}
+          ${isLedgerExpanded(row.key, 'effort') ? renderLedgerPanel(row, 'effort') : ''}
+          ${renderLedgerMetric(row, 'saved')}
+          ${isLedgerExpanded(row.key, 'saved') ? renderLedgerPanel(row, 'saved') : ''}
+        </div>
+        <button class="eval-round-toggle" onclick="toggleEvalRoundDetail('${escapeAttr(row.key)}')">${expanded ? '收起详情' : '展开详情'}</button>
+        ${expanded ? renderEvalRoundDetail(row) : ''}
+      </article>`;
+    }
+    function ledgerKey(rowKey, type) {
+      return `${rowKey}:${type}`;
+    }
+    function isLedgerExpanded(rowKey, type) {
+      return expandedLedgerKeys.has(ledgerKey(rowKey, type));
+    }
+    function toggleLedgerPanel(rowKey, type) {
+      const key = ledgerKey(rowKey, type);
+      if (expandedLedgerKeys.has(key)) expandedLedgerKeys.delete(key);
+      else expandedLedgerKeys.add(key);
+      selectedEvalRoundKey = rowKey;
+      renderCases();
+    }
+    function renderLedgerMetric(row, type) {
+      const effort = row.c.user_effort || {};
+      const isEffort = type === 'effort';
+      const label = isEffort ? '费力度' : '记忆节省信息点';
+      const value = isEffort ? (effort.final_score ?? '-') : memorySavingScore(effort);
+      const expanded = isLedgerExpanded(row.key, type);
+      return `<button class="ledger-trigger ${isEffort ? 'effort' : 'saved'}" aria-expanded="${expanded ? 'true' : 'false'}" onclick="toggleLedgerPanel('${escapeAttr(row.key)}', '${type}')">
+        <span>${label}</span>
+        <b>${value}</b>
+      </button>`;
+    }
+    function renderLedgerPanel(row, type) {
+      const timeline = row.c.eval_timeline || [];
+      const isEffort = type === 'effort';
+      const items = timeline.filter(t => {
+        const effort = t.effort || {};
+        if (isEffort) {
+          return effort.before !== undefined || effort.delta !== undefined || effort.after !== undefined || t.evaluation?.explanation;
+        }
+        return effort.saved_before !== undefined || effort.saved_delta !== undefined || effort.saved_after !== undefined || (effort.memory_saving_points || []).length;
+      });
+      if (!items.length) {
+        return `<div class="ledger-panel ${isEffort ? 'effort' : 'saved'}"><div class="muted">暂无逐轮累计说明。</div></div>`;
+      }
+      return `<div class="ledger-panel ${isEffort ? 'effort' : 'saved'}">
+        ${items.map(t => isEffort ? renderEffortLedgerItem(t) : renderSavedLedgerItem(t)).join('')}
+      </div>`;
+    }
+    function renderEffortLedgerItem(t) {
+      const effort = t.effort || {};
+      return `<div class="ledger-item">
+        <div class="ledger-item-head"><b>${escapeHtml(t.turn_id || '-')}</b><span>${effort.before ?? '-'} → +${effort.delta ?? 0} → ${effort.after ?? '-'}</span></div>
+        <div class="muted">${escapeHtml(t.evaluation?.explanation || '暂无本轮说明。')}</div>
+      </div>`;
+    }
+    function renderSavedLedgerItem(t) {
+      const effort = t.effort || {};
+      const points = effort.memory_saving_points || [];
+      return `<div class="ledger-item">
+        <div class="ledger-item-head"><b>${escapeHtml(t.turn_id || '-')}</b><span>${effort.saved_before ?? '-'} → +${effort.saved_delta ?? 0} → ${effort.saved_after ?? '-'}</span></div>
+        ${points.length ? `<div class="chips">${points.map(point => `<span class="chip good">${escapeHtml(point)}</span>`).join('')}</div>` : '<div class="muted">本轮无新增节省点。</div>'}
+      </div>`;
+    }
+    function toggleEvalRoundDetail(rowKey) {
+      if (expandedEvalRoundKeys.has(rowKey)) expandedEvalRoundKeys.delete(rowKey);
+      else expandedEvalRoundKeys.add(rowKey);
+      selectedEvalRoundKey = rowKey;
+      renderCases();
     }
     function selectEvalRound(groupKey, rowKey) {
       selectedEvalGroupKey = groupKey;
       selectedEvalRoundKey = rowKey;
+      if (expandedEvalRoundKeys.has(rowKey)) expandedEvalRoundKeys.delete(rowKey);
+      else expandedEvalRoundKeys.add(rowKey);
       renderCases();
     }
     function changeEvalGroupPage(groupKey, delta) {
@@ -680,12 +866,54 @@ let report = null;
       evalGroupPages.set(groupKey, next);
       const firstRowOnPage = group?.rows[next * 3];
       if (firstRowOnPage) selectedEvalRoundKey = firstRowOnPage.key;
+      expandedEvalRoundKeys.clear();
+      expandedLedgerKeys.clear();
       renderCases();
+    }
+    function memorySavingScore(effort = {}) {
+      return effort.memory_saving_points ?? effort.saved_score ?? effort.reduction ?? 0;
+    }
+    function renderEvalRoundDetail(row) {
+      const c = row.c || {};
+      const checks = c.checks || {};
+      return `<div class="eval-round-detail">
+        <div class="note">当前采用双账本：费力度和记忆节省信息点分别累计，不相互抵扣。节省信息点只统计被正确复用的信息，不把新增、删除或更新记忆本身当作节省。</div>
+        <div class="dims history-dims">${Object.entries(c.scores || {}).filter(([k])=>k!=='total').map(([k,v]) => `<div class="dim"><span class="muted">${dimNames[k] || k}</span><b>${v} / ${dimMax[k] || '-'}</b></div>`).join('') || '<div class="muted">暂无六维拆分。</div>'}</div>
+        <div class="chips">
+          <span class="chip">任务交付 ${checks.delivered_task_turns || 0}/${checks.task_turns || 0}</span>
+          <span class="chip">记忆动作 ${c.memory_events?.length || 0}</span>
+          <span class="chip ${checks.semantic_violations ? 'bad' : 'good'}">语义违规 ${checks.semantic_violations || 0}</span>
+          <span class="chip ${checks.repeated_memory_turns ? 'bad' : 'good'}">重复说明 ${checks.repeated_memory_turns || 0}</span>
+        </div>
+        <div class="turn-list history-turn-list">${(c.eval_timeline || []).map(timelineCard).join('') || '<div class="muted">暂无轨迹。</div>'}</div>
+      </div>`;
     }
     function chatStartedAt(c) { return c.script?.chat_started_at || c.turns?.[0]?.user?.timestamp || ''; }
     function renderEvalCase(c, opts = {}) {
       const effort = c.user_effort || {};
       const checks = c.checks || {};
+      const isCompact = !!opts.compact;
+      if (isCompact) {
+        const savingPoints = memorySavingScore(effort);
+        return `
+          <div class="chat-eval-compact">
+            <div class="case-head"><div><h2>${escapeHtml(caseDisplayName(c))}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div></div>
+            <div class="dims">${Object.entries(c.scores || {}).filter(([k])=>k!=='total').map(([k,v]) => `<div class="dim"><span class="muted">${dimNames[k] || k}</span><b>${v} / ${dimMax[k] || '-'}</b></div>`).join('') || '<div class="muted">暂无六维拆分。</div>'}</div>
+            <div class="metrics chat-eval-ledgers">
+              <div class="metric"><span class="muted">费力度</span><b>${effort.final_score ?? '-'}</b><div class="muted">越低越省力。</div></div>
+              <div class="metric"><span class="muted">记忆节省信息点</span><b>${savingPoints}</b><div class="muted">正确复用且用户未重复说明的信息点。</div></div>
+            </div>
+            <div class="note">Agent Chat 当前展示六维评分、费力度和记忆节省信息点；多轮横向对比请到 History Evals 查看。</div>
+            <div class="chips">
+              <span class="chip">任务交付 ${checks.delivered_task_turns || 0}/${checks.task_turns || 0}</span>
+              <span class="chip">记忆动作 ${c.memory_events?.length || 0}</span>
+              <span class="chip ${checks.semantic_violations ? 'bad' : 'good'}">语义违规 ${checks.semantic_violations || 0}</span>
+              <span class="chip ${checks.repeated_memory_turns ? 'bad' : 'good'}">重复说明 ${checks.repeated_memory_turns || 0}</span>
+            </div>
+            <h3>统一轨迹</h3>
+            <div class="turn-list">${(c.eval_timeline || []).map(timelineCard).join('') || '<div class="muted">暂无轨迹。</div>'}</div>
+          </div>`;
+      }
       return `
         <div>
           <div class="case-head"><div><h2>${escapeHtml(caseDisplayName(c))}</h2><div class="muted">${escapeHtml(c.module || c.domain || '')}</div></div><span class="score">${c.score ?? '-'}/100</span></div>

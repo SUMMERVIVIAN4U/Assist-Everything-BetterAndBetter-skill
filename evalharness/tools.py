@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from assist_everything_betterandbetter_skill.skill import AssistSkill, SemanticExtractor, SkillResponse
+from assist_everything_betterandbetter_skill.skill import AssistSkill, RetrievalIntentClassifier, SemanticExtractor, SkillResponse
 from assist_everything_betterandbetter_skill.mem0_backend import Mem0Config
 
 from .schemas import ToolCall
@@ -21,6 +21,7 @@ class MemoryToolbox:
         memory_enabled: bool | None = None,
         memory_backend: str | None = None,
         semantic_extractor: SemanticExtractor | None = None,
+        retrieval_intent_classifier: RetrievalIntentClassifier | None = None,
     ) -> None:
         self.skill = skill or AssistSkill(
             memory_dir=memory_dir,
@@ -29,6 +30,7 @@ class MemoryToolbox:
             memory_enabled=memory_enabled,
             memory_backend=memory_backend,
             semantic_extractor=semantic_extractor,
+            retrieval_intent_classifier=retrieval_intent_classifier,
         )
 
     @property

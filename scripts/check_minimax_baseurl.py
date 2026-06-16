@@ -18,16 +18,16 @@ from evalharness.env import load_env
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Diagnose Mimo OpenAI-compatible base URL connectivity.")
+    parser = argparse.ArgumentParser(description="Diagnose MiniMax OpenAI-compatible base URL connectivity.")
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--timeout", type=float, default=8.0)
     parser.add_argument("--post", action="store_true", help="Also call /chat/completions with the configured API key.")
     args = parser.parse_args()
 
     load_env(args.env_file)
-    base_url = os.getenv("MIMO_BASE_URL", "https://api.mimo.chat/v1").rstrip("/")
-    model = os.getenv("MIMO_MODEL", "mimo-v1")
-    api_key = os.getenv("MIMO_API_KEY", "").strip()
+    base_url = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.io/v1").rstrip("/")
+    model = os.getenv("MINIMAX_MODEL", "MiniMax-M2.7")
+    api_key = os.getenv("MINIMAX_API_KEY", "").strip()
     parsed = urlparse(base_url)
     host = parsed.hostname or ""
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -105,7 +105,7 @@ def _check_http_head(base_url: str, timeout: float) -> None:
 
 def _check_chat_post(base_url: str, model: str, api_key: str, timeout: float) -> None:
     if not api_key:
-        print("CHAT POST: SKIP missing MIMO_API_KEY")
+        print("CHAT POST: SKIP missing MINIMAX_API_KEY")
         return
     start = time.perf_counter()
     payload = {

@@ -10,7 +10,7 @@ RUNTIME_CONFIG_PATH = Path("memories/config/runtime.json")
 LEGACY_WORKBENCH_BACKEND_PATH = Path("memories/workbench/_backend.json")
 LEGACY_WORKBENCH_PRIVACY_PATH = Path("memories/workbench/_privacy.json")
 
-SUPPORTED_PROVIDERS = {"deepseek_pro", "deepseek_flash", "mimo"}
+SUPPORTED_PROVIDERS = {"deepseek_pro", "deepseek_flash", "minimax"}
 PROVIDER_ALIASES = {
     "deepseek": "deepseek_pro",
     "deepseek-pro": "deepseek_pro",
@@ -19,7 +19,10 @@ PROVIDER_ALIASES = {
     "deepseek-flash": "deepseek_flash",
     "deepseek_v4_flash": "deepseek_flash",
     "deepseek-v4-flash": "deepseek_flash",
-    "mimo": "mimo",
+    "minimax": "minimax",
+    "mini_max": "minimax",
+    "mini-max": "minimax",
+    "mimo": "minimax",
 }
 
 
@@ -97,9 +100,9 @@ def public_runtime_config(config: dict[str, Any] | None = None) -> dict[str, Any
 
 
 def normalize_provider(provider: Any) -> str:
-    raw = str(provider or os.getenv("ASSIST_AGENT_PROVIDER") or "deepseek_pro").strip().lower()
+    raw = str(provider or os.getenv("ASSIST_AGENT_PROVIDER") or "minimax").strip().lower()
     value = PROVIDER_ALIASES.get(raw, raw)
-    return value if value in SUPPORTED_PROVIDERS else "deepseek_pro"
+    return value if value in SUPPORTED_PROVIDERS else "minimax"
 
 
 def normalize_backend(value: Any) -> str:
@@ -118,7 +121,7 @@ def _default_runtime_config(profile: str) -> dict[str, Any]:
         "version": 1,
         "profile": profile,
         "agent": {
-            "provider": os.getenv("ASSIST_AGENT_PROVIDER") or os.getenv("EVALHARNESS_AGENT_PROVIDER") or "deepseek_pro",
+            "provider": os.getenv("ASSIST_AGENT_PROVIDER") or os.getenv("EVALHARNESS_AGENT_PROVIDER") or "minimax",
         },
         "memory": {
             "enabled": os.getenv("ASSIST_MEMORY_ENABLED", "1") != "0",

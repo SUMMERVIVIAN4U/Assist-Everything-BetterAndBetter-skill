@@ -21,7 +21,7 @@ from .skill import AssistSkill
 
 
 def _add_agent_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--provider", default=None, help="LLM provider: deepseek_pro, deepseek_flash, mimo.")
+    parser.add_argument("--provider", default=None, help="LLM provider. Default: minimax.")
     parser.add_argument("--memory-dir", default=None, help="Memory directory. Defaults to ASSIST_MEMORY_DIR or memories/default.")
     parser.add_argument("--memory-backend", default=None, choices=["local", "mem0_hosted"], help="Long-term memory backend.")
     parser.add_argument("--memory-enabled", default=None, choices=["0", "1"], help="Enable or disable memory for this process.")

@@ -22,7 +22,7 @@ MemoryToolbox
   把 AssistSkill 包成 harness agent 可调用的 tool
 
 HarnessAgent
-  Workbench Agent Chat 的对话壳；先跑 memory tool，再可选交给 Mimo 改写最终回复
+  Workbench Agent Chat 的对话壳；先跑 memory tool，再交给 MiniMax 改写最终回复
 
 Workbench
   浏览器界面：真实 LLM Agent Chat、Scenario Library / History Evals、统计、设置、Memory Scale Eval
@@ -54,7 +54,7 @@ deleted       删除，不允许参与召回
 1. 默认本地记忆为主，结构清晰，可审计，适合比赛演示。
 2. Mem0 是可选后端，适合展示持久化和大规模长期记忆能力。
 3. 本地 deterministic agent 只用于 CLI smoke/contract 测试，不进入 Workbench 主流程。
-4. Workbench 只保留真实 LLM provider；默认 provider 是 DeepSeek V4 Pro，可切换 DeepSeek V4 Flash / Mimo，agent chat 和 eval 都不允许静默回退到本地草稿或 heuristic judge。
+4. Workbench 只保留真实 LLM provider；比赛提交版默认 provider 是 MiniMax，agent chat 和 eval 都不允许静默回退到本地草稿或 heuristic judge。
 ```
 
 ## 2. Codex / 命令行使用路线
@@ -177,25 +177,19 @@ dedupe   重复记忆，不重复写
 
 ## 3. Workbench Agent Chat 使用路线
 
-Workbench 只支持真实 LLM 模式。默认建议先配置 DeepSeek：
+Workbench 只支持真实 LLM 模式。比赛提交版默认配置 MiniMax：
 
 ```dotenv
-DEEPSEEK_API_KEY=...
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-DEEPSEEK_PRO_MODEL=deepseek-v4-pro
-DEEPSEEK_FLASH_MODEL=deepseek-v4-flash
-DEEPSEEK_TIMEOUT=120
-
-MIMO_API_KEY=...
-MIMO_BASE_URL=https://api.mimo.chat/v1
-MIMO_MODEL=mimo-v1
-MIMO_TIMEOUT=60
+MINIMAX_API_KEY=...
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_MODEL=MiniMax-M2.7
+MINIMAX_TIMEOUT=60
 ```
 
 然后启动 Workbench：
 
 ```bash
-python3 -m evalharness.cli serve --port 8787 --agent deepseek_pro
+python3 -m evalharness.cli serve --port 8787 --agent minimax
 ```
 
 打开：
@@ -265,7 +259,7 @@ python3 -m evalharness.cli run --judge heuristic --agent local
 真实 LLM replay eval：
 
 ```bash
-python3 -m evalharness.cli run --agent deepseek_pro --judge deepseek_pro
+python3 -m evalharness.cli run --agent minimax --judge minimax
 ```
 
 这更接近比赛效果，因为 agent 和 judge 都由真实 LLM 参与。V5 Workbench 已把这两类结果明确区分：
@@ -365,7 +359,7 @@ Mem0 Hosted:
 Workbench 改造时只暴露这两种模式：
 
 ```text
-比赛推荐：Local Memory + DeepSeek V4 Pro Agent
+比赛推荐：Local Memory + MiniMax Agent
 规模演示：Mem0 Hosted + Performance Demo
 ```
 

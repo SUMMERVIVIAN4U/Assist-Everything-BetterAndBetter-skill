@@ -24,7 +24,7 @@ from evalharness.runner import _gift_round_cards, _round_cards
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run real-LLM stability evals across memory backends.")
-    parser.add_argument("--provider", default="deepseek_pro")
+    parser.add_argument("--provider", default="minimax")
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--backends", default="local,mem0_hosted")
     parser.add_argument("--cases", default="all", help="Comma list like C01,C02,GIFT or all")

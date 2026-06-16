@@ -3,7 +3,11 @@ import json
 from evalharness.agent import (
     HarnessAgent,
     _conversation_context_blocked_terms,
+    _enforce_memory_write_consistency,
+    _finalize_user_visible_output,
     _llm_response_is_usable,
+    _memory_write_result,
+    _response_directives,
     _sanitize_llm_output,
     _suppression_context_from_actions,
     _violates_memory_context_constraints,
@@ -73,6 +77,108 @@ def test_sanitize_llm_output_preserves_literal_double_asterisks():
     assert "**加粗**" in cleaned
 
 
+def test_finalize_user_visible_output_removes_generated_bold_and_memory_section():
+    text = "1. **玫瑰金耳钉** — 预算内。\n\n记忆处理：\n- 已保存为后续可复用记忆：预算1000元\n\n继续推进这款。"
+
+    cleaned = _finalize_user_visible_output(text)
+
+    assert "**" not in cleaned
+    assert "记忆处理" not in cleaned
+    assert "已保存为后续可复用记忆" not in cleaned
+    assert "玫瑰金耳钉" in cleaned
+    assert "继续推进这款" in cleaned
+
+
+def test_finalize_user_visible_output_preserves_code_double_asterisks():
+    text = "Python 里 `2 ** 3` 是 8；glob 可以写 `**/*.py`。"
+
+    cleaned = _finalize_user_visible_output(text)
+
+    assert "`2 ** 3`" in cleaned
+    assert "`**/*.py`" in cleaned
+
+
+def test_memory_write_consistency_blocks_false_saved_claim():
+    result = _memory_write_result("把本次确认的礼物也加入记忆", [])
+
+    cleaned = _enforce_memory_write_consistency("好的，已更新记忆。", result)
+
+    assert "没有成功写入" in cleaned or "还没有保存" in cleaned
+    assert "已更新记忆" not in cleaned
+
+
+def test_memory_write_result_reports_committed_add():
+    result = _memory_write_result(
+        "把本次确认的礼物也加入记忆",
+        [{"action": "add", "detail": "本次给女朋友的礼物已选定为野兽派丝巾礼盒", "ok": True}],
+    )
+
+    assert result["write_intent"] is True
+    assert result["committed"] is True
+    assert result["committed_actions"][0]["detail"] == "本次给女朋友的礼物已选定为野兽派丝巾礼盒"
+
+
+def test_confirm_first_budget_directive_confirms_and_recommends():
+    memory_context = {
+        "apply_now": [],
+        "confirm_first": [
+            {
+                "type": "constraint",
+                "content": "给女朋友选礼物预算在 1000 元左右",
+                "reason": "expired_current_task_confirm_first",
+            }
+        ],
+    }
+
+    directives = _response_directives("帮我给女朋友选个生日礼物。", memory_context)
+
+    text = "\n".join(directives)
+    assert "不要再问“有预算吗”" in text
+    assert "如果这次还沿用这个预算" in text
+    assert "直接按该预算给一个推荐" in text
+
+
+def test_confirm_first_temporary_constraint_directive_confirms_and_applies():
+    memory_context = {
+        "apply_now": [],
+        "confirm_first": [
+            {
+                "type": "constraint",
+                "content": "礼物约束：不要首饰，换非首饰品类",
+                "time_scope": "current_task",
+                "reason": "expired_current_task_confirm_first",
+            }
+        ],
+    }
+
+    directives = _response_directives("那再给一个推荐。", memory_context)
+
+    text = "\n".join(directives)
+    assert "上次同类任务的临时约束" in text
+    assert "不要首饰" in text
+    assert "如果这次仍沿用" in text
+    assert "给可执行结果" in text
+
+
+def test_non_jewelry_memory_constraint_allows_negation_but_blocks_jewelry_plan():
+    memory_context = {
+        "apply_now": [
+            {
+                "type": "constraint",
+                "content": "礼物约束：不要首饰，换非首饰品类",
+                "time_scope": "current_task",
+            }
+        ],
+        "confirm_first": [],
+    }
+
+    allowed = "如果这次仍沿用不要首饰的约束，我按非首饰方向给一个推荐：真丝睡衣礼盒，预算约900元。"
+    blocked = "如果这次仍沿用不要首饰的约束，我推荐紫色手链，预算约900元。"
+
+    assert not _violates_memory_context_constraints(allowed, memory_context)
+    assert _violates_memory_context_constraints(blocked, memory_context)
+
+
 def test_memory_inspection_command_does_not_require_llm_rewrite():
     class Client:
         def chat(self, messages, temperature=0.3):
@@ -101,6 +207,45 @@ def test_rewrite_payload_projects_selected_gifts_as_exclusions():
     assert exclusions
     assert any("拍立得" in item["content"] for item in exclusions)
     assert any(item["category"] == "影像设备" for item in exclusions)
+
+
+def test_gift_history_lookup_must_include_selected_gifts():
+    memory_context = {
+        "apply_now": [
+            {
+                "type": "history",
+                "predicate": "previously_given",
+                "content": "以前送过女朋友玫瑰金项链，送过的不要再送",
+            },
+            {
+                "type": "decision",
+                "predicate": "selected",
+                "content": "本次给女朋友的礼物已选定为labubu 礼盒",
+            },
+            {
+                "type": "decision",
+                "predicate": "selected",
+                "content": "本次给女朋友的礼物已选定为施华洛世奇水晶项链",
+            },
+        ],
+        "gift_selected_exclusions": [
+            {"content": "本次给女朋友的礼物已选定为labubu 礼盒", "category": "礼盒"},
+            {"content": "本次给女朋友的礼物已选定为施华洛世奇水晶项链", "category": "首饰"},
+        ],
+    }
+
+    directives = _response_directives("我送过女朋友什么礼物", memory_context)
+    assert any("明确送过" in directive and "已选定/应避免重复" in directive for directive in directives)
+    assert not _llm_response_is_usable(
+        "以前送过女朋友玫瑰金项链。",
+        user_text="我送过女朋友什么礼物",
+        memory_context=memory_context,
+    )
+    assert _llm_response_is_usable(
+        "明确送过：玫瑰金项链。已选定/应避免重复：labubu 礼盒、施华洛世奇水晶项链。",
+        user_text="我送过女朋友什么礼物",
+        memory_context=memory_context,
+    )
 
 
 def test_rewrite_retries_when_gift_recommendation_only_summarizes_selected_item():
@@ -522,3 +667,4 @@ def test_rewrite_payload_includes_memory_actions_without_tool_draft():
     payload = json.loads(client.calls[-1]["messages"][1]["content"])
     assert "tool_draft" not in payload
     assert payload["memory_actions"]
+    assert payload["memory_write_result"]["committed"] is True

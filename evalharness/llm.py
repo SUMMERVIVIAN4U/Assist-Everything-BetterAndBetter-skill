@@ -11,12 +11,13 @@ from typing import Any
 
 from .env import load_env
 
-DEFAULT_LLM_PROVIDER = "deepseek_pro"
+DEFAULT_LLM_PROVIDER = "minimax"
 LLM_PROVIDER_LABELS = {
+    "minimax": "MiniMax",
     "deepseek_pro": "DeepSeek V4 Pro",
     "deepseek_flash": "DeepSeek V4 Flash",
-    "mimo": "Mimo",
 }
+PUBLIC_LLM_PROVIDERS = ("minimax", "deepseek_pro", "deepseek_flash")
 LLM_PROVIDER_ALIASES = {
     "deepseek": "deepseek_pro",
     "deepseek-pro": "deepseek_pro",
@@ -25,7 +26,10 @@ LLM_PROVIDER_ALIASES = {
     "deepseek-flash": "deepseek_flash",
     "deepseek_v4_flash": "deepseek_flash",
     "deepseek-v4-flash": "deepseek_flash",
-    "mimo": "mimo",
+    "minimax": "minimax",
+    "mini_max": "minimax",
+    "mini-max": "minimax",
+    "mimo": "minimax",
 }
 
 
@@ -41,21 +45,26 @@ class LLMConfig:
 
 @dataclass(frozen=True)
 class MimoConfig(LLMConfig):
-    """Backward-compatible Mimo config wrapper."""
+    """Backward-compatible MiniMax/Mimo config wrapper."""
 
     @classmethod
     def from_env(cls) -> "MimoConfig":
         load_env()
-        api_key = os.getenv("MIMO_API_KEY", "").strip()
+        api_key = (os.getenv("MINIMAX_API_KEY") or os.getenv("MIMO_API_KEY") or "").strip()
         if not api_key:
-            raise ValueError("MIMO_API_KEY is not configured")
+            raise ValueError("MINIMAX_API_KEY is not configured")
         return cls(
             api_key=api_key,
-            base_url=os.getenv("MIMO_BASE_URL", "https://api.mimo.chat/v1").rstrip("/"),
-            model=os.getenv("MIMO_MODEL", "mimo-v1"),
-            timeout=float(os.getenv("MIMO_TIMEOUT", "60")),
-            provider="mimo",
-            label=LLM_PROVIDER_LABELS["mimo"],
+            base_url=(
+                os.getenv("MINIMAX_BASE_URL")
+                or os.getenv("MINIMAX_API_BASE")
+                or os.getenv("MIMO_BASE_URL")
+                or "https://api.minimax.io/v1"
+            ).rstrip("/"),
+            model=(os.getenv("MINIMAX_MODEL") or os.getenv("MIMO_MODEL") or "MiniMax-M2.7").strip(),
+            timeout=float(os.getenv("MINIMAX_TIMEOUT") or os.getenv("MIMO_TIMEOUT") or "60"),
+            provider="minimax",
+            label=LLM_PROVIDER_LABELS["minimax"],
         )
 
 
@@ -133,13 +142,14 @@ def supported_llm_providers() -> list[dict[str, Any]]:
     return [
         {"value": provider, "label": label, "configured": llm_configured(provider)}
         for provider, label in LLM_PROVIDER_LABELS.items()
+        if provider in PUBLIC_LLM_PROVIDERS
     ]
 
 
 def llm_config_from_env(provider: str | None = None) -> LLMConfig:
     load_env()
     normalized = normalize_llm_provider(provider)
-    if normalized == "mimo":
+    if normalized == "minimax":
         return MimoConfig.from_env()
     if normalized in {"deepseek_pro", "deepseek_flash"}:
         api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
@@ -168,8 +178,8 @@ def llm_client_from_env(provider: str | None = None, *, timeout: float | None = 
 def llm_configured(provider: str | None = None) -> bool:
     load_env()
     normalized = normalize_llm_provider(provider)
-    if normalized == "mimo":
-        return bool(os.getenv("MIMO_API_KEY", "").strip())
+    if normalized == "minimax":
+        return bool((os.getenv("MINIMAX_API_KEY") or os.getenv("MIMO_API_KEY") or "").strip())
     if normalized in {"deepseek_pro", "deepseek_flash"}:
         return bool(os.getenv("DEEPSEEK_API_KEY", "").strip())
     return False
@@ -189,7 +199,7 @@ def default_configured_provider() -> str:
 
 
 def mimo_configured() -> bool:
-    return llm_configured("mimo")
+    return llm_configured("minimax")
 
 
 def _parse_json_object(content: str) -> dict[str, Any]:

@@ -292,8 +292,8 @@ def _mem0_results(data: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
 
 
 def _mem0_sdk_config_from_env() -> dict[str, Any] | None:
-    mimo_key = os.getenv("MIMO_API_KEY") or os.getenv("MINIMAX_API_KEY")
-    if not mimo_key:
+    minimax_key = os.getenv("MINIMAX_API_KEY") or os.getenv("MIMO_API_KEY")
+    if not minimax_key:
         return None
     vector_path = os.getenv("MEM0_SDK_VECTOR_PATH", "memories/workbench/mem0_sdk_qdrant")
     collection_name = os.getenv("MEM0_SDK_COLLECTION", "workbench_mem0_sdk")
@@ -303,10 +303,15 @@ def _mem0_sdk_config_from_env() -> dict[str, Any] | None:
         "llm": {
             "provider": "minimax",
             "config": {
-                "api_key": mimo_key,
-                "minimax_base_url": os.getenv("MIMO_BASE_URL") or os.getenv("MINIMAX_API_BASE") or "https://api.minimax.io/v1",
-                "model": os.getenv("MIMO_MODEL") or os.getenv("MINIMAX_MODEL") or "MiniMax-M2.7",
-                "max_tokens": int(os.getenv("MIMO_MAX_TOKENS", "2000") or 2000),
+                "api_key": minimax_key,
+                "minimax_base_url": (
+                    os.getenv("MINIMAX_BASE_URL")
+                    or os.getenv("MINIMAX_API_BASE")
+                    or os.getenv("MIMO_BASE_URL")
+                    or "https://api.minimax.io/v1"
+                ),
+                "model": os.getenv("MINIMAX_MODEL") or os.getenv("MIMO_MODEL") or "MiniMax-M2.7",
+                "max_tokens": int(os.getenv("MINIMAX_MAX_TOKENS") or os.getenv("MIMO_MAX_TOKENS") or "2000"),
             },
         },
         "embedder": {
