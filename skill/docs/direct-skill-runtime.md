@@ -2,6 +2,25 @@
 
 This document is for host agents such as Codex, Claude Code, or similar shells after the Skill is installed.
 
+## Runtime Dependency
+
+Installing only the `skill/` folder is not enough to run memory tools. The Skill instructions call:
+
+```bash
+python3 -m assist_everything_betterandbetter_skill.cli ...
+```
+
+That command requires the repository runtime to be present:
+
+- `assist_everything_betterandbetter_skill/`
+- `evalharness/`
+- `pyproject.toml` or an equivalent editable/package install
+- local `.env` / runtime config
+
+Use the commands from the repo root, or install the package into the host environment first.
+
+The `scripts/` folder is auxiliary. It contains verification, stability eval, and document/demo builders. Direct Skill does not primarily run through `scripts/`.
+
 ## Runtime Model
 
 The host agent's own model is the agent. The Python CLI is the memory tool layer.
@@ -62,4 +81,3 @@ python3 -m assist_everything_betterandbetter_skill.cli chat --allow-no-llm --raw
 ```
 
 Raw mode returns the memory-tool draft and does not match Workbench answer quality.
-

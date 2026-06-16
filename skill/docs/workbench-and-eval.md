@@ -2,6 +2,10 @@
 
 Workbench is the visual shell around the same Agent chain.
 
+Workbench requires the full repository runtime. It does not run from the `skill/` folder alone.
+
+Primary Workbench entry point is the module command below. The `scripts/` folder contains auxiliary verification/stability/document generation helpers, not the main Workbench server.
+
 ## Run Workbench
 
 ```bash
