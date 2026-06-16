@@ -1,100 +1,89 @@
 # Assist Everything BetterAndBetter Skill
 
-这是一个面向比赛演示的“授权式协作记忆 Skill”。它同时提供两条使用路径：
+Assist Everything BetterAndBetter is an authorized collaborative memory skill for agent workflows. It helps a host agent reuse user-approved preferences, constraints, history, decisions, and correction lessons across sessions, so users do not need to repeat the same context in every similar task.
 
-- **Workbench**：浏览器里的真实 LLM Agent Chat + History Evals，用来跑比赛案例、看多轮对比和评估记忆是否省力。
-- **Direct Skill**：安装到 Codex / Claude Code 等 host agent 后，通过 `$assist-everything-betterandbetter-skill` 触发，无前端地使用同一套记忆能力。
+The repository provides two complementary ways to use and evaluate the skill:
 
-核心目标不是做一个只会保存聊天记录的 JSON 工具，而是展示：在用户授权下，系统如何把偏好、约束、历史、决策和纠错经验变成可复用记忆，并在第二轮、第三轮相似任务里明显减少用户重复说明。
+- **Direct Skill**: an installable skill entry for host agents such as Codex or Claude Code.
+- **Workbench**: a browser-based testing and evaluation workspace that visualizes skill behavior, memory changes, cognitive load, and memory reuse across multiple rounds.
+
+The system is organized around shared memory behavior. Direct Skill and Workbench use the same memory core and shared agent runtime so that behavior observed in Workbench matches behavior users get through the installed skill.
 
 ## Repository Map
 
 ```text
 skill/
-  SKILL.md                         # host agent 安装入口
-  docs/                            # 渐进式说明：配置、direct runtime、memory policy、workbench/eval
+  SKILL.md                         # host-agent skill entry
+  docs/                            # progressive docs for config, runtime, memory policy, eval
 
 assist_everything_betterandbetter_skill/
-  skill.py                         # 记忆提取、更新、召回、管理核心
+  skill.py                         # memory extraction, update, recall, and management
   memory.py                        # Local JSON / Markdown memory store
   mem0_backend.py                  # Mem0 Hosted backend
-  runtime_config.py                # 共享 runtime config
+  runtime_config.py                # shared runtime configuration
   cli.py                           # direct skill memory tools
-  direct_agent.py                  # direct skill / standalone agent runtime
+  direct_agent.py                  # direct skill and standalone agent runtime
 
 evalharness/
   server.py                        # Workbench API server
-  agent.py                         # shared Agent Runtime used by Workbench and direct agent
-  llm.py                           # MiniMax / DeepSeek provider config
-  evaluation.py / judge.py         # Eval scoring
+  agent.py                         # shared agent runtime
+  llm.py                           # MiniMax / DeepSeek provider configuration
+  evaluation.py / judge.py         # evaluation scoring
   static/                          # Workbench frontend
   persona/                         # soul.md / identity.md
 
 scripts/
-  verify_eval.py                   # 辅助验证
-  run_stability_eval.py            # 稳定性 eval 辅助
-  build_*.py                       # 文档 / demo 生成脚本
+  verify_eval.py                   # auxiliary verification
+  run_stability_eval.py            # auxiliary stability evaluation
+  build_*.py                       # document and artifact builders
 ```
 
-`scripts/` 不是 Workbench 或 Direct Skill 的主运行入口。Workbench 和 Direct Skill 的主入口都是 Python module command。
+`scripts/` is not the main runtime path for either Workbench or Direct Skill. The primary entry points are Python module commands.
 
 ## Architecture
 
 ```mermaid
-flowchart TB
-  User[User / Evaluator]
-  Host[Host Agent<br/>Codex / Claude Code]
-  SkillPkg[skill/<br/>SKILL.md + docs]
-  Core[assist_everything_betterandbetter_skill<br/>Memory Core]
-  Shared[evalharness<br/>Shared Agent Runtime<br/>LLM provider / turn orchestration / schemas]
-  UI[Workbench UI<br/>evalharness/static]
-  Server[Workbench API<br/>evalharness/server.py]
-  Local[(Local JSON / Markdown<br/>memories/)]
-  Mem0[(Mem0 Hosted)]
-  Eval[Eval Engine<br/>six dimensions + user effort + memory saving points]
-  Scripts[scripts/<br/>auxiliary verify / stability / docs]
+flowchart LR
+  User[User] --> Host[Host Agent]
+  Host --> Skill[skill/SKILL.md]
+  Skill --> Runtime[Shared Python Runtime]
+  Runtime --> Memory[Memory Core]
+  Memory --> Local[(Local JSON)]
+  Memory --> Mem0[(Mem0 Hosted)]
 
-  User -->|$assist-everything...| Host
-  Host -->|loads instructions| SkillPkg
-  SkillPkg -->|memory-pack / write / manage| Core
-  Core -->|local backend| Local
-  Core -->|optional hosted backend| Mem0
-  Core -->|direct agent currently reuses| Shared
-
-  User -->|browser| UI
-  UI --> Server
-  Server --> Shared
-  Shared --> Core
-  Server --> Eval
-  Eval --> Core
-
-  Scripts -. optional .-> Shared
-  Scripts -. optional .-> Core
+  User --> Workbench[Workbench UI]
+  Workbench --> Runtime
+  Runtime --> Eval[Evaluation]
 ```
 
-### Why Workbench And Direct Skill Both Exist
+The diagram is intentionally simple:
 
-Direct Skill 是用户真正安装到 Agent 后的使用形态；Workbench 是比赛验证和演示形态。
+- `skill/` provides instructions and the host-agent trigger.
+- `assist_everything_betterandbetter_skill/` provides the memory runtime.
+- `evalharness/` provides the Workbench server, evaluation layer, LLM provider adapters, message schemas, and shared agent turn orchestration.
+- Workbench and Direct Skill share this runtime so the same memory behavior can be used interactively and evaluated visually.
 
-Workbench 的价值：
+## Why Workbench And Direct Skill Both Exist
 
-- 让评委直接看到三轮对话、记忆变化和 History Evals。
-- 能把“用户费力度”和“记忆节省信息点”按 session 横向对比。
-- 能同时验证 Local JSON 和 Mem0 Hosted 两种后端。
-- 能把复杂场景，比如“给女朋友选生日礼物”，用可复测的方式跑出来。
+Direct Skill is the natural usage path. A user invokes the skill inside a host agent and continues a normal multi-turn conversation.
 
-Direct Skill 的价值：
+Workbench exists because memory behavior is difficult to judge from a single chat transcript. It provides an intuitive testing and evaluation surface for:
 
-- 证明这不是只能在 Workbench 里跑的 demo。
-- 安装到 host agent 后，用户可以自然地多轮对话、授权记忆、查看/删除/降级/清空记忆。
+- observing memory extraction, recall, updates, deletion, and backend state
+- comparing multiple sessions of the same task
+- visualizing changes in user cognitive load after the skill starts reusing memory
+- checking whether memory reuse improves task quality without forcing the user to repeat information
+- testing both Local JSON and Mem0 Hosted backends
 
-### Why Direct Skill Currently Reuses `evalharness`
+This structure is based on a practical requirement: a memory skill needs both a real agent usage path and a transparent evaluation surface. Direct Skill proves the runtime can be used by host agents; Workbench makes the memory behavior inspectable and measurable.
 
-Direct Skill 不依赖 Workbench 前端，但当前复用了 `evalharness/` 下的共享 Agent Runtime，包括 LLM provider 适配、turn 编排和 message schema。
+## Shared Runtime Design
 
-这是封板阶段的有意取舍：Workbench Agent Chat、History Evals 和 Direct Skill 使用同一套记忆行为，确保 Workbench 里评测到的结果，就是安装 Skill 后用户实际得到的行为。
+Direct Skill does not depend on the Workbench frontend. It currently reuses the shared agent runtime under `evalharness/` for provider adapters, turn orchestration, and message schemas.
 
-后续更干净的工程整理，是把这部分 shared runtime 从 `evalharness/` 中拆出来，改名为中立的 runtime 包。本次提交为了避免封板前出现双轨逻辑和行为不一致，暂时保持复用。
+This keeps the interactive Workbench path and the installed Direct Skill path aligned. The same memory extraction, recall, update, and management behavior is exercised in both places, which avoids divergent implementations.
+
+The runtime can be further optimized and abstracted over time, but the current structure already separates the host-agent skill entry, memory core, Workbench interface, and auxiliary scripts clearly enough for use and evaluation.
 
 ## Setup
 
@@ -104,19 +93,19 @@ python3 -m venv .venv
 python3 -m pip install -r requirements.txt
 ```
 
-也可以 editable install：
+Editable install:
 
 ```bash
 python3 -m pip install -e ".[test]"
 ```
 
-准备配置：
+Prepare configuration:
 
 ```bash
 cp .env.example .env
 ```
 
-至少配置 MiniMax，供 Workbench Agent Chat 和 LLM Eval 使用：
+MiniMax is the default configured provider for Workbench Agent Chat and LLM evaluation:
 
 ```dotenv
 ASSIST_AGENT_PROVIDER=minimax
@@ -126,7 +115,7 @@ MINIMAX_MODEL=MiniMax-M2.7
 MINIMAX_TIMEOUT=60
 ```
 
-可选 DeepSeek：
+Optional DeepSeek configuration:
 
 ```dotenv
 DEEPSEEK_API_KEY=<fill-your-deepseek-api-key>
@@ -138,7 +127,7 @@ DEEPSEEK_TIMEOUT=60
 
 ## Memory Configuration
 
-默认后端是 Local JSON / Markdown：
+Default memory backend:
 
 ```dotenv
 ASSIST_MEMORY_ENABLED=1
@@ -148,7 +137,7 @@ ASSIST_MEMORY_BACKEND=local
 ASSIST_RUNTIME_PROFILE=default
 ```
 
-Mem0 Hosted 示例：
+Optional Mem0 Hosted backend:
 
 ```dotenv
 ASSIST_MEMORY_BACKEND=mem0_hosted
@@ -161,46 +150,66 @@ MEM0_TIMEOUT=15
 MEM0_PROJECT_ID=<fill-your-mem0-project-id>
 ```
 
-`memories/`、`.env`、`1.env` 都被 git ignore，避免用户记忆和密钥泄露。
+`memories/`, `.env`, and `1.env` are git-ignored so local user memory and credentials do not leak into commits.
 
-## Memory Policy
+## Memory Authorization And Policy
 
-首次使用 Direct Skill 时，Agent 必须先提示：
+On first Direct Skill activation, the agent must tell the user:
 
-- 记忆默认开启还是关闭
-- 当前后端是 `local` 还是 `mem0_hosted`
-- 继续使用即授权本轮读取/写入记忆
-- 用户可随时说 `展示当前记忆`、`删除...`、`降级...`、`清空记忆`
-- 用户可说 `退出 skill` 或 `不允许记忆` 退出 Skill 流程
+- memory is enabled or disabled
+- active backend is `local` or `mem0_hosted`
+- continuing means authorizing memory reads and writes for this conversation
+- available memory commands include `展示当前记忆`, `删除...`, `降级...`, and `清空记忆`
+- the user can say `退出 skill` or `不允许记忆` to leave the skill flow
 
-记忆类型：
+Memory types:
 
-- `preference`：偏好
-- `constraint`：约束、禁忌、预算、排除项
-- `workflow`：用户纠正后的交互经验
-- `decision`：本次任务已选定的结果
-- `history`：过去发生/送过/处理过的事
-- `context_fact`：任务背景事实
+- `preference`: soft preference used for ranking or style
+- `constraint`: hard limit, taboo, exclusion, or budget
+- `workflow`: reusable interaction rule learned from user correction
+- `decision`: current-task choice that should be continued
+- `history`: past action or event that affects continuity or avoidance
+- `context_fact`: background fact useful for the task
 
-分层：
+Validity layers:
 
-- `current_task`：只在当前任务默认生效
-- `scene_memory`：同类场景召回，但应先确认
-- `long_term`：稳定偏好和规则，默认可用
-- `past`：历史事实，用于连续性和避免重复
+- `current_task`: applies by default only in the current task
+- `scene_memory`: recalled in similar scenes, but should be confirmed
+- `long_term`: stable preference or rule
+- `past`: historical fact for continuity and avoiding repetition
 
-写入策略是混合式：
+## Memory Extraction And Recall
 
-1. 规则提取高置信结构信息，例如预算、禁忌、已送历史、删除指令。
-2. LLM semantic extraction 处理上下文意图，例如“选拍立得”“重复候选名就是选定”“以后要...”。
-3. Skill 校验候选记忆，分配 scope / confidence / validity layer，去重后写入。
+```mermaid
+flowchart TD
+  U[User message] --> S[Scope and intent detection]
+  S --> R[Rule extraction]
+  S --> L[LLM semantic extraction]
+  R --> V[Validate and classify memory]
+  L --> V
+  V --> D[Deduplicate and resolve conflicts]
+  D --> W[Write active / superseded / archived / deleted memory]
 
-召回策略：
+  Q[New task query] --> F[Filter by status, scope, target, privacy]
+  F --> K[Rank by confidence, layer, entity hits, recency]
+  K --> A[apply_now]
+  K --> C[confirm_first]
+  A --> Ans[Answer with reused memory]
+  C --> Ans
+```
 
-1. 先按 status、scope、recipient/target、deleted 状态过滤。
-2. 再按 confidence、layer、关键词/实体、时间排序。
-3. `apply_now` 可直接用于回答。
-4. `confirm_first` 只能作为谨慎提醒，不应让用户重新从零说明。
+Write path:
+
+1. Rule extraction catches high-confidence structured signals such as budget, taboo, previous gifts, explicit deletion, and obvious travel/study/work constraints.
+2. LLM semantic extraction handles context-dependent intent such as "choose the Polaroid", "repeating a candidate name means selected", and "from now on...".
+3. The skill validates candidates, assigns scope, confidence, and validity layer, then deduplicates before writing.
+
+Recall path:
+
+1. Filter by active status, task scope, recipient/target, privacy, and deletion state.
+2. Rank by confidence, layer, keyword/entity hits, user approval, and recency.
+3. Use `apply_now` memories directly.
+4. Use `confirm_first` memories as cautious reminders while still providing a concrete answer.
 
 ## Run Workbench
 
@@ -208,38 +217,38 @@ MEM0_PROJECT_ID=<fill-your-mem0-project-id>
 python3 -m evalharness.cli --env-file .env serve --port 8787 --agent minimax
 ```
 
-打开：
+Open:
 
 ```text
 http://127.0.0.1:8787
 ```
 
-Workbench 主要模块：
+Workbench modules:
 
-- `Agent Chat`：真实 LLM 对话、当前 Memory、手动 Run LLM Eval。
-- `History Evals`：按任务聚合的历史 Eval，多轮横向对比。
-- `设置`：Agent、Skill、Memory、Eval 规则配置。
-- `Memory Scale Eval`：大记忆量性能演示线。
+- `Agent Chat`: real LLM chat, current memory panel, and manual LLM evaluation.
+- `History Evals`: grouped historical evaluations with multi-round comparison.
+- `Settings`: Agent, Skill, Memory, and Eval rule settings.
+- `Memory Scale Eval`: large-memory performance evaluation line.
 
-建议比赛演示路径：
+Suggested Workbench check:
 
-1. 在 Agent Chat 选择“给女朋友选生日礼物”案例。
-2. Round 1 完成对话并 Run LLM Eval。
-3. 开新 Session 跑 Round 2，看记忆复用是否减少用户重复说明。
-4. Round 3 修改/删除偏好，再 Run LLM Eval。
-5. 到 History Evals 看三轮的费力度和记忆节省信息点变化。
+1. Open `Agent Chat`.
+2. Run a multi-round task such as "choose a birthday gift for my girlfriend".
+3. Run LLM Eval after each session.
+4. Open `History Evals`.
+5. Compare cognitive load, memory saving points, and quality dimensions across sessions.
 
 ## Use Direct Skill
 
-Direct Skill 的安装入口是：
+The Direct Skill installation entry is:
 
 ```text
 skill/
 ```
 
-注意：只安装 `skill/` 文件夹只能安装 host-agent 触发说明，不能单独运行记忆工具。Direct Skill 还需要完整仓库 runtime，或先把本项目安装到 host 环境里。
+Installing only `skill/` installs the host-agent instructions, not a standalone runtime. Direct Skill also needs the repository runtime to be present, or the Python package installed in the host environment.
 
-最小 smoke test：
+Smoke test:
 
 ```bash
 python3 -m assist_everything_betterandbetter_skill.cli --env-file .env config
@@ -247,13 +256,13 @@ python3 -m assist_everything_betterandbetter_skill.cli --env-file .env memory-pa
 python3 -m assist_everything_betterandbetter_skill.cli --env-file .env memory-manage "展示当前记忆"
 ```
 
-在 Agent 中触发：
+Trigger inside a host agent:
 
 ```text
 $assist-everything-betterandbetter-skill 帮我给女朋友选个礼物
 ```
 
-后续同一对话不需要重复 `$assist...`。用户可以直接继续说：
+Continue naturally in the same conversation:
 
 ```text
 预算 1000 元
@@ -263,47 +272,65 @@ $assist-everything-betterandbetter-skill 帮我给女朋友选个礼物
 退出 skill
 ```
 
+### Direct Skill Step Flow
+
+```mermaid
+flowchart TD
+  A[User triggers skill] --> B[Agent checks config]
+  B --> C[Show memory authorization notice]
+  C --> D{User allows memory?}
+  D -- no --> E[Exit skill flow]
+  D -- yes --> F[Call memory-pack]
+  F --> G[Host agent answers]
+  G --> H{Reusable info or correction?}
+  H -- yes --> I[Call memory-write]
+  H -- no --> J[Continue conversation]
+  I --> J
+  J --> K{Memory command?}
+  K -- yes --> L[Call memory-manage]
+  K -- no --> F
+```
+
 ## Eval
 
-Workbench 的 Eval 是比赛主要展示方式。CLI Eval 用于可复测：
+Workbench evaluation is the primary way to inspect behavior over multiple sessions. CLI evaluation is available for reproducible runs:
 
 ```bash
 python3 -m evalharness.cli --env-file .env run --agent minimax --judge minimax
 ```
 
-评估重点：
+Evaluation focuses on:
 
-- 六维总分
-- 用户费力度
-- 记忆节省信息点
-- 记忆提取、应用、更新/删除是否正确
-- 是否完成任务交付
-- 是否出现语义违规或重复追问
+- six quality dimensions
+- user cognitive load
+- memory saving information points
+- memory extraction, application, update, and deletion correctness
+- task delivery
+- semantic violations and repeated clarification
 
-辅助稳定性验证：
+Auxiliary verification:
 
 ```bash
 python3 scripts/run_stability_eval.py
 python3 scripts/verify_eval.py
 ```
 
-这些脚本是辅助验证，不是 Workbench 或 Direct Skill 主入口。
+These scripts are helper tools, not the main Workbench or Direct Skill entry point.
 
-## What Evaluators Should Verify
+## What To Verify
 
 Workbench path:
 
-1. 能启动 `evalharness.cli serve`。
-2. Agent Chat 能真实调用 LLM。
-3. 当前 Memory 能显示 Local 或 Mem0 后端。
-4. Run LLM Eval 后结果进入 History Evals。
-5. 多轮 gift case 能看到用户费力度下降或记忆节省信息点增加。
+1. `evalharness.cli serve` starts successfully.
+2. Agent Chat uses a real LLM provider.
+3. Current Memory shows Local JSON or Mem0 Hosted state.
+4. Run LLM Eval writes results into History Evals.
+5. Multi-round tasks show changes in cognitive load and memory saving points.
 
 Direct Skill path:
 
-1. Host agent 能识别 `skill/SKILL.md`。
-2. 首次触发时会提示记忆默认开启、当前后端、授权和退出方式。
-3. `memory-pack` 能召回历史约束。
-4. 用户提供预算、偏好、选择、纠错后，`memory-write` 能写入。
-5. `展示当前记忆`、`删除...`、`降级...`、`清空记忆` 可用。
-
+1. The host agent can load `skill/SKILL.md`.
+2. First activation shows memory backend, authorization, memory commands, and exit instructions.
+3. `memory-pack` recalls relevant constraints.
+4. `memory-write` records budgets, preferences, choices, and user corrections.
+5. `memory-manage` supports show, delete, downgrade, archive, reset, profile, snapshot, layers, and privacy reports.
