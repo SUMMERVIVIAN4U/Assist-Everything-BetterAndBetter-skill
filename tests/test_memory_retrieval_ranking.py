@@ -211,6 +211,36 @@ class MemoryRetrievalRankingTest(unittest.TestCase):
             contents = [item.content for item in results]
             self.assertTrue(any("索尼 WH-CH720N 无线降噪耳机" in content for content in contents))
 
+    def test_short_purchase_channel_followup_uses_active_gift_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = AssistSkill(memory_dir=tmp, persist=True)
+            first.memory.add(
+                MemoryItem(
+                    "decision",
+                    "本次给女朋友的礼物已选定为拍立得相机配相册",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="selected",
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+            first.memory.add(
+                MemoryItem(
+                    "workflow",
+                    "以后处理同类任务时，选定礼物后，如果我直接问销售渠道，你就按已选礼物直接给购买渠道、下单注意点和包装建议，不要重新推荐礼物",
+                    scope="gift_planning",
+                    target="女朋友",
+                    predicate="uses_workflow",
+                )
+            )
+
+            next_session = AssistSkill(memory_dir=tmp, persist=True)
+            results = next_session.retrieve_relevant_memories("销售渠道")
+
+            contents = [item.content for item in results]
+            self.assertTrue(any("拍立得相机配相册" in content for content in contents))
+            self.assertTrue(any("销售渠道" in content and "不要重新推荐礼物" in content for content in contents))
+
     def test_llm_retrieval_intent_can_expand_natural_gift_history_lookup(self):
         calls = []
 

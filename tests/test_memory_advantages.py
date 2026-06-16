@@ -756,6 +756,17 @@ class MemoryAdvantagesTest(unittest.TestCase):
         self.assertIn("找时间最近的一次，直接回答我", workflows[0].content)
         self.assertFalse(any(item.type == DECISION and "直接回答我" in item.content for item in self.skill.memory.active()))
 
+    def test_gift_purchase_channel_teaching_becomes_workflow_memory(self):
+        response = self.skill.process_message(
+            "以后我选定礼物后，如果我直接问销售渠道，你就按已选礼物直接给购买渠道、下单注意点和包装建议，不要重新推荐礼物。",
+            context="user: 帮我给女朋友选礼物。\nassistant: 推荐：拍立得相机配相册。\nuser: 我选拍立得相机配相册",
+        )
+
+        add_details = [action.get("detail", "") for action in response.memory_actions if action.get("action") == "add"]
+        self.assertTrue(any("销售渠道" in detail and "不要重新推荐礼物" in detail for detail in add_details))
+        self.assertTrue(any(item.type == WORKFLOW and "销售渠道" in item.content for item in self.skill.memory.active()))
+        self.assertFalse(any(item.type == DECISION and "选定礼物后" in item.content for item in self.skill.memory.active()))
+
     def test_retrieval_filters_cross_scope_memories(self):
         self.skill.process_message("以后学习计划请先看例题再讲知识点。")
         self.skill.process_message(

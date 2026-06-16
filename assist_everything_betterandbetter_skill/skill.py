@@ -1083,6 +1083,14 @@ class AssistSkill:
         scope = _infer_scope(text, context)
         terms = _keywords(text)
         active = active_items if active_items is not None else self.memory.active()
+        if _workflow_instruction_content(text):
+            return [
+                item
+                for item in active
+                if item.scope == scope
+                and item.type == WORKFLOW
+                and any(term and term in item.content for term in terms)
+            ]
         if scope == "work_report" and "风险表只用于老板材料" in text:
             return [
                 item
@@ -1495,6 +1503,14 @@ def _local_retrieval_intent(text: str, context: str = "") -> dict[str, Any]:
             "include_types": ["history", "decision"],
             "include_expired_current_task": True,
         }
+    if _is_gift_purchase_followup(text):
+        return {
+            "intent": "gift_purchase_followup",
+            "scope": "gift_planning",
+            "target": _gift_recipient(text) or _gift_recipient(context),
+            "include_types": ["decision", "workflow", "constraint"],
+            "include_expired_current_task": True,
+        }
     return {}
 
 
@@ -1583,8 +1599,25 @@ def _is_generic_continuation_request(text: str) -> bool:
             "不重复的方向",
             "不重复的礼物方向",
             "另一个推荐",
+            "销售渠道",
+            "购买渠道",
+            "下单渠道",
+            "在哪里买",
+            "怎么买",
+            "下单",
+            "包装建议",
         ]
     )
+
+
+def _is_gift_purchase_followup(text: str) -> bool:
+    stripped = text.strip(" 。！？!?，,")
+    if not stripped:
+        return False
+    purchase_markers = ["销售渠道", "购买渠道", "下单渠道", "在哪里买", "怎么买", "下单", "包装建议"]
+    if not any(marker in stripped for marker in purchase_markers):
+        return False
+    return not any(marker in stripped for marker in ["删除", "不推荐", "不要推荐", "别推荐"])
 
 
 def _is_gift_history_lookup(text: str) -> bool:
@@ -1902,12 +1935,12 @@ def _workflow_instruction_content(text: str) -> str:
     stripped = text.strip(" \n\t。！？!?")
     if not stripped:
         return ""
-    if not re.search(r"以后(?:要|不要|不用|别|如果|当|在|遇到|再|都|只要)", stripped):
+    if not re.search(r"以后(?:要|不要|不用|别|如果|当|在|遇到|再|都|只要|我)", stripped):
         return ""
     if any(token in stripped for token in ["请记住", "记住"]):
         stripped = re.sub(r"^(?:请)?记住[:：,，\s]*", "", stripped)
     content = stripped
-    content = re.sub(r"^以后(?:要|都要|请|记得|如果|当|在|遇到|只要)?", "", content).strip(" ，,：:")
+    content = re.sub(r"^以后(?:要|都要|请|记得|如果|当|在|遇到|只要|我)?", "", content).strip(" ，,：:")
     if not content:
         return ""
     if len(content) < 4 or _is_plain_task_request(content):
