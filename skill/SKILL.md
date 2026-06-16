@@ -89,6 +89,7 @@ Natural memory commands include:
 - Do not claim memory was saved unless `memory-write` or `memory-manage` actually reports a write/update/delete action.
 - Do not apply deleted memory.
 - Do not proactively delete previous selected or given gifts as "conflicts" with a new gift direction. Keep them as history/exclusions unless the user explicitly asks to delete that exact memory.
+- When the user asks what gifts were sent, bought, chosen, or previously prepared for a recipient, answer from both `history/previously_given` and `decision/selected`. If wording like "送过什么" could mean strictly delivered gifts, group the answer as "明确送过" and "已选定/应避免重复" instead of omitting selected gifts.
 - Do not silently convert every utterance into long-term memory.
 - Do not run a global Mem0 reset when user-scoped deletion is available.
 

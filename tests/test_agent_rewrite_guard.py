@@ -209,6 +209,45 @@ def test_rewrite_payload_projects_selected_gifts_as_exclusions():
     assert any(item["category"] == "影像设备" for item in exclusions)
 
 
+def test_gift_history_lookup_must_include_selected_gifts():
+    memory_context = {
+        "apply_now": [
+            {
+                "type": "history",
+                "predicate": "previously_given",
+                "content": "以前送过女朋友玫瑰金项链，送过的不要再送",
+            },
+            {
+                "type": "decision",
+                "predicate": "selected",
+                "content": "本次给女朋友的礼物已选定为labubu 礼盒",
+            },
+            {
+                "type": "decision",
+                "predicate": "selected",
+                "content": "本次给女朋友的礼物已选定为施华洛世奇水晶项链",
+            },
+        ],
+        "gift_selected_exclusions": [
+            {"content": "本次给女朋友的礼物已选定为labubu 礼盒", "category": "礼盒"},
+            {"content": "本次给女朋友的礼物已选定为施华洛世奇水晶项链", "category": "首饰"},
+        ],
+    }
+
+    directives = _response_directives("我送过女朋友什么礼物", memory_context)
+    assert any("明确送过" in directive and "已选定/应避免重复" in directive for directive in directives)
+    assert not _llm_response_is_usable(
+        "以前送过女朋友玫瑰金项链。",
+        user_text="我送过女朋友什么礼物",
+        memory_context=memory_context,
+    )
+    assert _llm_response_is_usable(
+        "明确送过：玫瑰金项链。已选定/应避免重复：labubu 礼盒、施华洛世奇水晶项链。",
+        user_text="我送过女朋友什么礼物",
+        memory_context=memory_context,
+    )
+
+
 def test_rewrite_retries_when_gift_recommendation_only_summarizes_selected_item():
     class Client(_SemanticClient):
         def __init__(self):

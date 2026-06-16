@@ -690,6 +690,7 @@ def _response_directives(
         directives.append(
             "用户在盘点最近送过/选过的礼物；必须同时使用 memory_context.apply_now 中的 history/previously_given 和 decision/selected，"
             "以及 memory_context.gift_selected_exclusions 中的已选礼物。不要只回答以前送过的历史项。"
+            "如果用户问“送过什么”，也要把已选定礼物列为“已选定/应避免重复”，可与“明确送过”分组展示。"
         )
     confirm_budget = _confirm_first_budget(memory_context)
     if _is_gift_task_request(user_text) and confirm_budget:
@@ -1168,6 +1169,8 @@ def _llm_response_is_usable(
         conversation_context=conversation_context,
     ):
         return False
+    if _omits_selected_gifts_for_history_lookup(text, user_text, memory_context or {}):
+        return False
     if _contains_any(text, ["这个草案", "该草案", "上面的方案"]) and not _contains_any(text, ["第 1 天", "第1天", "上午", "下午", "推荐方向", "方案："]):
         return False
     if _is_route_task_request(user_text) and not _is_route_answer_deliverable(text):
@@ -1223,6 +1226,51 @@ def _violates_memory_context_constraints(
             if _suppressed_term_used_as_plan(body, term):
                 return True
     return False
+
+
+def _omits_selected_gifts_for_history_lookup(text: str, user_text: str, memory_context: dict[str, Any]) -> bool:
+    if not _is_gift_history_lookup(user_text):
+        return False
+    selected = _selected_gift_names_from_memory_context(memory_context)
+    if not selected:
+        return False
+    body = _normalize_text_for_match(_answer_body_without_management_ack(text))
+    if not body:
+        return True
+    return not any(_normalize_text_for_match(name) and _normalize_text_for_match(name) in body for name in selected)
+
+
+def _selected_gift_names_from_memory_context(memory_context: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for item in memory_context.get("apply_now", []) or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != DECISION and item.get("predicate") != "selected":
+            continue
+        name = _selected_gift_name(str(item.get("content") or ""))
+        if name and name not in names:
+            names.append(name)
+    for item in memory_context.get("gift_selected_exclusions", []) or []:
+        if not isinstance(item, dict):
+            continue
+        name = _selected_gift_name(str(item.get("content") or ""))
+        if name and name not in names:
+            names.append(name)
+    return names[:6]
+
+
+def _selected_gift_name(content: str) -> str:
+    value = str(content or "").strip()
+    match = re.search(r"已选定为(.+?)(?:。|；|$)", value)
+    if match:
+        value = match.group(1).strip()
+    value = re.sub(r"^本次给.*?的礼物", "", value).strip(" ：:，,。")
+    value = value.removeprefix("已选定为").strip(" ：:，,。")
+    return value
+
+
+def _normalize_text_for_match(text: str) -> str:
+    return re.sub(r"[\s，,。；;：:、\-—–_（）()【】\\[\\]\"'“”‘’]+", "", str(text or "")).lower()
 
 
 def _is_route_task_request(text: str) -> bool:
