@@ -2,6 +2,8 @@
 
 Assist Everything BetterAndBetter is an authorized collaborative memory skill for agent workflows. It helps a host agent reuse user-approved preferences, constraints, history, decisions, and correction lessons across sessions, so users do not need to repeat the same context in every similar task.
 
+The memory backend is designed for both lightweight local use and persistent business usage. It can run on Local JSON for simple verification, or on Mem0 Hosted for durable storage and recall in high-frequency, large-scale, multi-session assistant scenarios.
+
 The repository provides two complementary ways to use and evaluate the skill:
 
 - **Direct Skill**: an installable skill entry for host agents such as Codex or Claude Code.
@@ -61,6 +63,7 @@ The diagram is intentionally simple:
 - `skill/` provides instructions and the host-agent trigger.
 - `assist_everything_betterandbetter_skill/` provides the memory runtime.
 - `evalharness/` provides the Workbench server, evaluation layer, LLM provider adapters, message schemas, and shared agent turn orchestration.
+- The memory core supports both Local JSON and Mem0 Hosted, so the same extraction, update, recall, and management policies can be used in local testing and persistent production-style workflows.
 - Workbench and Direct Skill share this runtime so the same memory behavior can be used interactively and evaluated visually.
 
 ## Why Workbench And Direct Skill Both Exist
@@ -150,6 +153,13 @@ MEM0_TIMEOUT=15
 MEM0_PROJECT_ID=<fill-your-mem0-project-id>
 ```
 
+Backend strategy:
+
+- `local`: file-based Local JSON / Markdown memory, best for local development, inspection, and reproducible evaluation.
+- `mem0_hosted`: remote durable memory storage and retrieval, best for higher-frequency assistant use, long-lived personalization, and large-scale persistent memory scenarios.
+
+Both backends use the same memory schema, extraction policy, recall policy, and user-facing memory-management commands. Switching the backend does not require changing the task flow.
+
 `memories/`, `.env`, and `1.env` are git-ignored so local user memory and credentials do not leak into commits.
 
 ## Memory Authorization And Policy
@@ -210,6 +220,8 @@ Recall path:
 2. Rank by confidence, layer, keyword/entity hits, user approval, and recency.
 3. Use `apply_now` memories directly.
 4. Use `confirm_first` memories as cautious reminders while still providing a concrete answer.
+
+When Mem0 Hosted is enabled, structured memories are persisted remotely and retrieved back into the same `apply_now` / `confirm_first` memory pack. This makes the skill useful beyond one-off local tests: a deployed assistant can keep durable user preferences, decisions, exclusions, and workflow lessons across many sessions without changing the agent-facing interface.
 
 ## Run Workbench
 
