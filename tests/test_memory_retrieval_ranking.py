@@ -60,6 +60,100 @@ class MemoryRetrievalRankingTest(unittest.TestCase):
             self.assertEqual("active", skill.memory.get(selected.id).status)
             self.assertEqual("active", skill.memory.get(budget.id).status)
 
+    def test_delete_child_animal_preference_does_not_delete_current_trip_party(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(memory_dir=tmp, persist=True)
+            child = skill.memory.add(
+                MemoryItem(
+                    "context_fact",
+                    "孩子喜欢自然和动物",
+                    scope="life_family_travel",
+                    subject="child",
+                    predicate="states",
+                    tags=["孩子", "自然", "动物"],
+                    validity={"time_scope": "long_term"},
+                )
+            )
+            no_father = skill.memory.add(
+                MemoryItem(
+                    "context_fact",
+                    "这次父亲不去，只有我和孩子",
+                    scope="life_family_travel",
+                    subject="father",
+                    predicate="states",
+                    tags=["父亲", "孩子"],
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+            no_walk = skill.memory.add(
+                MemoryItem(
+                    "constraint",
+                    "本次少步行限制不适用",
+                    scope="life_family_travel",
+                    predicate="not_applicable",
+                    tags=["步行"],
+                    validity={"time_scope": "current_task", "session_id": "old_session"},
+                )
+            )
+
+            response = skill.process_message("删除孩子喜欢动物这个元素")
+
+            deleted_ids = [action["memory_id"] for action in response.memory_actions if action["action"] == "delete"]
+            self.assertEqual([child.id], deleted_ids)
+            self.assertEqual("deleted", skill.memory.get(child.id, include_inactive=True).status)
+            self.assertEqual("active", skill.memory.get(no_father.id).status)
+            self.assertEqual("active", skill.memory.get(no_walk.id).status)
+
+    def test_gift_selection_without_pronoun_writes_decision_in_gift_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(memory_dir=tmp, persist=True)
+
+            response = skill.process_message("选玫瑰金耳钉", context="user: 帮我给女朋友选个生日礼物。")
+
+            added = [action["detail"] for action in response.memory_actions if action["action"] == "add"]
+            self.assertTrue(any("本次给女朋友的礼物已选定为玫瑰金耳钉" in detail for detail in added))
+            active = skill.memory.active()
+            self.assertTrue(
+                any(
+                    item.type == "decision"
+                    and item.predicate == "selected"
+                    and item.scope == "gift_planning"
+                    and "玫瑰金耳钉" in item.content
+                    for item in active
+                )
+            )
+
+    def test_gift_task_request_is_not_recorded_as_selection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = AssistSkill(memory_dir=tmp, persist=True)
+
+            response = skill.process_message("选一个礼物", context="user: 帮我给女朋友选个生日礼物。")
+
+            self.assertFalse(
+                any(
+                    action["action"] == "add"
+                    and "已选定" in action.get("detail", "")
+                    for action in response.memory_actions
+                )
+            )
+
+    def test_gift_history_lookup_recalls_selected_gifts_without_fake_history_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            writer = AssistSkill(memory_dir=tmp, persist=True)
+            writer.process_message("选玫瑰金耳钉", context="user: 帮我给女朋友选个生日礼物。")
+
+            reader = AssistSkill(memory_dir=tmp, persist=True)
+            response = reader.process_message("我送过女朋友什么礼物")
+
+            self.assertIn("玫瑰金耳钉", response.text)
+            self.assertFalse(
+                any(
+                    action["action"] == "add"
+                    and "女朋友什么礼物" in action.get("detail", "")
+                    for action in response.memory_actions
+                )
+            )
+
     def test_local_retrieval_ranks_by_score_then_time(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill = AssistSkill(memory_dir=tmp, persist=True)
