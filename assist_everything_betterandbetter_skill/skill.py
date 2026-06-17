@@ -1928,6 +1928,8 @@ def _has_memory_signal(text: str, context: str = "") -> bool:
         return True
     if _infer_scope(text, context) == "gift_planning" and _looks_like_gift_candidate_reference(text, context):
         return True
+    if _infer_scope(text, context) == "gift_planning" and _extract_gift_decision(text, context):
+        return True
     return False
 
 
@@ -2549,10 +2551,31 @@ def _match_memory_items(query: str, items: list[MemoryItem]) -> list[MemoryItem]
             continue
         compact_hit = q in haystack
         content_hit = _normalize_query(item.content) and _normalize_query(item.content) in q
-        anchor_hit = anchors and any(anchor in haystack for anchor in anchors)
+        anchor_hit = _delete_anchor_match(item, anchors, haystack)
         if compact_hit or content_hit or anchor_hit:
             output.append(item)
     return output
+
+
+def _delete_anchor_match(item: MemoryItem, anchors: list[str], haystack: str) -> bool:
+    hits = [anchor for anchor in anchors if anchor and anchor in haystack]
+    if len(hits) >= 2:
+        return True
+    if not hits:
+        return False
+    anchor = hits[0]
+    content = _normalize_query(item.content)
+    tags = {_normalize_query(tag) for tag in item.tags if tag}
+    protected_singletons = {"孩子", "父亲", "爸爸", "妈妈", "她", "他", "收礼人", "女朋友", "男朋友"}
+    if anchor in protected_singletons:
+        return False
+    if anchor in tags:
+        return True
+    if len(anchor) >= 3 and anchor in content:
+        return True
+    if anchor in {"紫色", "银色", "动物", "自然", "网红"} and anchor in content:
+        return True
+    return False
 
 
 def _delete_query_anchors(query: str) -> list[str]:
@@ -2651,6 +2674,8 @@ def _gift_recipient(text: str) -> str:
 
 def _extract_previous_gifts(text: str) -> str:
     normalized = text.strip()
+    if _is_gift_history_lookup(normalized):
+        return ""
     if ("?" in normalized or "？" in normalized or normalized.endswith("吗")) and any(
         token in normalized for token in ["不是送过", "不是买过", "没送过", "没有送过"]
     ):
@@ -2679,6 +2704,7 @@ def _extract_gift_decision(text: str, context: str = "") -> str:
         r"(?:礼物)?(?:选定|定了|决定买|确认送)(?:为|了)?(.+?)(?:。|；|$)",
         r"(?:好的|好|行|可以)?(?:我)?选择(?:了)?(.+?)(?:，|,|。|；|$)",
         r"(?:好的|好|行|可以)?我选(?:了)?(.+?)(?:，|,|。|；|$)",
+        r"(?:好的|好|行|可以)?(?:就)?选(.+?)(?:，|,|。|；|$)",
         r"(?:好的|好|行|可以)?选了(.+?)(?:，|,|。|；|$)",
         r"(?:好的|好|行|可以)?锁定(?:了)?(.+?)(?:，|,|。|；|$)",
         r"就(.+?)(?:吧|了|。|；|$)",
@@ -2689,9 +2715,26 @@ def _extract_gift_decision(text: str, context: str = "") -> str:
             decision = _clean_gift_fragment(match.group(1))
             if _is_deictic_gift_decision(decision):
                 decision = _extract_last_gift_recommendation(context)
-            if decision and "推荐" not in decision and not _is_gift_metatalk(decision) and not _is_gift_task_request_text(decision):
+            if (
+                decision
+                and not _is_invalid_gift_decision_candidate(decision)
+                and "推荐" not in decision
+                and not _is_gift_metatalk(decision)
+                and not _is_gift_task_request_text(decision)
+            ):
                 return decision
     return ""
+
+
+def _is_invalid_gift_decision_candidate(text: str) -> bool:
+    value = text.strip(" ：:，,。")
+    if not value:
+        return True
+    if re.match(r"^(?:一个|一款|一份|某个|某款)", value) and _contains_any(value, ["礼物", "推荐", "方向", "方案", "品类", "东西"]):
+        return True
+    return bool(
+        re.match(r"^(?:一个|一款|个|款|礼物|生日礼物|方向|推荐|方案|东西|品类)(?:$|[，,。；; ]|的)", value)
+    )
 
 
 def _extract_contextual_confirmed_gift_decision(text: str, context: str = "") -> str:
@@ -3010,6 +3053,17 @@ def _gift_answer(text: str, memories: list[MemoryItem], context: str = "") -> st
     budget = next((item.content for item in memories if item.predicate == "budget_limit"), "预算按用户当前范围控制")
     avoid = [item.content for item in memories if item.predicate in {"previously_given", "must_avoid"}]
     preferences = [item.content for item in memories if item.type in {PREFERENCE, CONTEXT_FACT}]
+    if _is_gift_history_lookup(text):
+        previous = [item.content for item in memories if item.predicate == "previously_given"]
+        selected = [_selected_gift_display_name(item.content) for item in memories if item.predicate == "selected"]
+        lines = []
+        if previous:
+            lines.append("明确送过：" + "；".join(previous))
+        if selected:
+            lines.append("已选定/后续应避免重复：" + "；".join(selected))
+        if lines:
+            return "\n".join(lines)
+        return "当前没有查到已送过或已选定的礼物记录。"
     non_jewelry = any(token in combined for token in ["非首饰", "不要首饰", "不碰首饰", "不考虑首饰", "排除首饰"])
     no_purple = ("删除" in text and "紫色" in text) or ("紫色" not in memory_text and "紫色" not in text.replace("删除 她喜欢紫色", ""))
     if "不重复" in text or "再给" in text or "推荐" in text:
@@ -3051,6 +3105,14 @@ def _gift_answer(text: str, memories: list[MemoryItem], context: str = "") -> st
         f"- 备选：花艺体验、手作体验、质感小皮具。\n"
         f"- 避开：{('；'.join(avoid) or '暂不重复用户后续明确说已经送过或排除的品类')}。"
     )
+
+
+def _selected_gift_display_name(content: str) -> str:
+    value = str(content or "").strip()
+    match = re.search(r"已选定为(.+?)(?:。|；|$)", value)
+    if match:
+        return match.group(1).strip(" ：:，,。")
+    return value
 
 
 def _travel_answer(text: str, memories: list[MemoryItem]) -> str:
